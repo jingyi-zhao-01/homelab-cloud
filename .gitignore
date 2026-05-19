@@ -1,0 +1,4 @@
+# Sensitive local secrets
+secrets/
+.kube-config
+grafana-token
