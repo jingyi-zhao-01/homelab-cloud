@@ -1,0 +1,107 @@
+name: Deploy to Remote VPS k3s
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  NAMESPACE: ${{ vars.K8S_NAMESPACE || 'flashsales' }}
+  RELEASE: ${{ vars.HELM_RELEASE || 'flashsales' }}
+  CHART_PATH: ${{ vars.HELM_CHART_PATH || 'charts/flashsales' }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - user-service
+          - product-service
+          - order-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: services/${{ matrix.service }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/flashsales-${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/flashsales-${{ matrix.service }}:latest
+
+  deploy:
+    name: Deploy to k3s
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-push
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl version --client
+          kubectl get nodes
+
+      - name: Deploy Helm release
+        run: |
+          helm upgrade --install "$RELEASE" "$CHART_PATH" \
+            -n "$NAMESPACE" \
+            --create-namespace \
+            --set userService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-user-service \
+            --set userService.image.tag=${{ github.sha }} \
+            --set userService.image.pullPolicy=IfNotPresent \
+            --set productService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-product-service \
+            --set productService.image.tag=${{ github.sha }} \
+            --set productService.image.pullPolicy=IfNotPresent \
+            --set orderService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-order-service \
+            --set orderService.image.tag=${{ github.sha }} \
+            --set orderService.image.pullPolicy=IfNotPresent
+
+      - name: Wait for rollouts
+        run: |
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-user-service --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-product-service --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=300s
+
+      - name: Show final status
+        run: |
+          kubectl get pods -n "$NAMESPACE" -o wide
+          kubectl get svc -n "$NAMESPACE"

@@ -111,7 +111,7 @@ make deploy KUBECONFIG_PATH=$HOME/.kube/config
 说明:
 
 - `make deploy` 默认带本地集群保护，检测到非 localhost/127.0.0.1 会拒绝执行。
-- 本项目不支持远端覆盖，非本地集群会直接拒绝执行。
+- 远端 VPS 部署建议通过 GitHub Actions 自动化流程执行，见下文 CI/CD 章节。
 
 1. 检查 Pod
 
@@ -217,3 +217,35 @@ kubectl port-forward -n flashsales svc/flashsales-rabbitmq 15672:15672
 - 增加中间件 Secret 的外部化管理 (例如 SealedSecret)
 - 增加 Ingress 统一对外入口
 - 为三服务分别拆分独立 Helm Chart 或保留单体 Chart + 子图
+
+## GitHub Actions 远端部署 (VPS k3s)
+
+已新增工作流:
+
+- `.github/workflows/deploy-remote-vps.yml`
+
+流程:
+
+1. push 到 `main` 或手动触发 workflow
+1. 构建 3 个服务镜像
+1. 推送镜像到 `ghcr.io`
+1. 使用仓库 Secret 中的 kubeconfig 连接远端 k3s
+1. 执行 `helm upgrade --install` 完成部署
+
+需要配置的仓库 Secret:
+
+1. `KUBE_CONFIG_DATA`
+
+生成方式示例:
+
+```bash
+base64 -w 0 .kube-config
+```
+
+将输出结果完整复制到 GitHub Repository Secrets 的 `KUBE_CONFIG_DATA`。
+
+说明:
+
+- 工作流会将镜像推到 `ghcr.io/<owner>/flashsales-<service>:<commit_sha>`。
+- Helm 部署时使用对应 commit sha 的 tag，保证部署版本可追踪。
+- 如果 GHCR 镜像是私有，需要额外在集群中配置 imagePullSecret 并在 chart 中引用。
