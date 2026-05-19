@@ -7,7 +7,9 @@ metadata:
     {{- include "flashsales.labels" . | nindent 4 }}
     app.kubernetes.io/component: product-service
 spec:
+  {{- if not .Values.productService.autoscaling.enabled }}
   replicas: {{ .Values.productService.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/component: product-service
