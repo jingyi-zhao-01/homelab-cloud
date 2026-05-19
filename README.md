@@ -210,6 +210,63 @@ RabbitMQ 管理面板端口转发:
 kubectl port-forward -n flashsales svc/flashsales-rabbitmq 15672:15672
 ```
 
+## Grafana k6 Load Test
+
+用途:
+
+- 对 `order-service` 发压测请求
+- 在测试开始前自动创建测试用户和测试商品
+- 通过 `kubectl port-forward` 连接远端或本地 k3s 服务
+
+前置要求:
+
+- 已安装 `k6`
+- 已安装 `kubectl`
+- `KUBECONFIG_PATH` 指向可访问目标集群的 kubeconfig
+
+快速执行:
+
+```bash
+make loadtest KUBECONFIG_PATH=.kube-config
+```
+
+短时压测:
+
+```bash
+make loadtest-quick KUBECONFIG_PATH=.kube-config
+```
+
+自定义并发和时长示例:
+
+```bash
+bash ./scripts/loadtest-k6.sh \
+  -e RAMP_UP=30s \
+  -e STEADY=180s \
+  -e RAMP_DOWN=30s \
+  -e TARGET_VUS=50
+```
+
+说明:
+
+- k6 场景脚本在 `scripts/k6-loadtest.js`
+- 包装脚本在 `scripts/loadtest-k6.sh`
+- 包装脚本会自动选择可用本地端口并在结束后清理 port-forward 进程
+
+GitHub Actions 手动触发:
+
+- workflow 文件: `.github/workflows/loadtest-manual.yml`
+- 触发方式: Actions 页面手动点击 `Run workflow`
+- 可配置输入参数:
+  - `target_vus` (默认 `20`)
+  - `ramp_up` (默认 `20s`)
+  - `steady` (默认 `60s`)
+  - `ramp_down` (默认 `20s`)
+
+说明:
+
+- 此压测 workflow 仅支持手动触发 (`workflow_dispatch`)，不会在 push 时自动运行。
+- 依赖仓库 Secret `KUBE_CONFIG_DATA` 用于连接远端 k3s。
+
 ## 后续工作
 
 - 给数据库表补迁移方案 (当前是服务启动自动建表)
@@ -235,6 +292,8 @@ kubectl port-forward -n flashsales svc/flashsales-rabbitmq 15672:15672
 需要配置的仓库 Secret:
 
 1. `KUBE_CONFIG_DATA`
+1. `GHCR_PULL_USERNAME`
+1. `GHCR_PULL_TOKEN`
 
 生成方式示例:
 
@@ -248,4 +307,5 @@ base64 -w 0 .kube-config
 
 - 工作流会将镜像推到 `ghcr.io/<owner>/flashsales-<service>:<commit_sha>`。
 - Helm 部署时使用对应 commit sha 的 tag，保证部署版本可追踪。
-- 如果 GHCR 镜像是私有，需要额外在集群中配置 imagePullSecret 并在 chart 中引用。
+- workflow 会在目标 namespace 自动创建 `ghcr-pull-secret` 并注入 chart 的 `imagePullSecrets`。
+- `GHCR_PULL_TOKEN` 需要包含 `read:packages` 权限（classic PAT）或等价 package 读取权限。

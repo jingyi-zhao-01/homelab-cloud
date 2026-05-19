@@ -18,6 +18,10 @@ spec:
         app.kubernetes.io/component: product-service
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: product-service
           image: "{{ .Values.productService.image.repository }}:{{ .Values.productService.image.tag }}"

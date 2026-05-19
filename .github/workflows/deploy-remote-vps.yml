@@ -80,11 +80,31 @@ jobs:
           kubectl version --client
           kubectl get nodes
 
+      - name: Create GHCR image pull secret
+        env:
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          if [ -z "$GHCR_PULL_USERNAME" ] || [ -z "$GHCR_PULL_TOKEN" ]; then
+            echo "GHCR_PULL_USERNAME or GHCR_PULL_TOKEN is missing"
+            echo "Add both secrets so k3s can pull private GHCR images"
+            exit 1
+          fi
+
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl -n "$NAMESPACE" create secret docker-registry ghcr-pull-secret \
+            --docker-server=ghcr.io \
+            --docker-username="$GHCR_PULL_USERNAME" \
+            --docker-password="$GHCR_PULL_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy Helm release
         run: |
           helm upgrade --install "$RELEASE" "$CHART_PATH" \
             -n "$NAMESPACE" \
             --create-namespace \
+            --set imagePullSecrets[0].name=ghcr-pull-secret \
             --set userService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-user-service \
             --set userService.image.tag=${{ github.sha }} \
             --set userService.image.pullPolicy=IfNotPresent \
@@ -100,6 +120,15 @@ jobs:
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-user-service --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-product-service --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=300s
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods -n "$NAMESPACE" -o wide || true
+          kubectl get events -n "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 80 || true
+          kubectl describe deploy flashsales-user-service -n "$NAMESPACE" || true
+          kubectl describe deploy flashsales-product-service -n "$NAMESPACE" || true
+          kubectl describe deploy flashsales-order-service -n "$NAMESPACE" || true
 
       - name: Show final status
         run: |

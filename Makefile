@@ -12,7 +12,7 @@ SSH_PORT ?= 22
 REMOTE_K3S_CMD ?= k3s ctr images import -
 SSH ?= ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
 
-.PHONY: help deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote
+.PHONY: help deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote loadtest loadtest-quick
 
 TAIL ?= 200
 SINCE ?= 10m
@@ -35,6 +35,8 @@ help:
 >echo "  make import-images-remote  # Stream local images into remote k3s containerd via SSH"
 >echo "  make deploy-remote         # Deploy chart to remote cluster using .kube-config"
 >echo "  make fix-images-remote     # Build + import to remote + restart + status"
+>echo "  make loadtest              # Run k6 load test via port-forward"
+>echo "  make loadtest-quick        # Run shorter k6 load test"
 
 check-local:
 >API_SERVER=$$(KUBECONFIG=$(KUBECONFIG_PATH) kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'); \
@@ -113,3 +115,9 @@ logs-since:
 >KUBECONFIG=$(KUBECONFIG_PATH) kubectl logs -n $(NAMESPACE) deploy/flashsales-product-service --since=$(SINCE) --tail=$(TAIL)
 >echo "=== order-service (since $(SINCE)) ==="
 >KUBECONFIG=$(KUBECONFIG_PATH) kubectl logs -n $(NAMESPACE) deploy/flashsales-order-service --since=$(SINCE) --tail=$(TAIL)
+
+loadtest:
+>bash ./scripts/loadtest-k6.sh
+
+loadtest-quick:
+>bash ./scripts/loadtest-k6.sh -e RAMP_UP=10s -e STEADY=20s -e RAMP_DOWN=10s -e TARGET_VUS=10
