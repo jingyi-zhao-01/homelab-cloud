@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: flashsales-order-service
+  namespace: {{ include "flashsales.namespace" . }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: order-service
+spec:
+  type: {{ .Values.orderService.service.type }}
+  selector:
+    app.kubernetes.io/component: order-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - port: {{ .Values.orderService.service.port }}
+      targetPort: {{ .Values.orderService.service.port }}
+      protocol: TCP
+      name: http

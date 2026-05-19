@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: flashsales-product-service
+  namespace: {{ include "flashsales.namespace" . }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: product-service
+spec:
+  type: {{ .Values.productService.service.type }}
+  selector:
+    app.kubernetes.io/component: product-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - port: {{ .Values.productService.service.port }}
+      targetPort: {{ .Values.productService.service.port }}
+      protocol: TCP
+      name: http

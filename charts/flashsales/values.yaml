@@ -1,0 +1,99 @@
+namespaceOverride: ""
+
+imagePullSecrets: []
+
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5432
+  auth:
+    username: flashsales
+    password: flashsales-pass
+    database: flashsales
+  storage:
+    size: 5Gi
+    className: ""
+
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 6379
+  auth:
+    password: redis-pass
+  storage:
+    size: 2Gi
+    className: ""
+
+rabbitmq:
+  enabled: true
+  image:
+    repository: rabbitmq
+    tag: "3.13-management-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    amqpPort: 5672
+    managementPort: 15672
+  auth:
+    username: flashsales
+    password: mq-pass
+    vhost: "/"
+  storage:
+    size: 5Gi
+    className: ""
+
+userService:
+  replicaCount: 1
+  image:
+    repository: flashsales/user-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8001
+  env:
+    dbHost: flashsales-postgres
+    dbPort: "5432"
+    dbName: flashsales
+
+productService:
+  replicaCount: 1
+  image:
+    repository: flashsales/product-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8002
+  env:
+    dbHost: flashsales-postgres
+    dbPort: "5432"
+    dbName: flashsales
+
+orderService:
+  replicaCount: 1
+  image:
+    repository: flashsales/order-service
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8003
+  env:
+    userServiceUrl: http://flashsales-user-service:8001
+    productServiceUrl: http://flashsales-product-service:8002
+    dbHost: flashsales-postgres
+    dbPort: "5432"
+    dbName: flashsales
+    redisUrl: redis://:redis-pass@flashsales-redis:6379/0
+    rabbitmqUrl: amqp://flashsales:mq-pass@flashsales-rabbitmq:5672/

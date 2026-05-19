@@ -1,0 +1,12 @@
+[project]
+name = "homelab-cloud"
+version = "0.1.0"
+description = "Homelab flashsales microservices on k3s"
+requires-python = ">=3.12"
+
+[tool.uv.workspace]
+members = [
+  "services/user-service",
+  "services/product-service",
+  "services/order-service",
+]

@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flashsales-user-service
+  namespace: {{ include "flashsales.namespace" . }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: user-service
+spec:
+  replicas: {{ .Values.userService.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: user-service
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: user-service
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: user-service
+          image: "{{ .Values.userService.image.repository }}:{{ .Values.userService.image.tag }}"
+          imagePullPolicy: {{ .Values.userService.image.pullPolicy }}
+          env:
+            - name: DB_HOST
+              value: {{ .Values.userService.env.dbHost | quote }}
+            - name: DB_PORT
+              value: {{ .Values.userService.env.dbPort | quote }}
+            - name: DB_NAME
+              value: {{ .Values.userService.env.dbName | quote }}
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: flashsales-postgres-auth
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: flashsales-postgres-auth
+                  key: POSTGRES_PASSWORD
+          ports:
+            - containerPort: {{ .Values.userService.service.port }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.userService.service.port }}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.userService.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10

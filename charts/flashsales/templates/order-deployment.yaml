@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flashsales-order-service
+  namespace: {{ include "flashsales.namespace" . }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: order-service
+spec:
+  replicas: {{ .Values.orderService.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: order-service
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: order-service
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: order-service
+          image: "{{ .Values.orderService.image.repository }}:{{ .Values.orderService.image.tag }}"
+          imagePullPolicy: {{ .Values.orderService.image.pullPolicy }}
+          env:
+            - name: USER_SERVICE_URL
+              value: {{ .Values.orderService.env.userServiceUrl | quote }}
+            - name: PRODUCT_SERVICE_URL
+              value: {{ .Values.orderService.env.productServiceUrl | quote }}
+            - name: DB_HOST
+              value: {{ .Values.orderService.env.dbHost | quote }}
+            - name: DB_PORT
+              value: {{ .Values.orderService.env.dbPort | quote }}
+            - name: DB_NAME
+              value: {{ .Values.orderService.env.dbName | quote }}
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: flashsales-postgres-auth
+                  key: POSTGRES_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: flashsales-postgres-auth
+                  key: POSTGRES_PASSWORD
+            - name: REDIS_URL
+              value: {{ .Values.orderService.env.redisUrl | quote }}
+            - name: RABBITMQ_URL
+              value: {{ .Values.orderService.env.rabbitmqUrl | quote }}
+          ports:
+            - containerPort: {{ .Values.orderService.service.port }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.orderService.service.port }}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.orderService.service.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
