@@ -1,0 +1,74 @@
+name: Manual Perf Test (k6)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_vus:
+        description: Target concurrent VUs
+        required: false
+        default: "20"
+      ramp_up:
+        description: Ramp-up duration (e.g. 20s)
+        required: false
+        default: "20s"
+      steady:
+        description: Steady duration (e.g. 60s)
+        required: false
+        default: "60s"
+      ramp_down:
+        description: Ramp-down duration (e.g. 20s)
+        required: false
+        default: "20s"
+      report_interval_ms:
+        description: Runtime metric print interval in milliseconds
+        required: false
+        default: "5000"
+
+permissions:
+  contents: read
+
+jobs:
+  perf-test:
+    name: Run k6 Perf Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NAMESPACE: ${{ vars.K8S_NAMESPACE || 'flashsales' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl get nodes
+
+      - name: Verify target services
+        run: |
+          kubectl -n "$NAMESPACE" get svc flashsales-user-service
+          kubectl -n "$NAMESPACE" get svc flashsales-product-service
+          kubectl -n "$NAMESPACE" get svc flashsales-order-service
+
+      - name: Run perf test
+        run: |
+          bash ./perf/loadtest-k6.sh \
+            -e TARGET_VUS=${{ github.event.inputs.target_vus }} \
+            -e RAMP_UP=${{ github.event.inputs.ramp_up }} \
+            -e STEADY=${{ github.event.inputs.steady }} \
+            -e RAMP_DOWN=${{ github.event.inputs.ramp_down }} \
+            -e REPORT_INTERVAL_MS=${{ github.event.inputs.report_interval_ms }}

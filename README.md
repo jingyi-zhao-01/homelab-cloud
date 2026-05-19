@@ -239,7 +239,7 @@ make loadtest-quick KUBECONFIG_PATH=.kube-config
 自定义并发和时长示例:
 
 ```bash
-bash ./scripts/loadtest-k6.sh \
+bash ./perf/loadtest-k6.sh \
   -e RAMP_UP=30s \
   -e STEADY=180s \
   -e RAMP_DOWN=30s \
@@ -248,8 +248,8 @@ bash ./scripts/loadtest-k6.sh \
 
 说明:
 
-- k6 场景脚本在 `scripts/k6-loadtest.js`
-- 包装脚本在 `scripts/loadtest-k6.sh`
+- k6 场景脚本在 `perf/loadtest.js`
+- 包装脚本在 `perf/loadtest-k6.sh`
 - 包装脚本会自动选择可用本地端口并在结束后清理 port-forward 进程
 
 GitHub Actions 手动触发:

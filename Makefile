@@ -117,7 +117,7 @@ logs-since:
 >KUBECONFIG=$(KUBECONFIG_PATH) kubectl logs -n $(NAMESPACE) deploy/flashsales-order-service --since=$(SINCE) --tail=$(TAIL)
 
 loadtest:
->bash ./scripts/loadtest-k6.sh
+>bash ./perf/loadtest-k6.sh
 
 loadtest-quick:
->bash ./scripts/loadtest-k6.sh -e RAMP_UP=10s -e STEADY=20s -e RAMP_DOWN=10s -e TARGET_VUS=10
+>bash ./perf/loadtest-k6.sh -e RAMP_UP=10s -e STEADY=20s -e RAMP_DOWN=10s -e TARGET_VUS=10
