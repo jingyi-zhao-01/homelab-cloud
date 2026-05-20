@@ -100,6 +100,22 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
+      - name: Import existing secret into Terraform state
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
+        env:
+          NAMESPACE: ${{ env.TF_VAR_k8s_namespace }}
+        run: |
+          if terraform state show kubernetes_secret_v1.neon_credentials >/dev/null 2>&1; then
+            echo "kubernetes_secret_v1.neon_credentials already managed by Terraform"
+            exit 0
+          fi
+
+          if kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth >/dev/null 2>&1; then
+            terraform import -input=false kubernetes_secret_v1.neon_credentials "$NAMESPACE/flashsales-postgres-auth"
+          else
+            echo "flashsales-postgres-auth does not exist yet; Terraform will create it"
+          fi
+
       - name: Terraform Plan
         env:
           TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
@@ -110,6 +126,22 @@ jobs:
         env:
           TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
         run: terraform apply -auto-approve -input=false
+
+      - name: Verify secret was reconciled to Neon
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
+        env:
+          NAMESPACE: ${{ env.TF_VAR_k8s_namespace }}
+        run: |
+          DB_URL=$(kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth -o jsonpath='{.data.DATABASE_URL}' | base64 -d)
+          if [ -z "$DB_URL" ]; then
+            echo "DATABASE_URL is empty in flashsales-postgres-auth"
+            exit 1
+          fi
+          if ! echo "$DB_URL" | grep -qi 'neon\.tech'; then
+            echo "DATABASE_URL does not look like a Neon endpoint"
+            exit 1
+          fi
+          echo "flashsales-postgres-auth has been reconciled to Neon credentials"
 
       - name: Terraform Destroy
         if: ${{ inputs.action == 'destroy' }}
