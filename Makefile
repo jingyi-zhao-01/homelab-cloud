@@ -12,13 +12,10 @@ SSH_PORT ?= 22
 REMOTE_K3S_CMD ?= k3s ctr images import -
 SSH ?= ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
 
-.PHONY: help deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote loadtest loadtest-lite loadtest-high-safe
+.PHONY: help deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote
 
 TAIL ?= 200
 SINCE ?= 10m
-K6_P50_THRESHOLD_MS ?= 800
-K6_P90_THRESHOLD_MS ?= 1200
-K6_P95_THRESHOLD_MS ?= 1500
 
 help:
 >echo "Targets:"
@@ -42,6 +39,8 @@ help:
 >echo "  make loadtest-lite         # Run shorter k6 load test"
 >echo "  make loadtest-high-safe    # Run higher-pressure but bounded k6 load test"
 >echo "  Override thresholds: K6_P50_THRESHOLD_MS K6_P90_THRESHOLD_MS K6_P95_THRESHOLD_MS"
+
+include perf/perf.mk
 
 check-local:
 >API_SERVER=$$(KUBECONFIG=$(KUBECONFIG_PATH) kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'); \
@@ -121,11 +120,3 @@ logs-since:
 >echo "=== order-service (since $(SINCE)) ==="
 >KUBECONFIG=$(KUBECONFIG_PATH) kubectl logs -n $(NAMESPACE) deploy/flashsales-order-service --since=$(SINCE) --tail=$(TAIL)
 
-loadtest:
->LOADTEST_SCRIPT=./perf/loadtest.js bash ./perf/loadtest-k6.sh -e K6_P50_THRESHOLD_MS=$(K6_P50_THRESHOLD_MS) -e K6_P90_THRESHOLD_MS=$(K6_P90_THRESHOLD_MS) -e K6_P95_THRESHOLD_MS=$(K6_P95_THRESHOLD_MS)
-
-loadtest-lite:
->LOADTEST_SCRIPT=./perf/loadtest-lite.js bash ./perf/loadtest-k6.sh -e K6_P50_THRESHOLD_MS=$(K6_P50_THRESHOLD_MS) -e K6_P90_THRESHOLD_MS=$(K6_P90_THRESHOLD_MS) -e K6_P95_THRESHOLD_MS=$(K6_P95_THRESHOLD_MS)
-
-loadtest-high-safe:
->LOADTEST_SCRIPT=./perf/loadtest-high.js bash ./perf/loadtest-k6.sh -e K6_P50_THRESHOLD_MS=$(K6_P50_THRESHOLD_MS) -e K6_P90_THRESHOLD_MS=$(K6_P90_THRESHOLD_MS) -e K6_P95_THRESHOLD_MS=$(K6_P95_THRESHOLD_MS)

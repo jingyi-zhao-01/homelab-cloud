@@ -74,9 +74,6 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
 
-      - name: Install k6
-        uses: grafana/setup-k6-action@v1
-
       - name: Configure kubeconfig
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
@@ -132,13 +129,6 @@ jobs:
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-product-service --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=300s
 
-      - name: Run post-deploy loadtest-lite
-        run: |
-          KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" LOADTEST_SCRIPT=./perf/loadtest-lite.js bash ./perf/loadtest-k6.sh \
-            -e K6_P50_THRESHOLD_MS=${{ vars.K6_P50_THRESHOLD_MS || '800' }} \
-            -e K6_P90_THRESHOLD_MS=${{ vars.K6_P90_THRESHOLD_MS || '1200' }} \
-            -e K6_P95_THRESHOLD_MS=${{ vars.K6_P95_THRESHOLD_MS || '1500' }}
-
       - name: Diagnostics on failure
         if: failure()
         run: |
@@ -152,3 +142,78 @@ jobs:
         run: |
           kubectl get pods -n "$NAMESPACE" -o wide
           kubectl get svc -n "$NAMESPACE"
+
+  perf-lite:
+    name: Post-deploy Perf Lite
+    runs-on: ubuntu-latest
+    needs:
+      - deploy
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Run loadtest-lite
+        run: |
+          KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" \
+          K6_P50_THRESHOLD_MS=${{ vars.K6_P50_THRESHOLD_MS || '800' }} \
+          K6_P90_THRESHOLD_MS=${{ vars.K6_P90_THRESHOLD_MS || '1200' }} \
+          K6_P95_THRESHOLD_MS=${{ vars.K6_P95_THRESHOLD_MS || '1500' }} \
+          make loadtest-lite
+
+  perf-high:
+    name: Post-deploy Perf High
+    runs-on: ubuntu-latest
+    needs:
+      - perf-lite
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Pause 5 minutes before high test
+        run: sleep 300
+
+      - name: Run loadtest-high
+        run: |
+          KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" \
+          K6_P50_THRESHOLD_MS=${{ vars.K6_P50_THRESHOLD_MS_HIGH || '1200' }} \
+          K6_P90_THRESHOLD_MS=${{ vars.K6_P90_THRESHOLD_MS_HIGH || '2200' }} \
+          K6_P95_THRESHOLD_MS=${{ vars.K6_P95_THRESHOLD_MS_HIGH || '3000' }} \
+          make loadtest-high-safe
