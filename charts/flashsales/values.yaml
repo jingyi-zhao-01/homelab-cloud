@@ -9,8 +9,10 @@ postgres:
     tag: "16-alpine"
     pullPolicy: IfNotPresent
   resources:
-    limits:
+    requests:
       cpu: "100m"
+    limits:
+      cpu: "250m"
       memory: "128Mi"
   service:
     type: ClusterIP
@@ -30,8 +32,10 @@ redis:
     tag: "7-alpine"
     pullPolicy: IfNotPresent
   resources:
-    limits:
+    requests:
       cpu: "100m"
+    limits:
+      cpu: "250m"
       memory: "128Mi"
   service:
     type: ClusterIP
@@ -76,8 +80,10 @@ userService:
     tag: latest
     pullPolicy: IfNotPresent
   resources:
-    limits:
+    requests:
       cpu: "100m"
+    limits:
+      cpu: "250m"
   service:
     type: ClusterIP
     port: 8001
@@ -98,8 +104,10 @@ productService:
     tag: latest
     pullPolicy: IfNotPresent
   resources:
-    limits:
+    requests:
       cpu: "100m"
+    limits:
+      cpu: "250m"
   service:
     type: ClusterIP
     port: 8002
