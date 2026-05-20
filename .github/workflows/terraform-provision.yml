@@ -63,7 +63,7 @@ jobs:
       # Export as TF_VAR_* so every terraform command (plan/apply/import/destroy)
       # gets the Neon API key without repeating step-level env blocks.
       TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
-      # AWS credentials are needed both for S3 backend (all steps) and SSM apply.
+      # AWS credentials are needed for the S3 backend.
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -209,44 +209,6 @@ jobs:
             exit 1
           fi
           echo "flashsales-postgres-auth has been reconciled to Neon credentials"
-
-      # ── SSM Parameter Store ──────────────────────────────────────────────────
-      # Skipped when AWS credentials are not configured (e.g. local runs / plan-only).
-      - name: Sync credentials to AWS SSM Parameter Store
-        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        working-directory: terraform/neon
-        run: |
-          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
-            echo "AWS_ACCESS_KEY_ID not configured; skipping SSM sync"
-            exit 0
-          fi
-
-          # Read sensitive neon outputs and immediately mask them
-          PG_USER=$(terraform output -raw database_user)
-          PG_PASS=$(terraform output -raw database_password)
-          PG_DB=$(terraform output -raw database_name)
-          DB_URL=$(terraform output -raw database_url)
-          echo "::add-mask::$PG_USER"
-          echo "::add-mask::$PG_PASS"
-          echo "::add-mask::$DB_URL"
-
-          cd "$GITHUB_WORKSPACE/terraform/ssm"
-          terraform init -input=false \
-            -backend-config="bucket=${TF_STATE_BUCKET}" \
-            -backend-config="key=flashsales/ssm/terraform.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="encrypt=true"
-
-          terraform apply -auto-approve -input=false \
-            -var "aws_region=${AWS_REGION}" \
-            -var "postgres_user=${PG_USER}" \
-            -var "postgres_password=${PG_PASS}" \
-            -var "postgres_db=${PG_DB}" \
-            -var "database_url=${DB_URL}"
 
       # Transaction-like safeguard:
       # if apply path fails and this run created a brand-new project,
