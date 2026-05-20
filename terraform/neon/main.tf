@@ -24,13 +24,10 @@ provider "kubernetes" {
 resource "neon_project" "flashsales" {
   name      = "flashsales"
   region_id = var.neon_region
-
-  default_branch_database_name = "flashsales"
-  default_branch_role_name     = "flashsales"
 }
 
 locals {
-  database_url = "postgresql://${neon_project.flashsales.database_user}:${neon_project.flashsales.database_password}@${neon_project.flashsales.database_host}/flashsales?sslmode=require"
+  database_url = "postgresql://${neon_project.flashsales.database_user}:${neon_project.flashsales.database_password}@${neon_project.flashsales.database_host}/${neon_project.flashsales.database_name}?sslmode=require"
 }
 
 # Writes the Neon credentials into the same Secret name the Helm chart expects,
