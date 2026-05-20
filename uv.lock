@@ -181,7 +181,7 @@ wheels = [
 [[package]]
 name = "order-service"
 version = "0.1.0"
-source = { editable = "services/order-service" }
+source = { editable = "flashsale/order-service" }
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
@@ -202,7 +202,7 @@ requires-dist = [
 [[package]]
 name = "product-service"
 version = "0.1.0"
-source = { editable = "services/product-service" }
+source = { editable = "flashsale/product-service" }
 dependencies = [
     { name = "fastapi" },
     { name = "psycopg", extra = ["binary"] },
@@ -406,7 +406,7 @@ wheels = [
 [[package]]
 name = "user-service"
 version = "0.1.0"
-source = { editable = "services/user-service" }
+source = { editable = "flashsale/user-service" }
 dependencies = [
     { name = "email-validator" },
     { name = "fastapi" },

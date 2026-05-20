@@ -75,9 +75,9 @@
 1. 使用 containerd 生态工具构建镜像 (不使用 Docker)
 
 ```bash
-nerdctl build -t flashsales/user-service:latest services/user-service
-nerdctl build -t flashsales/product-service:latest services/product-service
-nerdctl build -t flashsales/order-service:latest services/order-service
+nerdctl build -t flashsales/user-service:latest flashsale/user-service
+nerdctl build -t flashsales/product-service:latest flashsale/product-service
+nerdctl build -t flashsales/order-service:latest flashsale/order-service
 ```
 
 1. 导入镜像到 k3s 的 containerd

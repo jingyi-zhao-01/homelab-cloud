@@ -74,9 +74,9 @@ e2e: check-local
 >KUBECONFIG_PATH=$(KUBECONFIG_PATH) NAMESPACE=$(NAMESPACE) ./scripts/e2e-smoke.sh
 
 build-images:
->$(CONTAINER_CLI) build -t flashsales/user-service:$(IMAGE_TAG) services/user-service
->$(CONTAINER_CLI) build -t flashsales/product-service:$(IMAGE_TAG) services/product-service
->$(CONTAINER_CLI) build -t flashsales/order-service:$(IMAGE_TAG) services/order-service
+>$(CONTAINER_CLI) build -t flashsales/user-service:$(IMAGE_TAG) flashsale/user-service
+>$(CONTAINER_CLI) build -t flashsales/product-service:$(IMAGE_TAG) flashsale/product-service
+>$(CONTAINER_CLI) build -t flashsales/order-service:$(IMAGE_TAG) flashsale/order-service
 
 import-images:
 >$(CONTAINER_CLI) save flashsales/user-service:$(IMAGE_TAG) | sudo k3s ctr images import -

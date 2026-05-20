@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'services/**'
+      - 'flashsale/**'
       - 'charts/flashsales/**'
       - '.github/workflows/deploy-remote-vps.yml'
   workflow_dispatch:
@@ -52,7 +52,7 @@ jobs:
       - name: Build and Push ${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
-          context: services/${{ matrix.service }}
+          context: flashsale/${{ matrix.service }}
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/flashsales-${{ matrix.service }}:${{ github.sha }}
