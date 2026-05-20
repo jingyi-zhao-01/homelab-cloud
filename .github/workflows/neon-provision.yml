@@ -1,5 +1,7 @@
 name: Provision Neon Database
 
+# This workflow provisions Neon + syncs credentials into Kubernetes Secret.
+# Design goal: idempotent apply with safe rollback when partial failures happen.
 on:
   workflow_dispatch:
     inputs:
@@ -35,6 +37,7 @@ on:
       - '.github/workflows/neon-provision.yml'
 
 concurrency:
+  # Serialize runs to avoid tfstate races between concurrent workflow executions.
   group: neon-provision
   cancel-in-progress: false   # never cancel infra runs mid-flight
 
@@ -48,6 +51,10 @@ jobs:
   terraform:
     name: Terraform ${{ inputs.action || 'apply' }}
     runs-on: ubuntu-latest
+    env:
+      # Export as TF_VAR_* so every terraform command (plan/apply/import/destroy)
+      # gets the Neon API key without repeating step-level env blocks.
+      TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
     defaults:
       run:
         working-directory: terraform/neon
@@ -100,6 +107,8 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
+      # If the Secret already exists (for example, created by Helm previously),
+      # import it first so apply updates it instead of failing on "already exists".
       - name: Import existing secret into Terraform state
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         env:
@@ -117,14 +126,22 @@ jobs:
           fi
 
       - name: Terraform Plan
-        env:
-          TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
         run: terraform plan -input=false
+
+      # Capture whether neon_project.flashsales was already managed before apply.
+      # Used by rollback step to avoid deleting long-lived existing projects.
+      - name: Detect whether project is already managed
+        id: precheck_project
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
+        run: |
+          if terraform state show neon_project.flashsales >/dev/null 2>&1; then
+            echo "project_preexisting=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "project_preexisting=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Terraform Apply
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
-        env:
-          TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
         run: terraform apply -auto-approve -input=false
 
       - name: Verify secret was reconciled to Neon
@@ -143,10 +160,17 @@ jobs:
           fi
           echo "flashsales-postgres-auth has been reconciled to Neon credentials"
 
+      # Transaction-like safeguard:
+      # if apply path fails and this run created a brand-new project,
+      # clean it up so we do not leave orphan Neon projects behind.
+      - name: Roll back newly-created Neon project if apply flow failed
+        if: ${{ failure() && (inputs.action == 'apply' || inputs.action == '') && steps.precheck_project.outputs.project_preexisting == 'false' }}
+        run: |
+          echo "Apply flow failed and project was not previously managed. Rolling back neon_project.flashsales..."
+          terraform destroy -target neon_project.flashsales -auto-approve -input=false || true
+
       - name: Terraform Destroy
         if: ${{ inputs.action == 'destroy' }}
-        env:
-          TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
         run: terraform destroy -auto-approve -input=false
 
       # Always upload the latest tfstate so the next run can restore it.
