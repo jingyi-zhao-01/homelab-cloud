@@ -4,6 +4,7 @@ import httpx
 from fastapi import HTTPException
 
 from .config import (
+    DEPENDENCY_TIMEOUT_SECONDS,
     DATABASE_UNAVAILABLE_MESSAGE,
     PRODUCT_SERVICE_URL,
     USER_SERVICE_URL,
@@ -24,7 +25,10 @@ class OrderService:
         self._repository.init_db()
 
     def _ensure_user_exists(self, client: httpx.Client, user_id: int) -> None:
-        response = client.get(f"{USER_SERVICE_URL}/users/{user_id}", timeout=5)
+        response = client.get(
+            f"{USER_SERVICE_URL}/users/{user_id}",
+            timeout=DEPENDENCY_TIMEOUT_SECONDS,
+        )
         if response.status_code == 404:
             self._logger.info("event=order_user_not_found user_id=%s", user_id)
             raise HTTPException(status_code=404, detail="user not found")
@@ -40,7 +44,8 @@ class OrderService:
         self, client: httpx.Client, product_id: int, quantity: int
     ) -> tuple[float, int]:
         product_response = client.get(
-            f"{PRODUCT_SERVICE_URL}/products/{product_id}", timeout=5
+            f"{PRODUCT_SERVICE_URL}/products/{product_id}",
+            timeout=DEPENDENCY_TIMEOUT_SECONDS,
         )
         if product_response.status_code == 404:
             self._logger.info("event=order_product_not_found product_id=%s", product_id)
@@ -60,7 +65,7 @@ class OrderService:
         reserve_response = client.post(
             f"{PRODUCT_SERVICE_URL}/products/{product_id}/reserve",
             json={"quantity": quantity},
-            timeout=5,
+            timeout=DEPENDENCY_TIMEOUT_SECONDS,
         )
         if reserve_response.status_code == 409:
             self._logger.warning(

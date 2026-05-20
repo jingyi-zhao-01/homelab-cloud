@@ -24,6 +24,13 @@ spec:
         - name: postgres
           image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
           imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          args:
+            - "-c"
+            - "log_lock_waits=on"
+            - "-c"
+            - "deadlock_timeout=200ms"
+            - "-c"
+            - "log_min_duration_statement=200ms"
           envFrom:
             - secretRef:
                 name: flashsales-postgres-auth

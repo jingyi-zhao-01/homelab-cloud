@@ -136,6 +136,7 @@ orderService:
   env:
     userServiceUrl: http://flashsales-user-service:8001
     productServiceUrl: http://flashsales-product-service:8002
+    dependencyTimeoutSeconds: "8"
     dbHost: flashsales-postgres
     dbPort: "5432"
     dbName: flashsales

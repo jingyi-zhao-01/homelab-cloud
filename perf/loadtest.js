@@ -2,6 +2,11 @@ import http from "k6/http";
 import { check, sleep } from "k6";
 import exec from "k6/execution";
 
+// Scenario description:
+// This load test targets hotspot ordering behavior.
+// All VUs place orders for the same user and same product, stressing the
+// order -> user/product dependency path and product stock reservation on one hot row.
+
 const BASE_URL = __ENV.BASE_URL || "http://127.0.0.1:18082";
 const USER_URL = __ENV.USER_URL || "http://127.0.0.1:18080";
 const PRODUCT_URL = __ENV.PRODUCT_URL || "http://127.0.0.1:18081";
@@ -11,6 +16,10 @@ const STEADY = __ENV.STEADY || "60s";
 const RAMP_DOWN = __ENV.RAMP_DOWN || "20s";
 const TARGET_VUS = Number(__ENV.TARGET_VUS || 20);
 const REPORT_INTERVAL_MS = Number(__ENV.REPORT_INTERVAL_MS || 5000);
+const K6_HTTP_TIMEOUT = __ENV.K6_HTTP_TIMEOUT || "15s";
+const TEST_DESCRIPTION =
+  __ENV.TEST_DESCRIPTION ||
+  "Hotspot order test: all VUs repeatedly order the same product for the same user";
 
 let lastReportAt = Date.now();
 let lastCompletedIterations = 0;
@@ -30,30 +39,32 @@ export const options = {
 function postJson(url, body) {
   return http.post(url, JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
-    timeout: "10s",
+    timeout: K6_HTTP_TIMEOUT,
   });
 }
 
 export function setup() {
+  console.log(`[k6-scenario] ${TEST_DESCRIPTION}`);
+
   const ts = Date.now();
 
   // Reset databases before test
   const resetOrderRes = http.post(`${BASE_URL}/admin/reset`, null, {
-    timeout: "10s",
+    timeout: K6_HTTP_TIMEOUT,
   });
   check(resetOrderRes, {
     "order database reset": (r) => r.status === 204,
   });
 
   const resetUserRes = http.post(`${USER_URL}/admin/reset`, null, {
-    timeout: "10s",
+    timeout: K6_HTTP_TIMEOUT,
   });
   check(resetUserRes, {
     "user database reset": (r) => r.status === 204,
   });
 
   const seedProductRes = http.post(`${PRODUCT_URL}/admin/seed`, null, {
-    timeout: "10s",
+    timeout: K6_HTTP_TIMEOUT,
   });
   check(seedProductRes, {
     "products seeded": (r) => r.status === 204,

@@ -1,3 +1,5 @@
+import logging
+import time
 from itertools import count
 from threading import Lock
 from typing import Protocol
@@ -5,8 +7,10 @@ from typing import Protocol
 import psycopg
 from psycopg.rows import dict_row
 
-from .config import DEFAULT_SEED_PRODUCT_COUNT
+from .config import DEFAULT_SEED_PRODUCT_COUNT, RESERVE_SQL_LOG_SLOW_MS
 from .models import ProductCreate, ProductOut
+
+db_logger = logging.getLogger("product-service.db")
 
 
 def seed_items(
@@ -217,6 +221,7 @@ class PostgresProductRepository:
                 )
 
     def reserve_product(self, product_id: int, quantity: int) -> ProductOut | None:
+        start = time.perf_counter()
         with psycopg.connect(
             self._database_url, autocommit=True, row_factory=dict_row
         ) as conn:
@@ -232,6 +237,14 @@ class PostgresProductRepository:
                 )
                 updated = cur.fetchone()
                 if updated:
+                    elapsed_ms = (time.perf_counter() - start) * 1000
+                    if elapsed_ms >= RESERVE_SQL_LOG_SLOW_MS:
+                        db_logger.warning(
+                            "event=reserve_sql_slow product_id=%s quantity=%s elapsed_ms=%.2f result=updated",
+                            product_id,
+                            quantity,
+                            elapsed_ms,
+                        )
                     return ProductOut(
                         id=int(updated["id"]),
                         name=str(updated["name"]),
@@ -242,7 +255,23 @@ class PostgresProductRepository:
                 cur.execute("SELECT id FROM products WHERE id = %s", (product_id,))
                 exists = cur.fetchone()
                 if not exists:
+                    elapsed_ms = (time.perf_counter() - start) * 1000
+                    if elapsed_ms >= RESERVE_SQL_LOG_SLOW_MS:
+                        db_logger.warning(
+                            "event=reserve_sql_slow product_id=%s quantity=%s elapsed_ms=%.2f result=missing",
+                            product_id,
+                            quantity,
+                            elapsed_ms,
+                        )
                     return None
+                elapsed_ms = (time.perf_counter() - start) * 1000
+                if elapsed_ms >= RESERVE_SQL_LOG_SLOW_MS:
+                    db_logger.warning(
+                        "event=reserve_sql_slow product_id=%s quantity=%s elapsed_ms=%.2f result=insufficient_stock",
+                        product_id,
+                        quantity,
+                        elapsed_ms,
+                    )
                 raise ValueError("insufficient stock")
 
     def has_product(self, product_id: int) -> bool:
