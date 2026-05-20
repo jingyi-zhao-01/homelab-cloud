@@ -1,13 +1,19 @@
 import logging
 import time
+from abc import ABC, abstractmethod
 from itertools import count
 from threading import Lock
-from typing import Protocol
 
 import psycopg
 from psycopg.rows import dict_row
 
-from .config import DEFAULT_SEED_PRODUCT_COUNT, RESERVE_SQL_LOG_SLOW_MS
+from .config import (
+    DEFAULT_SEED_PRODUCT_COUNT,
+    INVENTORY_LOCK_MODE,
+    OPTIMISTIC_RETRY_LIMIT,
+    RESERVE_SQL_LOG_SLOW_MS,
+)
+from .locking import InventoryReserveEngine
 from .models import ProductCreate, ProductOut
 
 db_logger = logging.getLogger("product-service.db")
@@ -26,27 +32,45 @@ def seed_items(
     ]
 
 
-class ProductRepository(Protocol):
-    def init_db(self) -> None: ...
+class ProductRepository(ABC):
+    @abstractmethod
+    def init_db(self) -> None:
+        pass
 
-    def seed_if_empty(self) -> None: ...
+    @abstractmethod
+    def seed_if_empty(self) -> None:
+        pass
 
-    def reset_db(self) -> None: ...
+    @abstractmethod
+    def reset_db(self) -> None:
+        pass
 
-    def seed_with_quantity(self, count: int, quantity: int) -> None: ...
+    @abstractmethod
+    def seed_with_quantity(self, count: int, quantity: int) -> None:
+        pass
 
-    def create_product(self, payload: ProductCreate) -> ProductOut: ...
+    @abstractmethod
+    def create_product(self, payload: ProductCreate) -> ProductOut:
+        pass
 
-    def get_product(self, product_id: int) -> ProductOut | None: ...
+    @abstractmethod
+    def get_product(self, product_id: int) -> ProductOut | None:
+        pass
 
-    def reserve_product(self, product_id: int, quantity: int) -> ProductOut | None: ...
+    @abstractmethod
+    def reserve_product(self, product_id: int, quantity: int) -> ProductOut | None:
+        pass
 
-    def has_product(self, product_id: int) -> bool: ...
+    @abstractmethod
+    def has_product(self, product_id: int) -> bool:
+        pass
 
-    def list_products(self) -> list[ProductOut]: ...
+    @abstractmethod
+    def list_products(self) -> list[ProductOut]:
+        pass
 
 
-class InMemoryProductRepository:
+class InMemoryProductRepository(ProductRepository):
     def __init__(self) -> None:
         self._products: dict[int, ProductOut] = {}
         self._counter = count(1)
@@ -120,9 +144,25 @@ class InMemoryProductRepository:
         return list(self._products.values())
 
 
-class PostgresProductRepository:
+class PostgresProductRepository(ProductRepository):
     def __init__(self, database_url: str) -> None:
         self._database_url = database_url
+        self._inventory_lock_mode = INVENTORY_LOCK_MODE
+        self._reserve_engine = InventoryReserveEngine(
+            database_url=database_url,
+            lock_mode=INVENTORY_LOCK_MODE,
+            retry_limit=OPTIMISTIC_RETRY_LIMIT,
+            slow_ms_threshold=RESERVE_SQL_LOG_SLOW_MS,
+        )
+
+    @staticmethod
+    def _to_product(row: dict[str, object]) -> ProductOut:
+        return ProductOut(
+            id=int(row["id"]),
+            name=str(row["name"]),
+            price=float(row["price"]),
+            stock=int(row["stock"]),
+        )
 
     def init_db(self) -> None:
         with psycopg.connect(self._database_url, autocommit=True) as conn:
@@ -222,57 +262,31 @@ class PostgresProductRepository:
 
     def reserve_product(self, product_id: int, quantity: int) -> ProductOut | None:
         start = time.perf_counter()
-        with psycopg.connect(
-            self._database_url, autocommit=True, row_factory=dict_row
-        ) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE products
-                    SET stock = stock - %s
-                    WHERE id = %s AND stock >= %s
-                    RETURNING id, name, price, stock
-                    """,
-                    (quantity, product_id, quantity),
-                )
-                updated = cur.fetchone()
-                if updated:
-                    elapsed_ms = (time.perf_counter() - start) * 1000
-                    if elapsed_ms >= RESERVE_SQL_LOG_SLOW_MS:
-                        db_logger.warning(
-                            "event=reserve_sql_slow product_id=%s quantity=%s elapsed_ms=%.2f result=updated",
-                            product_id,
-                            quantity,
-                            elapsed_ms,
-                        )
-                    return ProductOut(
-                        id=int(updated["id"]),
-                        name=str(updated["name"]),
-                        price=float(updated["price"]),
-                        stock=int(updated["stock"]),
-                    )
+        result = "updated"
+        try:
+            updated_row = self._reserve_engine.reserve(product_id, quantity)
 
-                cur.execute("SELECT id FROM products WHERE id = %s", (product_id,))
-                exists = cur.fetchone()
-                if not exists:
-                    elapsed_ms = (time.perf_counter() - start) * 1000
-                    if elapsed_ms >= RESERVE_SQL_LOG_SLOW_MS:
-                        db_logger.warning(
-                            "event=reserve_sql_slow product_id=%s quantity=%s elapsed_ms=%.2f result=missing",
-                            product_id,
-                            quantity,
-                            elapsed_ms,
-                        )
-                    return None
-                elapsed_ms = (time.perf_counter() - start) * 1000
-                if elapsed_ms >= RESERVE_SQL_LOG_SLOW_MS:
-                    db_logger.warning(
-                        "event=reserve_sql_slow product_id=%s quantity=%s elapsed_ms=%.2f result=insufficient_stock",
-                        product_id,
-                        quantity,
-                        elapsed_ms,
-                    )
-                raise ValueError("insufficient stock")
+            if not updated_row:
+                result = "missing"
+                return None
+            return self._to_product(updated_row)
+        except ValueError:
+            result = "insufficient_stock"
+            raise
+        except RuntimeError:
+            result = "retry_exhausted"
+            raise
+        finally:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            if elapsed_ms >= RESERVE_SQL_LOG_SLOW_MS:
+                db_logger.warning(
+                    "event=reserve_sql_slow product_id=%s quantity=%s elapsed_ms=%.2f result=%s lock_mode=%s",
+                    product_id,
+                    quantity,
+                    elapsed_ms,
+                    result,
+                    self._inventory_lock_mode,
+                )
 
     def has_product(self, product_id: int) -> bool:
         with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
