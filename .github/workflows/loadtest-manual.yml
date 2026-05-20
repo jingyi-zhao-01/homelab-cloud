@@ -62,10 +62,16 @@ jobs:
             exit 1
           fi
           chmod 600 "$HOME/.kube/config"
+          export KUBECONFIG="$HOME/.kube/config"
+
+          if ! timeout 15s kubectl config current-context; then
+            echo "Failed to read current-context from kubeconfig (or command timed out)."
+            exit 1
+          fi
 
           # Bound cluster checks to avoid opaque runner-level unhandled failures.
           for i in 1 2 3; do
-            if kubectl --request-timeout=20s get nodes; then
+            if timeout 30s kubectl --request-timeout=20s get nodes; then
               exit 0
             fi
             echo "kubectl get nodes failed (attempt $i/3), retrying..."
