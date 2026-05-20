@@ -17,6 +17,9 @@ const RAMP_DOWN = __ENV.RAMP_DOWN || "20s";
 const TARGET_VUS = Number(__ENV.TARGET_VUS || 20);
 const REPORT_INTERVAL_MS = Number(__ENV.REPORT_INTERVAL_MS || 5000);
 const K6_HTTP_TIMEOUT = __ENV.K6_HTTP_TIMEOUT || "15s";
+const K6_P50_THRESHOLD_MS = Number(__ENV.K6_P50_THRESHOLD_MS || 800);
+const K6_P90_THRESHOLD_MS = Number(__ENV.K6_P90_THRESHOLD_MS || 1200);
+const K6_P95_THRESHOLD_MS = Number(__ENV.K6_P95_THRESHOLD_MS || 1500);
 const TEST_DESCRIPTION =
   __ENV.TEST_DESCRIPTION ||
   "Hotspot order test: all VUs repeatedly order the same product for the same user";
@@ -32,7 +35,11 @@ export const options = {
   ],
   thresholds: {
     http_req_failed: ["rate<0.05"],
-    http_req_duration: ["p(95)<1500"],
+    http_req_duration: [
+      `p(50)<${K6_P50_THRESHOLD_MS}`,
+      `p(90)<${K6_P90_THRESHOLD_MS}`,
+      `p(95)<${K6_P95_THRESHOLD_MS}`,
+    ],
   },
 };
 

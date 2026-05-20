@@ -16,6 +16,9 @@ SSH ?= ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
 
 TAIL ?= 200
 SINCE ?= 10m
+K6_P50_THRESHOLD_MS ?= 800
+K6_P90_THRESHOLD_MS ?= 1200
+K6_P95_THRESHOLD_MS ?= 1500
 
 help:
 >echo "Targets:"
@@ -38,6 +41,7 @@ help:
 >echo "  make loadtest              # Run k6 load test via port-forward"
 >echo "  make loadtest-quick        # Run shorter k6 load test"
 >echo "  make loadtest-high-safe    # Run higher-pressure but bounded k6 load test"
+>echo "  Override thresholds: K6_P50_THRESHOLD_MS K6_P90_THRESHOLD_MS K6_P95_THRESHOLD_MS"
 
 check-local:
 >API_SERVER=$$(KUBECONFIG=$(KUBECONFIG_PATH) kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'); \
@@ -118,10 +122,10 @@ logs-since:
 >KUBECONFIG=$(KUBECONFIG_PATH) kubectl logs -n $(NAMESPACE) deploy/flashsales-order-service --since=$(SINCE) --tail=$(TAIL)
 
 loadtest:
->bash ./perf/loadtest-k6.sh
+>bash ./perf/loadtest-k6.sh -e K6_P50_THRESHOLD_MS=$(K6_P50_THRESHOLD_MS) -e K6_P90_THRESHOLD_MS=$(K6_P90_THRESHOLD_MS) -e K6_P95_THRESHOLD_MS=$(K6_P95_THRESHOLD_MS)
 
 loadtest-lite:
->bash ./perf/loadtest-k6.sh -e RAMP_UP=10s -e STEADY=20s -e RAMP_DOWN=10s -e TARGET_VUS=10 -e K6_HTTP_TIMEOUT=20s
+>bash ./perf/loadtest-k6.sh -e RAMP_UP=10s -e STEADY=20s -e RAMP_DOWN=10s -e TARGET_VUS=10 -e K6_HTTP_TIMEOUT=20s -e K6_P50_THRESHOLD_MS=$(K6_P50_THRESHOLD_MS) -e K6_P90_THRESHOLD_MS=$(K6_P90_THRESHOLD_MS) -e K6_P95_THRESHOLD_MS=$(K6_P95_THRESHOLD_MS)
 
 loadtest-high-safe:
->bash ./perf/loadtest-k6.sh -e RAMP_UP=20s -e STEADY=45s -e RAMP_DOWN=20s -e TARGET_VUS=40 -e K6_HTTP_TIMEOUT=30s -e TEST_DESCRIPTION="High-pressure safe test: increased concurrency with bounded duration and timeout"
+>bash ./perf/loadtest-k6.sh -e RAMP_UP=20s -e STEADY=45s -e RAMP_DOWN=20s -e TARGET_VUS=40 -e K6_HTTP_TIMEOUT=30s -e K6_P50_THRESHOLD_MS=$(K6_P50_THRESHOLD_MS) -e K6_P90_THRESHOLD_MS=$(K6_P90_THRESHOLD_MS) -e K6_P95_THRESHOLD_MS=$(K6_P95_THRESHOLD_MS) -e TEST_DESCRIPTION="High-pressure safe test: increased concurrency with bounded duration and timeout"
