@@ -74,4 +74,4 @@ def list_users() -> list[UserOut]:
     responses={503: {"description": "Database unavailable"}},
 )
 def admin_reset() -> None:
-    user_service.repository.reset_db()
+    user_service._repository.reset_db()

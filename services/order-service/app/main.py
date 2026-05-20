@@ -77,4 +77,4 @@ def list_orders() -> list[OrderOut]:
     responses={503: {"description": "Database unavailable"}},
 )
 def admin_reset() -> None:
-    order_service.repository.reset_db()
+    order_service._repository.reset_db()

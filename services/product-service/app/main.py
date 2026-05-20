@@ -83,7 +83,7 @@ def list_products() -> list[ProductOut]:
     responses={503: {"description": "Database unavailable"}},
 )
 def admin_reset() -> None:
-    product_service.repository.reset_db()
+    product_service._repository.reset_db()
 
 
 @app.post(
@@ -92,6 +92,6 @@ def admin_reset() -> None:
     responses={503: {"description": "Database unavailable"}},
 )
 def admin_seed() -> None:
-    product_service.repository.seed_with_quantity(
+    product_service._repository.seed_with_quantity(
         SEED_PRODUCT_COUNT, SEED_PRODUCT_QUANTITY
     )
