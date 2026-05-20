@@ -24,7 +24,7 @@ postgres:
     className: ""
 
 redis:
-  enabled: true
+  enabled: false
   image:
     repository: redis
     tag: "7-alpine"
@@ -43,7 +43,7 @@ redis:
     className: ""
 
 rabbitmq:
-  enabled: true
+  enabled: false
   image:
     repository: rabbitmq
     tag: "3.13-management-alpine"
