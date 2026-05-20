@@ -12,7 +12,7 @@ SSH_PORT ?= 22
 REMOTE_K3S_CMD ?= k3s ctr images import -
 SSH ?= ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
 
-.PHONY: help deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote
+.PHONY: help deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-init neon-apply neon-destroy
 
 TAIL ?= 200
 SINCE ?= 10m
@@ -43,6 +43,9 @@ help:
 >echo "  make concurrency-stress100 # 100 TPS stress stage"
 >echo "  make concurrency-stress200 # 200 TPS stress stage"
 >echo "  make concurrency-hotspot   # High-conflict hotspot correctness test"
+>echo "  make neon-init             # terraform init for Neon provider"
+>echo "  make neon-apply            # Provision Neon DB and write K8s secret"
+>echo "  make neon-destroy          # Destroy Neon resources (caution: data loss)"
 
 include perf/perf.mk
 
@@ -123,4 +126,15 @@ logs-since:
 >KUBECONFIG=$(KUBECONFIG_PATH) kubectl logs -n $(NAMESPACE) deploy/flashsales-product-service --since=$(SINCE) --tail=$(TAIL)
 >echo "=== order-service (since $(SINCE)) ==="
 >KUBECONFIG=$(KUBECONFIG_PATH) kubectl logs -n $(NAMESPACE) deploy/flashsales-order-service --since=$(SINCE) --tail=$(TAIL)
+
+TERRAFORM_NEON_DIR ?= terraform/neon
+
+neon-init:
+>cd $(TERRAFORM_NEON_DIR) && terraform init
+
+neon-apply:
+>cd $(TERRAFORM_NEON_DIR) && terraform apply
+
+neon-destroy:
+>cd $(TERRAFORM_NEON_DIR) && terraform destroy
 
