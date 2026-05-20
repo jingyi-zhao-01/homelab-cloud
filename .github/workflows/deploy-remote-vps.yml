@@ -182,6 +182,7 @@ jobs:
   perf-high:
     name: Post-deploy Perf High
     runs-on: ubuntu-latest
+    if: ${{ always() }}
     needs:
       - perf-lite
 
