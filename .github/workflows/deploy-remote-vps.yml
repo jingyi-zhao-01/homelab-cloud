@@ -74,6 +74,9 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
 
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
       - name: Configure kubeconfig
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
@@ -128,6 +131,13 @@ jobs:
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-user-service --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-product-service --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=300s
+
+      - name: Run post-deploy loadtest-lite
+        run: |
+          KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" LOADTEST_SCRIPT=./perf/loadtest-lite.js bash ./perf/loadtest-k6.sh \
+            -e K6_P50_THRESHOLD_MS=${{ vars.K6_P50_THRESHOLD_MS || '800' }} \
+            -e K6_P90_THRESHOLD_MS=${{ vars.K6_P90_THRESHOLD_MS || '1200' }} \
+            -e K6_P95_THRESHOLD_MS=${{ vars.K6_P95_THRESHOLD_MS || '1500' }}
 
       - name: Diagnostics on failure
         if: failure()

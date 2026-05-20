@@ -10,10 +10,16 @@ else
 fi
 
 NAMESPACE="${NAMESPACE:-flashsales}"
+LOADTEST_SCRIPT="${LOADTEST_SCRIPT:-./perf/loadtest.js}"
 
 if [[ ! -r "$KUBECONFIG_PATH" ]]; then
   echo "Kubeconfig not found or not readable: $KUBECONFIG_PATH" >&2
   echo "Set KUBECONFIG_PATH explicitly or provide .kube-config / $HOME/.kube/config" >&2
+  exit 1
+fi
+
+if [[ ! -r "$LOADTEST_SCRIPT" ]]; then
+  echo "Loadtest script not found or not readable: $LOADTEST_SCRIPT" >&2
   exit 1
 fi
 
@@ -107,4 +113,4 @@ k6 run \
   -e PRODUCT_URL="$PRODUCT_URL" \
   -e BASE_URL="$BASE_URL" \
   "$@" \
-  ./perf/loadtest.js
+  "$LOADTEST_SCRIPT"
