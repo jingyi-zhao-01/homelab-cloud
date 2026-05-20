@@ -27,6 +27,10 @@ class ProductRepository(Protocol):
 
     def seed_if_empty(self) -> None: ...
 
+    def reset_db(self) -> None: ...
+
+    def seed_with_quantity(self, count: int, quantity: int) -> None: ...
+
     def create_product(self, payload: ProductCreate) -> ProductOut: ...
 
     def get_product(self, product_id: int) -> ProductOut | None: ...
@@ -56,6 +60,23 @@ class InMemoryProductRepository:
                     id=idx, name=name, price=price, stock=stock
                 )
             self._counter = count(len(self._products) + 1)
+
+    def reset_db(self) -> None:
+        with self._lock:
+            self._products.clear()
+            self._counter = count(1)
+
+    def seed_with_quantity(self, count_value: int, quantity: int) -> None:
+        with self._lock:
+            self._products.clear()
+            for idx in range(1, count_value + 1):
+                self._products[idx] = ProductOut(
+                    id=idx,
+                    name=f"Seed Item {idx}",
+                    price=round(9.9 + idx * 0.5, 2),
+                    stock=quantity,
+                )
+            self._counter = count(count_value + 1)
 
     def create_product(self, payload: ProductCreate) -> ProductOut:
         with self._lock:
@@ -126,6 +147,29 @@ class PostgresProductRepository:
                     VALUES (%s, %s, %s)
                     """,
                     seed_items(),
+                )
+
+    def reset_db(self) -> None:
+        with psycopg.connect(self._database_url, autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute("TRUNCATE TABLE products RESTART IDENTITY CASCADE")
+
+    def seed_with_quantity(self, count_value: int, quantity: int) -> None:
+        with psycopg.connect(
+            self._database_url, autocommit=True, row_factory=dict_row
+        ) as conn:
+            with conn.cursor() as cur:
+                cur.execute("TRUNCATE TABLE products RESTART IDENTITY CASCADE")
+                items_to_seed = [
+                    (f"Seed Item {idx}", round(9.9 + idx * 0.5, 2), quantity)
+                    for idx in range(1, count_value + 1)
+                ]
+                cur.executemany(
+                    """
+                    INSERT INTO products (name, price, stock)
+                    VALUES (%s, %s, %s)
+                    """,
+                    items_to_seed,
                 )
 
     def create_product(self, payload: ProductCreate) -> ProductOut:

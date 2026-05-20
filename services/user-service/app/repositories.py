@@ -11,6 +11,8 @@ from .models import UserCreate, UserOut
 class UserRepository(Protocol):
     def init_db(self) -> None: ...
 
+    def reset_db(self) -> None: ...
+
     def create_user(self, payload: UserCreate) -> UserOut: ...
 
     def get_user(self, user_id: int) -> UserOut | None: ...
@@ -26,6 +28,11 @@ class InMemoryUserRepository:
 
     def init_db(self) -> None:
         return
+
+    def reset_db(self) -> None:
+        with self._lock:
+            self._users.clear()
+            self._counter = count(1)
 
     def create_user(self, payload: UserCreate) -> UserOut:
         with self._lock:
@@ -55,6 +62,11 @@ class PostgresUserRepository:
                         email TEXT NOT NULL UNIQUE
                     )
                     """)
+
+    def reset_db(self) -> None:
+        with psycopg.connect(self._database_url, autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
 
     def create_user(self, payload: UserCreate) -> UserOut:
         with psycopg.connect(

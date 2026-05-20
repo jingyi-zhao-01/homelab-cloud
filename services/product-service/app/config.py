@@ -4,6 +4,10 @@ DATABASE_UNAVAILABLE_MESSAGE = "database unavailable"
 PRODUCT_NOT_FOUND_MESSAGE = "product not found"
 DEFAULT_SEED_PRODUCT_COUNT = 100
 
+# Perf test seed config
+SEED_PRODUCT_COUNT = int(os.getenv("SEED_PRODUCT_COUNT", "1000"))
+SEED_PRODUCT_QUANTITY = int(os.getenv("SEED_PRODUCT_QUANTITY", "10000"))
+
 DB_HOST = os.getenv("DB_HOST", "")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "")

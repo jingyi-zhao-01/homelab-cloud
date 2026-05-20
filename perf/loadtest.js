@@ -37,6 +37,29 @@ function postJson(url, body) {
 export function setup() {
   const ts = Date.now();
 
+  // Reset databases before test
+  const resetOrderRes = http.post(`${BASE_URL}/admin/reset`, null, {
+    timeout: "10s",
+  });
+  check(resetOrderRes, {
+    "order database reset": (r) => r.status === 204,
+  });
+
+  const resetUserRes = http.post(`${USER_URL}/admin/reset`, null, {
+    timeout: "10s",
+  });
+  check(resetUserRes, {
+    "user database reset": (r) => r.status === 204,
+  });
+
+  const seedProductRes = http.post(`${PRODUCT_URL}/admin/seed`, null, {
+    timeout: "10s",
+  });
+  check(seedProductRes, {
+    "products seeded": (r) => r.status === 204,
+  });
+
+  // Create test user and product for load test
   const userRes = postJson(`${USER_URL}/users`, {
     email: `k6-${ts}@example.com`,
     name: "k6 user",

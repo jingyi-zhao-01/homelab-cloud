@@ -69,3 +69,12 @@ def get_order(order_id: int) -> OrderOut:
 )
 def list_orders() -> list[OrderOut]:
     return order_service.list_orders()
+
+
+@app.post(
+    "/admin/reset",
+    status_code=204,
+    responses={503: {"description": "Database unavailable"}},
+)
+def admin_reset() -> None:
+    order_service.repository.reset_db()

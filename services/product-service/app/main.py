@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from .config import db_url, use_postgres
+from .config import SEED_PRODUCT_COUNT, SEED_PRODUCT_QUANTITY, db_url, use_postgres
 from .models import ProductCreate, ProductOut, ReserveRequest
 from .observability import configure_service_logger, create_request_logging_middleware
 from .repositories import InMemoryProductRepository, PostgresProductRepository
@@ -75,3 +75,23 @@ def reserve_product(product_id: int, payload: ReserveRequest) -> ProductOut:
 )
 def list_products() -> list[ProductOut]:
     return product_service.list_products()
+
+
+@app.post(
+    "/admin/reset",
+    status_code=204,
+    responses={503: {"description": "Database unavailable"}},
+)
+def admin_reset() -> None:
+    product_service.repository.reset_db()
+
+
+@app.post(
+    "/admin/seed",
+    status_code=204,
+    responses={503: {"description": "Database unavailable"}},
+)
+def admin_seed() -> None:
+    product_service.repository.seed_with_quantity(
+        SEED_PRODUCT_COUNT, SEED_PRODUCT_QUANTITY
+    )

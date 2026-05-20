@@ -66,3 +66,12 @@ def get_user(user_id: int) -> UserOut:
 )
 def list_users() -> list[UserOut]:
     return user_service.list_users()
+
+
+@app.post(
+    "/admin/reset",
+    status_code=204,
+    responses={503: {"description": "Database unavailable"}},
+)
+def admin_reset() -> None:
+    user_service.repository.reset_db()

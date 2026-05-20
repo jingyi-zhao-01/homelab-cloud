@@ -16,6 +16,8 @@ ROW_FACTORY = cast(Any, dict_row)
 class OrderRepository(Protocol):
     def init_db(self) -> None: ...
 
+    def reset_db(self) -> None: ...
+
     def create_order(
         self, user_id: int, total_amount: float, order_items: list[OrderItemOut]
     ) -> OrderOut: ...
@@ -48,6 +50,11 @@ class InMemoryOrderRepository:
 
     def init_db(self) -> None:
         return
+
+    def reset_db(self) -> None:
+        with self._lock:
+            self._orders.clear()
+            self._counter = count(1)
 
     def create_order(
         self, user_id: int, total_amount: float, order_items: list[OrderItemOut]
@@ -87,6 +94,11 @@ class PostgresOrderRepository:
                         items_json JSONB NOT NULL
                     )
                     """)
+
+    def reset_db(self) -> None:
+        with psycopg.connect(self._database_url, autocommit=True) as conn:
+            with conn.cursor() as cur:
+                cur.execute("TRUNCATE TABLE orders RESTART IDENTITY CASCADE")
 
     def create_order(
         self, user_id: int, total_amount: float, order_items: list[OrderItemOut]
