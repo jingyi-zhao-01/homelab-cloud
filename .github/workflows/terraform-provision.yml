@@ -1,4 +1,4 @@
-name: Provision Neon Database
+name: Terraform Provision
 
 # This workflow provisions Neon + syncs credentials into Kubernetes Secret.
 # Design goal: idempotent apply with safe rollback when partial failures happen.
@@ -29,9 +29,13 @@ on:
       KUBE_CONFIG_DATA:
         required: true
       AWS_ACCESS_KEY_ID:
-        required: false
+        required: true
       AWS_SECRET_ACCESS_KEY:
-        required: false
+        required: true
+      AWS_REGION:
+        required: true
+      TF_STATE_BUCKET:
+        required: true
 
   push:
     branches:
@@ -46,7 +50,7 @@ concurrency:
   cancel-in-progress: false   # never cancel infra runs mid-flight
 
 env:
-  TF_VAR_k8s_namespace: ${{ vars.K8S_NAMESPACE || 'flashsales' }}
+  TF_VAR_k8s_namespace: flashsales
 
 permissions:
   contents: read
@@ -62,8 +66,8 @@ jobs:
       # AWS credentials are needed both for S3 backend (all steps) and SSM apply.
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
-      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
     defaults:
       run:
         working-directory: terraform/neon
@@ -89,7 +93,11 @@ jobs:
             exit 1
           fi
           if [ -z "$TF_STATE_BUCKET" ]; then
-            echo "TF_STATE_BUCKET variable is missing"
+            echo "TF_STATE_BUCKET secret is missing"
+            exit 1
+          fi
+          if [ -z "$AWS_REGION" ]; then
+            echo "AWS_REGION secret is missing"
             exit 1
           fi
 
@@ -209,7 +217,7 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          AWS_REGION: ${{ env.AWS_REGION_VALUE }}
         working-directory: terraform/neon
         run: |
           if [ -z "$AWS_ACCESS_KEY_ID" ]; then
