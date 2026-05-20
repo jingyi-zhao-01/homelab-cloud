@@ -25,7 +25,8 @@ def create_request_logging_middleware(
         request_id = request.headers.get("x-request-id", str(uuid4()))
         response = await call_next(request)
         duration_ms = (time.perf_counter() - start) * 1000
-        logger.info(
+        log_fn = logger.error if response.status_code >= 400 else logger.info
+        log_fn(
             "event=request service=%s request_id=%s method=%s path=%s status_code=%s duration_ms=%.2f",
             service_name,
             request_id,
