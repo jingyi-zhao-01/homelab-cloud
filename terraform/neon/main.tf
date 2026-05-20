@@ -1,6 +1,10 @@
 terraform {
   required_version = ">= 1.5"
 
+  # Partial configuration — bucket/key/region are passed via -backend-config at init time.
+  # Set TF_STATE_BUCKET and AWS credentials in CI secrets/vars.
+  backend "s3" {}
+
   required_providers {
     neon = {
       source  = "kislerdm/neon"

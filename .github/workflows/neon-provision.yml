@@ -28,6 +28,10 @@ on:
         required: true
       KUBE_CONFIG_DATA:
         required: true
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
 
   push:
     branches:
@@ -55,6 +59,11 @@ jobs:
       # Export as TF_VAR_* so every terraform command (plan/apply/import/destroy)
       # gets the Neon API key without repeating step-level env blocks.
       TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
+      # AWS credentials are needed both for S3 backend (all steps) and SSM apply.
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
     defaults:
       run:
         working-directory: terraform/neon
@@ -65,15 +74,6 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-
-      # Restore tfstate from previous run so Terraform knows what already exists.
-      # continue-on-error so the first run (no prior state) doesn't fail.
-      - name: Restore tfstate artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: neon-tfstate
-          path: terraform/neon
-        continue-on-error: true
 
       - name: Validate required secrets
         env:
@@ -86,6 +86,10 @@ jobs:
           fi
           if [ -z "$KUBE_CONFIG_DATA" ]; then
             echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          if [ -z "$TF_STATE_BUCKET" ]; then
+            echo "TF_STATE_BUCKET variable is missing"
             exit 1
           fi
 
@@ -105,7 +109,12 @@ jobs:
           EOF
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=flashsales/neon/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
 
       # If the Secret already exists (for example, created by Helm previously),
       # import it first so apply updates it instead of failing on "already exists".
@@ -193,6 +202,44 @@ jobs:
           fi
           echo "flashsales-postgres-auth has been reconciled to Neon credentials"
 
+      # ── SSM Parameter Store ──────────────────────────────────────────────────
+      # Skipped when AWS credentials are not configured (e.g. local runs / plan-only).
+      - name: Sync credentials to AWS SSM Parameter Store
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+        working-directory: terraform/neon
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "AWS_ACCESS_KEY_ID not configured; skipping SSM sync"
+            exit 0
+          fi
+
+          # Read sensitive neon outputs and immediately mask them
+          PG_USER=$(terraform output -raw database_user)
+          PG_PASS=$(terraform output -raw database_password)
+          PG_DB=$(terraform output -raw database_name)
+          DB_URL=$(terraform output -raw database_url)
+          echo "::add-mask::$PG_USER"
+          echo "::add-mask::$PG_PASS"
+          echo "::add-mask::$DB_URL"
+
+          cd "$GITHUB_WORKSPACE/terraform/ssm"
+          terraform init -input=false \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=flashsales/ssm/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
+
+          terraform apply -auto-approve -input=false \
+            -var "aws_region=${AWS_REGION}" \
+            -var "postgres_user=${PG_USER}" \
+            -var "postgres_password=${PG_PASS}" \
+            -var "postgres_db=${PG_DB}" \
+            -var "database_url=${DB_URL}"
+
       # Transaction-like safeguard:
       # if apply path fails and this run created a brand-new project,
       # clean it up so we do not leave orphan Neon projects behind.
@@ -206,12 +253,4 @@ jobs:
         if: ${{ inputs.action == 'destroy' }}
         run: terraform destroy -auto-approve -input=false
 
-      # Always upload the latest tfstate so the next run can restore it.
-      - name: Save tfstate artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: neon-tfstate
-          path: terraform/neon/terraform.tfstate
-          overwrite: true
-          retention-days: 90
+
