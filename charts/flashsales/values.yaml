@@ -50,8 +50,8 @@ rabbitmq:
     pullPolicy: IfNotPresent
   resources:
     limits:
-      cpu: "100m"
-      memory: "128Mi"
+      cpu: "250m"
+      memory: "384Mi"
   service:
     type: ClusterIP
     amqpPort: 5672
