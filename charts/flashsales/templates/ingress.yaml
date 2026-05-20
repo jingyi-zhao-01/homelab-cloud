@@ -1,0 +1,41 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "flashsales.fullname" . }}-ingress
+  namespace: {{ include "flashsales.namespace" . }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+spec:
+  rules:
+  - host: {{ .Values.ingress.userServiceHost }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: flashsales-user-service
+            port:
+              number: 8001
+  - host: {{ .Values.ingress.productServiceHost }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: flashsales-product-service
+            port:
+              number: 8002
+  - host: {{ .Values.ingress.orderServiceHost }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: flashsales-order-service
+            port:
+              number: 8003
+{{- end }}

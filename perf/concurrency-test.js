@@ -3,9 +3,9 @@ import { check } from "k6";
 import exec from "k6/execution";
 import { Counter, Rate } from "k6/metrics";
 
-const BASE_URL = __ENV.BASE_URL || "http://127.0.0.1:18082";
-const USER_URL = __ENV.USER_URL || "http://127.0.0.1:18080";
-const PRODUCT_URL = __ENV.PRODUCT_URL || "http://127.0.0.1:18081";
+const BASE_URL = __ENV.BASE_URL || "http://homelab-order-service.jzhao62.com";
+const USER_URL = __ENV.USER_URL || "http://homelab-user-service.jzhao62.com";
+const PRODUCT_URL = __ENV.PRODUCT_URL || "http://homelab-product-service.jzhao62.com";
 const K6_HTTP_TIMEOUT = __ENV.K6_HTTP_TIMEOUT || "20s";
 const PROFILE = __ENV.PROFILE || "smoke";
 const REPORT_INTERVAL_MS = Number(__ENV.REPORT_INTERVAL_MS || 5000);

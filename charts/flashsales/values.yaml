@@ -144,3 +144,9 @@ orderService:
     dbName: flashsales
     redisUrl: redis://:redis-pass@flashsales-redis:6379/0
     rabbitmqUrl: amqp://flashsales:mq-pass@flashsales-rabbitmq:5672/
+
+ingress:
+  enabled: true
+  userServiceHost: "homelab-user-service.jzhao62.com"
+  productServiceHost: "homelab-product-service.jzhao62.com"
+  orderServiceHost: "homelab-order-service.jzhao62.com"
