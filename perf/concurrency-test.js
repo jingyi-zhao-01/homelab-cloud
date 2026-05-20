@@ -86,6 +86,7 @@ const MAX_VUS = Number(__ENV.MAX_VUS || Math.max(200, TARGET_TPS * 10));
 const TEST_DESCRIPTION =
   __ENV.TEST_DESCRIPTION ||
   `Concurrency profile=${PROFILE} tps=${TARGET_TPS} duration=${TEST_DURATION}`;
+const POST_CLEANUP = (__ENV.POST_CLEANUP || "true").toLowerCase() === "true";
 
 const http5xxRate = new Rate("http_5xx_rate");
 const oversellViolations = new Counter("oversell_violations");
@@ -130,6 +131,37 @@ function failIfNotStatus(res, expectedStatus, message) {
   check(res, {
     [message]: (r) => r.status === expectedStatus,
   });
+}
+
+function resetServiceDb(url, serviceName) {
+  const res = http.post(`${url}/admin/reset`, null, {
+    timeout: K6_HTTP_TIMEOUT,
+  });
+  const ok = res.status === 204;
+  check(res, {
+    [`post-cleanup ${serviceName} database reset`]: (r) => r.status === 204,
+  });
+  if (!ok) {
+    console.log(
+      `[k6-post-cleanup] reset_failed service=${serviceName} status=${res.status}`,
+    );
+  }
+  return ok;
+}
+
+function runPostCleanup() {
+  if (!POST_CLEANUP) {
+    console.log("[k6-post-cleanup] skipped (POST_CLEANUP=false)");
+    return;
+  }
+
+  const orderOk = resetServiceDb(BASE_URL, "order");
+  const userOk = resetServiceDb(USER_URL, "user");
+  const productOk = resetServiceDb(PRODUCT_URL, "product");
+  const allOk = orderOk && userOk && productOk;
+  console.log(
+    `[k6-post-cleanup] completed order_reset=${orderOk} user_reset=${userOk} product_reset=${productOk} all_ok=${allOk}`,
+  );
 }
 
 export function setup() {
@@ -223,34 +255,37 @@ export function teardown(data) {
   const listOrdersRes = http.get(`${BASE_URL}/orders`, {
     timeout: K6_HTTP_TIMEOUT,
   });
+  let violations = 0;
+
   if (listOrdersRes.status !== 200) {
     oversellViolations.add(1);
+    violations += 1;
     console.log("[k6-correctness] unable to list orders for oversell check");
-    return;
-  }
-
-  const orders = listOrdersRes.json();
-  const soldByProduct = {};
-  for (const order of orders) {
-    for (const item of order.items || []) {
-      const productId = Number(item.product_id);
-      const quantity = Number(item.quantity || 0);
-      soldByProduct[productId] = (soldByProduct[productId] || 0) + quantity;
+  } else {
+    const orders = listOrdersRes.json();
+    const soldByProduct = {};
+    for (const order of orders) {
+      for (const item of order.items || []) {
+        const productId = Number(item.product_id);
+        const quantity = Number(item.quantity || 0);
+        soldByProduct[productId] = (soldByProduct[productId] || 0) + quantity;
+      }
     }
-  }
 
-  let violations = 0;
-  for (const productId of data.products) {
-    const sold = soldByProduct[Number(productId)] || 0;
-    if (sold > data.initialStock) {
-      violations += 1;
-      console.log(
-        `[k6-correctness] oversell_detected product_id=${productId} sold=${sold} initial_stock=${data.initialStock}`,
-      );
+    for (const productId of data.products) {
+      const sold = soldByProduct[Number(productId)] || 0;
+      if (sold > data.initialStock) {
+        violations += 1;
+        console.log(
+          `[k6-correctness] oversell_detected product_id=${productId} sold=${sold} initial_stock=${data.initialStock}`,
+        );
+      }
     }
   }
 
   if (violations > 0) {
     oversellViolations.add(violations);
   }
+
+  runPostCleanup();
 }

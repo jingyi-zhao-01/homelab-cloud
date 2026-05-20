@@ -30,6 +30,36 @@ require_cmd() {
   fi
 }
 
+ensure_node24() {
+  local required_major="${NODE_MAJOR_REQUIRED:-24}"
+  local current=""
+
+  if command -v node >/dev/null 2>&1; then
+    current="$(node -v 2>/dev/null || true)"
+    if [[ "$current" =~ ^v${required_major}\. ]]; then
+      echo "Using Node.js ${current}"
+      return 0
+    fi
+  fi
+
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+    # shellcheck disable=SC1090
+    . "$NVM_DIR/nvm.sh"
+    nvm install "$required_major" >/dev/null
+    nvm use "$required_major" >/dev/null
+    current="$(node -v 2>/dev/null || true)"
+    if [[ "$current" =~ ^v${required_major}\. ]]; then
+      echo "Using Node.js ${current} via nvm"
+      return 0
+    fi
+  fi
+
+  echo "Node.js ${required_major}.x is required by this load test wrapper."
+  echo "k6 runtime itself does not need Node.js, but this project standardizes on Node ${required_major}."
+  exit 1
+}
+
 wait_http() {
   local url="$1"
   local name="$2"
@@ -52,6 +82,7 @@ trap cleanup EXIT
 require_cmd kubectl
 require_cmd k6
 require_cmd curl
+ensure_node24
 
 # Using Ingress with DNS-configured domain names
 USER_HOST="homelab-user-service.jzhao62.com"
