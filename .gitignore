@@ -2,3 +2,4 @@
 secrets/
 .kube-config
 grafana-token
+__pycache__/

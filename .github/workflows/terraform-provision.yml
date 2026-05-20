@@ -1,6 +1,7 @@
 name: Terraform Provision
 
-# This workflow provisions Neon + syncs credentials into Kubernetes Secret.
+# This workflow provisions Neon, reconciles Kubernetes Secret,
+# and syncs Neon credentials into AWS SSM Parameter Store.
 # Design goal: idempotent apply with safe rollback when partial failures happen.
 on:
   workflow_dispatch:
@@ -42,7 +43,8 @@ on:
       - main
     paths:
       - 'terraform/neon/**'
-      - '.github/workflows/neon-provision.yml'
+      - 'terraform/ssm/**'
+      - '.github/workflows/terraform-provision.yml'
 
 concurrency:
   # Serialize runs to avoid tfstate races between concurrent workflow executions.
@@ -209,6 +211,32 @@ jobs:
             exit 1
           fi
           echo "flashsales-postgres-auth has been reconciled to Neon credentials"
+
+      - name: Sync Neon credentials to SSM via Terraform
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
+        env:
+          SSM_PATH_PREFIX: flashsales/prod
+        run: |
+          DB_USER=$(terraform output -raw database_user)
+          DB_PASSWORD=$(terraform output -raw database_password)
+          DB_NAME=$(terraform output -raw database_name)
+          DATABASE_URL=$(terraform output -raw database_url)
+
+          cd ../ssm
+
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=flashsales/ssm/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
+
+          terraform apply -auto-approve -input=false \
+            -var="aws_region=${AWS_REGION}" \
+            -var="ssm_path_prefix=${SSM_PATH_PREFIX}" \
+            -var="postgres_user=${DB_USER}" \
+            -var="postgres_password=${DB_PASSWORD}" \
+            -var="postgres_db=${DB_NAME}" \
+            -var="database_url=${DATABASE_URL}"
 
       # Transaction-like safeguard:
       # if apply path fails and this run created a brand-new project,
