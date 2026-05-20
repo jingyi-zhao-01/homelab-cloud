@@ -13,7 +13,11 @@ require_cmd() {
 
 pick_free_port() {
   local port
+  local excluded=" $* "
   for port in $(seq 18080 18180); do
+    if [[ "$excluded" == *" $port "* ]]; then
+      continue
+    fi
     if ! ss -lnt "( sport = :$port )" | grep -q ":$port"; then
       echo "$port"
       return 0
@@ -37,6 +41,17 @@ wait_http() {
   exit 1
 }
 
+service_port() {
+  local service_name="$1"
+  local port
+  port="$(KUBECONFIG="$KUBECONFIG_PATH" kubectl -n "$NAMESPACE" get svc "$service_name" -o jsonpath='{.spec.ports[0].port}')"
+  if [[ -z "$port" ]]; then
+    echo "Unable to resolve service port for $service_name" >&2
+    exit 1
+  fi
+  echo "$port"
+}
+
 cleanup() {
   [[ -n "${PF_USER_PID:-}" ]] && kill "$PF_USER_PID" >/dev/null 2>&1 || true
   [[ -n "${PF_PRODUCT_PID:-}" ]] && kill "$PF_PRODUCT_PID" >/dev/null 2>&1 || true
@@ -50,22 +65,20 @@ require_cmd curl
 require_cmd ss
 
 USER_PORT="$(pick_free_port)"
-PRODUCT_PORT="$(pick_free_port)"
-while [[ "$PRODUCT_PORT" == "$USER_PORT" ]]; do
-  PRODUCT_PORT="$(pick_free_port)"
-done
-ORDER_PORT="$(pick_free_port)"
-while [[ "$ORDER_PORT" == "$USER_PORT" || "$ORDER_PORT" == "$PRODUCT_PORT" ]]; do
-  ORDER_PORT="$(pick_free_port)"
-done
+PRODUCT_PORT="$(pick_free_port "$USER_PORT")"
+ORDER_PORT="$(pick_free_port "$USER_PORT" "$PRODUCT_PORT")"
 
-KUBECONFIG="$KUBECONFIG_PATH" kubectl -n "$NAMESPACE" port-forward svc/flashsales-user-service "$USER_PORT:80" >/tmp/flashsales-pf-user.log 2>&1 &
+USER_SVC_PORT="$(service_port flashsales-user-service)"
+PRODUCT_SVC_PORT="$(service_port flashsales-product-service)"
+ORDER_SVC_PORT="$(service_port flashsales-order-service)"
+
+KUBECONFIG="$KUBECONFIG_PATH" kubectl -n "$NAMESPACE" port-forward svc/flashsales-user-service "$USER_PORT:$USER_SVC_PORT" >/tmp/flashsales-pf-user.log 2>&1 &
 PF_USER_PID=$!
 
-KUBECONFIG="$KUBECONFIG_PATH" kubectl -n "$NAMESPACE" port-forward svc/flashsales-product-service "$PRODUCT_PORT:80" >/tmp/flashsales-pf-product.log 2>&1 &
+KUBECONFIG="$KUBECONFIG_PATH" kubectl -n "$NAMESPACE" port-forward svc/flashsales-product-service "$PRODUCT_PORT:$PRODUCT_SVC_PORT" >/tmp/flashsales-pf-product.log 2>&1 &
 PF_PRODUCT_PID=$!
 
-KUBECONFIG="$KUBECONFIG_PATH" kubectl -n "$NAMESPACE" port-forward svc/flashsales-order-service "$ORDER_PORT:80" >/tmp/flashsales-pf-order.log 2>&1 &
+KUBECONFIG="$KUBECONFIG_PATH" kubectl -n "$NAMESPACE" port-forward svc/flashsales-order-service "$ORDER_PORT:$ORDER_SVC_PORT" >/tmp/flashsales-pf-order.log 2>&1 &
 PF_ORDER_PID=$!
 
 USER_URL="http://127.0.0.1:$USER_PORT"
