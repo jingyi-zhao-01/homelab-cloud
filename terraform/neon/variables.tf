@@ -10,6 +10,12 @@ variable "neon_region" {
   default     = "aws-us-east-1"
 }
 
+variable "neon_history_retention_seconds" {
+  description = "Point-in-time restore retention in seconds; 21600 is compatible with the current Neon plan limit"
+  type        = number
+  default     = 21600
+}
+
 variable "kubeconfig_path" {
   description = "Path to kubeconfig used to write the K8s secret"
   type        = string

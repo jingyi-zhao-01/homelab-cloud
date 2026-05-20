@@ -15,6 +15,12 @@ on:
 
   # Called by deploy-remote-vps.yml as a reusable workflow (always applies)
   workflow_call:
+    inputs:
+      action:
+        description: "Terraform action to run when called as reusable workflow"
+        required: false
+        default: apply
+        type: string
     secrets:
       NEON_API_KEY:
         required: true
@@ -62,14 +68,24 @@ jobs:
           path: terraform/neon
         continue-on-error: true
 
-      - name: Configure kubeconfig
+      - name: Validate required secrets
         env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
         run: |
+          if [ -z "$NEON_API_KEY" ]; then
+            echo "NEON_API_KEY secret is missing"
+            exit 1
+          fi
           if [ -z "$KUBE_CONFIG_DATA" ]; then
             echo "KUBE_CONFIG_DATA secret is missing"
             exit 1
           fi
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
           mkdir -p "$HOME/.kube"
           echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
@@ -87,19 +103,19 @@ jobs:
       - name: Terraform Plan
         env:
           TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
-        run: terraform plan
+        run: terraform plan -input=false
 
       - name: Terraform Apply
-        if: ${{ (inputs.action == 'apply' || inputs.action == '') && inputs.action != 'destroy' }}
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         env:
           TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -input=false
 
       - name: Terraform Destroy
         if: ${{ inputs.action == 'destroy' }}
         env:
           TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
-        run: terraform destroy -auto-approve
+        run: terraform destroy -auto-approve -input=false
 
       # Always upload the latest tfstate so the next run can restore it.
       - name: Save tfstate artifact

@@ -27,6 +27,8 @@ jobs:
   provision-neon:
     name: Provision Neon Database
     uses: ./.github/workflows/neon-provision.yml
+    with:
+      action: apply
     secrets: inherit
 
   build-and-push:
