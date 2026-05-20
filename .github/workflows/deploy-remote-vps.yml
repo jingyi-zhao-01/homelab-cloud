@@ -4,7 +4,15 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'services/**'
+      - 'charts/flashsales/**'
+      - '.github/workflows/deploy-remote-vps.yml'
   workflow_dispatch:
+
+concurrency:
+  group: deploy-remote-vps-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   NAMESPACE: ${{ vars.K8S_NAMESPACE || 'flashsales' }}
