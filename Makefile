@@ -35,10 +35,14 @@ help:
 >echo "  make import-images-remote  # Stream local images into remote k3s containerd via SSH"
 >echo "  make deploy-remote         # Deploy chart to remote cluster using .kube-config"
 >echo "  make fix-images-remote     # Build + import to remote + restart + status"
->echo "  make loadtest              # Run k6 load test via port-forward"
->echo "  make loadtest-lite         # Run shorter k6 load test"
->echo "  make loadtest-high-safe    # Run higher-pressure but bounded k6 load test"
->echo "  Override thresholds: K6_P50_THRESHOLD_MS K6_P90_THRESHOLD_MS K6_P95_THRESHOLD_MS"
+>echo "  make loadtest              # Run baseline concurrency test (50 TPS profile)"
+>echo "  make loadtest-lite         # Run smoke concurrency test (10 TPS profile)"
+>echo "  make loadtest-high-safe    # Run stress concurrency test (100 TPS profile)"
+>echo "  make concurrency-smoke     # 10 TPS, strict latency and zero 5xx"
+>echo "  make concurrency-baseline  # 50 TPS sustained baseline"
+>echo "  make concurrency-stress100 # 100 TPS stress stage"
+>echo "  make concurrency-stress200 # 200 TPS stress stage"
+>echo "  make concurrency-hotspot   # High-conflict hotspot correctness test"
 
 include perf/perf.mk
 
