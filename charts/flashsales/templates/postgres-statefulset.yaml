@@ -43,6 +43,10 @@ spec:
               port: postgres
             initialDelaySeconds: 15
             periodSeconds: 10
+          {{- with .Values.postgres.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
   volumeClaimTemplates:
     - metadata:
         name: postgres-data

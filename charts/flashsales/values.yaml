@@ -8,6 +8,10 @@ postgres:
     repository: postgres
     tag: "16-alpine"
     pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
   service:
     type: ClusterIP
     port: 5432
@@ -25,6 +29,10 @@ redis:
     repository: redis
     tag: "7-alpine"
     pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
   service:
     type: ClusterIP
     port: 6379
@@ -40,6 +48,10 @@ rabbitmq:
     repository: rabbitmq
     tag: "3.13-management-alpine"
     pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
   service:
     type: ClusterIP
     amqpPort: 5672

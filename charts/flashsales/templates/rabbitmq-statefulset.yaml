@@ -45,6 +45,10 @@ spec:
               port: amqp
             initialDelaySeconds: 20
             periodSeconds: 10
+          {{- with .Values.rabbitmq.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
   volumeClaimTemplates:
     - metadata:
         name: rabbitmq-data

@@ -52,6 +52,10 @@ spec:
               port: redis
             initialDelaySeconds: 10
             periodSeconds: 10
+          {{- with .Values.redis.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
   volumeClaimTemplates:
     - metadata:
         name: redis-data
