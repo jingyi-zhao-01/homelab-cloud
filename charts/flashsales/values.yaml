@@ -63,6 +63,9 @@ userService:
     repository: flashsales/user-service
     tag: latest
     pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: "100m"
   service:
     type: ClusterIP
     port: 8001
@@ -82,6 +85,9 @@ productService:
     repository: flashsales/product-service
     tag: latest
     pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: "100m"
   service:
     type: ClusterIP
     port: 8002
@@ -101,6 +107,9 @@ orderService:
     repository: flashsales/order-service
     tag: latest
     pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: "100m"
   service:
     type: ClusterIP
     port: 8003
