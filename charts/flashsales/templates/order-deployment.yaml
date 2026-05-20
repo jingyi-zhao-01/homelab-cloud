@@ -28,19 +28,10 @@ spec:
         - name: order-service
           image: "{{ .Values.orderService.image.repository }}:{{ .Values.orderService.image.tag }}"
           imagePullPolicy: {{ .Values.orderService.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: flashsales-order-service-config
           env:
-            - name: USER_SERVICE_URL
-              value: {{ .Values.orderService.env.userServiceUrl | quote }}
-            - name: PRODUCT_SERVICE_URL
-              value: {{ .Values.orderService.env.productServiceUrl | quote }}
-            - name: DEPENDENCY_TIMEOUT_SECONDS
-              value: {{ .Values.orderService.env.dependencyTimeoutSeconds | quote }}
-            - name: DB_HOST
-              value: {{ .Values.orderService.env.dbHost | quote }}
-            - name: DB_PORT
-              value: {{ .Values.orderService.env.dbPort | quote }}
-            - name: DB_NAME
-              value: {{ .Values.orderService.env.dbName | quote }}
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
@@ -51,10 +42,6 @@ spec:
                 secretKeyRef:
                   name: flashsales-postgres-auth
                   key: POSTGRES_PASSWORD
-            - name: REDIS_URL
-              value: {{ .Values.orderService.env.redisUrl | quote }}
-            - name: RABBITMQ_URL
-              value: {{ .Values.orderService.env.rabbitmqUrl | quote }}
           ports:
             - containerPort: {{ .Values.orderService.service.port }}
           readinessProbe:

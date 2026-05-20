@@ -91,8 +91,6 @@ userService:
     dbHost: flashsales-postgres
     dbPort: "5432"
     dbName: flashsales
-    inventoryLockMode: pessimistic
-    optimisticRetryLimit: "5"
 
 productService:
   replicaCount: 1
@@ -117,6 +115,8 @@ productService:
     dbHost: flashsales-postgres
     dbPort: "5432"
     dbName: flashsales
+    inventoryLockMode: pessimistic
+    optimisticRetryLimit: "5"
 
 orderService:
   replicaCount: 1

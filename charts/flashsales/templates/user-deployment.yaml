@@ -28,13 +28,10 @@ spec:
         - name: user-service
           image: "{{ .Values.userService.image.repository }}:{{ .Values.userService.image.tag }}"
           imagePullPolicy: {{ .Values.userService.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: flashsales-user-service-config
           env:
-            - name: DB_HOST
-              value: {{ .Values.userService.env.dbHost | quote }}
-            - name: DB_PORT
-              value: {{ .Values.userService.env.dbPort | quote }}
-            - name: DB_NAME
-              value: {{ .Values.userService.env.dbName | quote }}
             - name: DB_USER
               valueFrom:
                 secretKeyRef:

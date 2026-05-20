@@ -28,17 +28,10 @@ spec:
         - name: product-service
           image: "{{ .Values.productService.image.repository }}:{{ .Values.productService.image.tag }}"
           imagePullPolicy: {{ .Values.productService.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: flashsales-product-service-config
           env:
-            - name: DB_HOST
-              value: {{ .Values.productService.env.dbHost | quote }}
-            - name: DB_PORT
-              value: {{ .Values.productService.env.dbPort | quote }}
-            - name: DB_NAME
-              value: {{ .Values.productService.env.dbName | quote }}
-            - name: INVENTORY_LOCK_MODE
-              value: {{ .Values.productService.env.inventoryLockMode | quote }}
-            - name: OPTIMISTIC_RETRY_LIMIT
-              value: {{ .Values.productService.env.optimisticRetryLimit | quote }}
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
