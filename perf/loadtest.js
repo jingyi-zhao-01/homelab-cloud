@@ -69,8 +69,12 @@ export function setup() {
 export default function loadtestScenario(data) {
   const orderRes = postJson(`${BASE_URL}/orders`, {
     user_id: data.user_id,
-    product_id: data.product_id,
-    quantity: 1,
+    items: [
+      {
+        product_id: data.product_id,
+        quantity: 1,
+      },
+    ],
   });
 
   check(orderRes, {
