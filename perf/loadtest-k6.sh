@@ -1,8 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-KUBECONFIG_PATH="${KUBECONFIG_PATH:-.kube-config}"
+if [[ -n "${KUBECONFIG_PATH:-}" ]]; then
+  KUBECONFIG_PATH="$KUBECONFIG_PATH"
+elif [[ -f .kube-config ]]; then
+  KUBECONFIG_PATH=".kube-config"
+else
+  KUBECONFIG_PATH="$HOME/.kube/config"
+fi
+
 NAMESPACE="${NAMESPACE:-flashsales}"
+
+if [[ ! -r "$KUBECONFIG_PATH" ]]; then
+  echo "Kubeconfig not found or not readable: $KUBECONFIG_PATH" >&2
+  echo "Set KUBECONFIG_PATH explicitly or provide .kube-config / $HOME/.kube/config" >&2
+  exit 1
+fi
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
