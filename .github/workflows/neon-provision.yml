@@ -125,6 +125,39 @@ jobs:
             echo "flashsales-postgres-auth does not exist yet; Terraform will create it"
           fi
 
+      # If the Neon project already exists but Terraform state was lost, import it
+      # before apply so we do not create another flashsales project on every deploy.
+      # When multiple projects share the same name, prefer the most recently created
+      # one so we keep following the latest live deployment path.
+      - name: Import existing project into Terraform state
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PROJECT_NAME: flashsales
+        run: |
+          if terraform state show neon_project.flashsales >/dev/null 2>&1; then
+            echo "neon_project.flashsales already managed by Terraform"
+            exit 0
+          fi
+
+          existing_project_id=$(curl -fsS \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            "https://console.neon.tech/api/v2/projects?search=${PROJECT_NAME}&limit=100" \
+            | jq -r --arg name "$PROJECT_NAME" '
+                [.projects[] | select(.name == $name)]
+                | sort_by(.created_at)
+                | last
+                | .id // empty
+              ')
+
+          if [ -z "$existing_project_id" ]; then
+            echo "No existing Neon project named ${PROJECT_NAME} was found; Terraform will create it"
+            exit 0
+          fi
+
+          echo "Importing existing Neon project ${PROJECT_NAME} with id ${existing_project_id}"
+          terraform import -input=false neon_project.flashsales "$existing_project_id"
+
       - name: Terraform Plan
         run: terraform plan -input=false
 
