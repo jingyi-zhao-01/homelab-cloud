@@ -19,8 +19,8 @@ permissions:
   contents: read
 
 jobs:
-  perf-suite:
-    name: Run Perf Suite (Fail Fast)
+  prepare:
+    name: Prepare Perf Environment
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
@@ -59,6 +59,40 @@ jobs:
           kubectl -n "$NAMESPACE" get svc flashsales-product-service
           kubectl -n "$NAMESPACE" get svc flashsales-order-service
 
+  smoke:
+    name: Concurrency Smoke (10 TPS)
+    runs-on: ubuntu-latest
+    needs: prepare
+    if: ${{ needs.prepare.result == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
       - name: Pause 5 minutes before smoke
         run: sleep 300
 
@@ -66,6 +100,40 @@ jobs:
         run: |
           set -euo pipefail
           KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" make concurrency-smoke
+
+  baseline:
+    name: Concurrency Baseline (50 TPS)
+    runs-on: ubuntu-latest
+    needs: smoke
+    if: ${{ needs.smoke.result == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
 
       - name: Pause 5 minutes before baseline
         run: sleep 300
@@ -75,6 +143,40 @@ jobs:
           set -euo pipefail
           KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" make concurrency-baseline
 
+  stress100:
+    name: Concurrency Stress100 (100 TPS)
+    runs-on: ubuntu-latest
+    needs: baseline
+    if: ${{ needs.baseline.result == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
       - name: Pause 5 minutes before stress100
         run: sleep 300
 
@@ -83,6 +185,40 @@ jobs:
           set -euo pipefail
           KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" make concurrency-stress100
 
+  stress200:
+    name: Concurrency Stress200 (200 TPS)
+    runs-on: ubuntu-latest
+    needs: stress100
+    if: ${{ needs.stress100.result == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
       - name: Pause 5 minutes before stress200
         run: sleep 300
 
@@ -90,6 +226,40 @@ jobs:
         run: |
           set -euo pipefail
           KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" make concurrency-stress200
+
+  hotspot:
+    name: Concurrency Hotspot
+    runs-on: ubuntu-latest
+    needs: stress200
+    if: ${{ needs.stress200.result == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
 
       - name: Pause 5 minutes before hotspot
         run: sleep 300
