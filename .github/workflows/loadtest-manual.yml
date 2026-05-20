@@ -49,14 +49,31 @@ jobs:
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
         run: |
+          set -euo pipefail
+
           if [ -z "$KUBE_CONFIG_DATA" ]; then
             echo "KUBE_CONFIG_DATA secret is missing"
             exit 1
           fi
+
           mkdir -p "$HOME/.kube"
-          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          if ! echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"; then
+            echo "Failed to decode KUBE_CONFIG_DATA. Ensure it is valid base64 kubeconfig content."
+            exit 1
+          fi
           chmod 600 "$HOME/.kube/config"
-          kubectl get nodes
+
+          # Bound cluster checks to avoid opaque runner-level unhandled failures.
+          for i in 1 2 3; do
+            if kubectl --request-timeout=20s get nodes; then
+              exit 0
+            fi
+            echo "kubectl get nodes failed (attempt $i/3), retrying..."
+            sleep 5
+          done
+
+          echo "Unable to connect to Kubernetes cluster after retries."
+          exit 1
 
       - name: Verify target services
         run: |
