@@ -2,6 +2,12 @@
 
 Personal k3s homelab for platform engineering practice, split into two independently deployed workloads.
 
+## Why This Exists
+
+I use AI to generate a lot of dev-level code on a specific matter issue , but I do not want to spend the same energy provisioning infra for every service. I also wanted a real lab where I can test system design ideas on a live setup instead of only reading about them.
+
+This platform is the result: a shared place where services can converge, agent can write code via github apps, can focus on code, logic, and implementation details, and the infra (which is currently manually handled by me) provisioning plus GitOps work is handled by a centralized platform layer.
+
 ## Start Here
 
 | Page | What it covers |

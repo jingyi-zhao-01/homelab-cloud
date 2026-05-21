@@ -2,6 +2,12 @@
 
 This repository is a personal Kubernetes homelab centered on two independent workloads:
 
+## Why This Exists
+
+I rely on AI to generate a lot of dev-level code, but I do not want to provision infrastructure for every service by hand. I also wanted a real-world lab where I can experiment with system design ideas instead of keeping them only in books.
+
+This platform gives me a centralized layer where services can converge. The service layer can focus on code, logic, and implementation, while infra provisioning and GitOps are handled by the platform layer.
+
 | Namespace | Purpose |
 |---|---|
 | `flashsales` | Concurrency practice workload with three FastAPI services and self-hosted supporting data stores |
