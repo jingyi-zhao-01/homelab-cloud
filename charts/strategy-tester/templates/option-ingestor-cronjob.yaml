@@ -9,6 +9,7 @@ metadata:
     {{- include "strategy-tester.labels" . | nindent 4 }}
 spec:
   schedule: {{ .Values.optionIngestor.cronJob.schedule | quote }}
+  concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
