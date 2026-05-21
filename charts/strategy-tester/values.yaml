@@ -4,7 +4,7 @@ imagePullSecrets:
   - name: ghcr-pull-secret
 
 externalSecrets:
-  enabled: false
+  enabled: true
   refreshInterval: 1h
   targetSecretName: strategy-tester-apis
   parameterPrefix: /strategy-tester/prod
