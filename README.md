@@ -96,6 +96,8 @@ helm upgrade --install strategy-tester charts/strategy-tester \
   --set externalSecrets.enabled=true
 ```
 
+The deploy workflow also creates `external-secrets/aws-ssm-credentials` from `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` before Helm installs the chart.
+
 **Run concurrency load test**
 ```bash
 make loadtest KUBECONFIG_PATH=secrets/.kube-config
