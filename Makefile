@@ -137,4 +137,3 @@ neon-apply:
 
 neon-destroy:
 >cd $(TERRAFORM_NEON_DIR) && terraform destroy
-

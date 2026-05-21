@@ -1,0 +1,24 @@
+{{- if .Values.optionIngestor.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "strategy-tester.fullname" . }}-option-ingestor
+  namespace: {{ include "strategy-tester.namespace" . }}
+  labels:
+    app: option-ingestor
+    {{- include "strategy-tester.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "strategy-tester.fullname" . }}-option-ingestor
+  minReplicas: {{ .Values.optionIngestor.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.optionIngestor.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.optionIngestor.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

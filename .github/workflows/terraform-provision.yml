@@ -250,5 +250,3 @@ jobs:
       - name: Terraform Destroy
         if: ${{ inputs.action == 'destroy' }}
         run: terraform destroy -auto-approve -input=false
-
-

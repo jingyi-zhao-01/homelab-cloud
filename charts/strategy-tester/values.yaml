@@ -1,0 +1,78 @@
+namespaceOverride: ""
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
+
+externalSecrets:
+  enabled: false
+  refreshInterval: 1h
+  targetSecretName: strategy-tester-apis
+  parameterPrefix: /strategy-tester/prod
+  store:
+    kind: ClusterSecretStore
+    name: strategy-tester-aws-ssm
+    create: true
+    region: us-west-1
+    authSecret:
+      name: aws-ssm-credentials
+      namespace: external-secrets
+      accessKeyIdKey: access-key-id
+      secretAccessKeyKey: secret-access-key
+
+optionIngestor:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 2
+    targetCPUUtilizationPercentage: 70
+  image:
+    repository: ghcr.io/jingyi-zhao-01/strategy-tester-option-ingestor
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  service:
+    type: ClusterIP
+    port: 8001
+  env:
+    LOG_LEVEL: INFO
+  cronJob:
+    enabled: true
+    schedule: "0 2 * * *"  # 02:00 UTC = 9 PM EST
+    restartPolicy: OnFailure
+    backoffLimit: 3
+
+snapshotIngestor:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 2
+    targetCPUUtilizationPercentage: 70
+  image:
+    repository: ghcr.io/jingyi-zhao-01/strategy-tester-snapshot-ingestor
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  service:
+    type: ClusterIP
+    port: 8002
+  env:
+    LOG_LEVEL: INFO
+  cronJob:
+    enabled: true
+    schedule: "0 4 * * *"  # 04:00 UTC = 11 PM EST
+    restartPolicy: OnFailure
+    backoffLimit: 3

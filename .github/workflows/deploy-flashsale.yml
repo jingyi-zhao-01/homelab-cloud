@@ -1,4 +1,4 @@
-name: Deploy to Remote VPS k3s
+name: Deploy Flashsale Services
 
 on:
   push:
@@ -7,11 +7,11 @@ on:
     paths:
       - 'flashsale/**'
       - 'charts/flashsales/**'
-      - '.github/workflows/deploy-remote-vps.yml'
+      - '.github/workflows/deploy-flashsale.yml'
   workflow_dispatch:
 
 concurrency:
-  group: deploy-remote-vps-${{ github.ref }}
+  group: deploy-flashsale-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -142,4 +142,3 @@ jobs:
         run: |
           kubectl get pods -n "$NAMESPACE" -o wide
           kubectl get svc -n "$NAMESPACE"
-

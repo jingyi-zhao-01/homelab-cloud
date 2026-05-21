@@ -1,0 +1,27 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        exclude: ^charts/.*/templates/
+      - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: helm-lint-flashsales
+        name: Helm Lint - flashsales
+        entry: helm lint charts/flashsales/
+        language: system
+        files: charts/flashsales/
+        stages: [pre-commit]
+        pass_filenames: false
+
+      - id: helm-lint-strategy-tester
+        name: Helm Lint - strategy-tester
+        entry: helm lint charts/strategy-tester/
+        language: system
+        files: charts/strategy-tester/
+        stages: [pre-commit]
+        pass_filenames: false

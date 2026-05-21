@@ -1,0 +1,46 @@
+{{- if .Values.snapshotIngestor.cronJob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "strategy-tester.fullname" . }}-snapshot-ingestor
+  namespace: {{ include "strategy-tester.namespace" . }}
+  labels:
+    app: snapshot-ingestor
+    {{- include "strategy-tester.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.snapshotIngestor.cronJob.schedule | quote }}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.snapshotIngestor.cronJob.backoffLimit }}
+      template:
+        metadata:
+          labels:
+            app: snapshot-ingestor
+            {{- include "strategy-tester.selectorLabels" . | nindent 12 }}
+        spec:
+          restartPolicy: {{ .Values.snapshotIngestor.cronJob.restartPolicy }}
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+            - name: snapshot-ingestor
+              image: "{{ .Values.snapshotIngestor.image.repository }}:{{ .Values.snapshotIngestor.image.tag }}"
+              imagePullPolicy: {{ .Values.snapshotIngestor.image.pullPolicy }}
+              {{- with .Values.snapshotIngestor.env }}
+              env:
+                {{- range $key, $value := . }}
+                - name: {{ $key }}
+                  value: {{ $value | quote }}
+                {{- end }}
+              {{- end }}
+              {{- if .Values.externalSecrets.enabled }}
+              envFrom:
+                - secretRef:
+                    name: {{ .Values.externalSecrets.targetSecretName }}
+              {{- end }}
+              resources:
+                {{- toYaml .Values.snapshotIngestor.resources | nindent 16 }}
+{{- end }}

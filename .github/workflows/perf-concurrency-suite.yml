@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   workflow_run:
     workflows:
-      - Deploy to Remote VPS k3s
+      - Deploy Flashsale Services
     types:
       - completed
 
