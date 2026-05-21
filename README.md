@@ -1,6 +1,6 @@
 # homelab-cloud
 
-Personal k3s homelab for platform engineering practice, split into two independently deployed workloads.
+Personal k3s native cloud for platform engineering practice, experimenting in real world networks, infras, and risks.
 
 ## Why This Exists
 
