@@ -12,7 +12,7 @@ Flashsales is the concurrency practice workload. It is composed of three FastAPI
 
 The workload also includes self-hosted PostgreSQL, Redis, and RabbitMQ in the chart.
 
-## Local Deploy
+## Deploy to VPS
 
 ```bash
 kubectl create namespace flashsales --dry-run=client -o yaml | kubectl apply -f -
@@ -24,6 +24,8 @@ If you prefer the repo-managed workflow, use:
 ```bash
 make deploy KUBECONFIG_PATH=$HOME/.kube/config
 ```
+
+This workload is deployed to the VPS-backed k3s cluster, not to a local-only environment.
 
 ## Verification
 

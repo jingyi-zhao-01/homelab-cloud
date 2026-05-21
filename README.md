@@ -7,7 +7,7 @@ Personal k3s homelab for platform engineering practice, split into two independe
 | Page | What it covers |
 |---|---|
 | [Repository overview](docs/overview.md) | High-level architecture, layout, and shared conventions |
-| [Flashsales workload](docs/flashsales.md) | Concurrency practice app, local deploy, smoke test, and debugging |
+| [Flashsales workload](docs/flashsales.md) | Concurrency practice app deployed to the VPS, smoke test, and debugging |
 | [Strategy tester workload](docs/strategy-tester.md) | Scheduled ingestion app, cron jobs, and secret wiring |
 | [Infrastructure](docs/infrastructure.md) | Terraform, Neon provisioning, AWS SSM secrets, and state backend |
 | [Operations and tooling](docs/operations.md) | CI/CD, perf tests, local workflows, and developer setup |
