@@ -1,25 +1,316 @@
 # homelab-cloud
 
-## 当前状态
+A personal Kubernetes homelab running on k3s, used to practice platform engineering and infrastructure tooling.
 
-已完成微服务第一版实现，并提供 k3s 可用的 Helm Chart。
+## What this repo is for
 
-当前 Chart 已包含:
+| Namespace | Purpose |
+|---|---|
+| `flashsales` | Concurrency practice — multi-service workload with PostgreSQL, Redis, RabbitMQ |
+| `strategy-tester` | Real workload — scheduled option data ingestion via Polygon API |
 
-- 3 个业务微服务 (user/product/order)
-- self-hosted PostgreSQL (StatefulSet + PVC)
-- self-hosted Redis (StatefulSet + PVC)
-- self-hosted RabbitMQ (StatefulSet + PVC)
+---
 
-当前服务:
+## Platform Features
 
-- `user-service` (容器端口 `8001`)
-- `product-service` (容器端口 `8002`)
-- `order-service` (容器端口 `8003`)
+### Kubernetes / Helm
+- Two independent Helm charts, one per namespace
+- HPA configured for all Deployments
+- StatefulSets with PVC for PostgreSQL, Redis, RabbitMQ (flashsales)
+- CronJobs for scheduled ingestion (strategy-tester)
 
-服务调用关系:
+### Secrets Management
+- **External Secrets Operator** syncing from AWS SSM Parameter Store
+- Separate `ClusterSecretStore` per namespace
 
-- `order-service` -> `user-service` (校验用户)
+| Chart | ClusterSecretStore | SSM prefix |
+|---|---|---|
+| `flashsales` | `flashsales-aws-ssm` | `/flashsales/prod/` |
+| `strategy-tester` | `strategy-tester-aws-ssm` | `/strategy-tester/prod/` |
+
+### CI/CD
+Two independent parallel deploy workflows — changes to one namespace never trigger the other.
+
+| Workflow | Trigger | Namespace |
+|---|---|---|
+| `deploy-flashsale.yml` | push to `flashsale/**` or `charts/flashsales/**` | `flashsales` |
+| `deploy-strategy-tester.yml` | push to `strategy-tester/**` or `charts/strategy-tester/**` | `strategy-tester` |
+| `perf-concurrency-suite.yml` | `deploy-flashsale` succeeds | — |
+| `loadtest-manual.yml` | manual `workflow_dispatch` | — |
+| `terraform-provision.yml` | manual | — |
+
+### Observability
+- Grafana k6 load testing with ramp-up/steady/ramp-down phases
+- Concurrency suite auto-triggered after each flashsale deploy
+- Grafana Cloud monitoring via `secrets/grafana-k8s-monitoring-values.yaml`
+
+### Developer Tooling
+- **pre-commit** hooks: trailing whitespace, end-of-file, YAML lint (excluding Helm templates), `helm lint` for both charts
+- **uv** as package manager; pre-commit installed as dev dependency via `uv sync --extra dev`
+- **Makefile** targets: `deploy`, `status`, `fix-images`, `loadtest`, `loadtest-quick`
+
+---
+
+## Repository Layout
+
+```text
+.
+├── charts/
+│   ├── flashsales/              # Helm chart — concurrency practice workload
+│   └── strategy-tester/         # Helm chart — real scheduled ingestion workload
+├── services/                    # flashsales microservice source (FastAPI)
+│   ├── user-service/
+│   ├── product-service/
+│   └── order-service/
+├── perf/                        # k6 load test scripts + shell wrappers
+├── scripts/
+│   └── e2e-smoke.sh
+├── secrets/                     # gitignored: kubeconfig, Grafana tokens
+├── .github/workflows/
+├── .pre-commit-config.yaml
+├── pyproject.toml
+└── Makefile
+```
+
+---
+
+## Quick Start
+
+**Deploy flashsales (concurrency workload)**
+```bash
+kubectl create namespace flashsales --dry-run=client -o yaml | kubectl apply -f -
+helm upgrade --install flashsales charts/flashsales -n flashsales
+```
+
+**Deploy strategy-tester (real workload)**
+```bash
+kubectl create namespace strategy-tester --dry-run=client -o yaml | kubectl apply -f -
+helm upgrade --install strategy-tester charts/strategy-tester \
+  -n strategy-tester \
+  --set externalSecrets.enabled=true
+```
+
+**Run concurrency load test**
+```bash
+make loadtest KUBECONFIG_PATH=secrets/.kube-config
+```
+
+**Run e2e smoke test**
+```bash
+./scripts/e2e-smoke.sh
+```
+
+---
+
+## Required Secrets (GitHub Actions)
+
+```
+KUBE_CONFIG_DATA        # base64-encoded kubeconfig
+GHCR_PULL_USERNAME
+GHCR_PULL_TOKEN         # read:packages scope
+AWS_ACCESS_KEY_ID       # for ESO → SSM
+AWS_SECRET_ACCESS_KEY
+```
+│   ├── flashsales/          # flashsales Helm Chart
+│   │   ├── Chart.yaml
+│   │   ├── values.yaml
+│   │   └── templates/
+│   └── strategy-tester/     # strategy-tester Helm Chart
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       └── templates/
+├── services/                # flashsales 微服务源码
+│   ├── user-service/
+│   ├── product-service/
+│   └── order-service/
+├── perf/                    # 性能测试脚本
+│   ├── loadtest.js
+│   ├── loadtest-lite.js
+│   ├── loadtest-high.js
+│   ├── concurrency-test.js
+│   ├── loadtest-k6.sh
+│   └── perf.mk
+├── scripts/
+│   └── e2e-smoke.sh
+├── secrets/                 # 本地 kubeconfig（不提交到 git）
+├── .github/workflows/
+│   ├── deploy-flashsale.yml        # flashsales 命名空间部署
+│   ├── deploy-strategy-tester.yml  # strategy-tester 命名空间部署
+│   ├── perf-concurrency-suite.yml  # deploy-flashsale 成功后自动触发
+│   ├── loadtest-manual.yml         # 手动压测
+│   └── terraform-provision.yml     # 基础设施 Terraform
+├── .pre-commit-config.yaml
+├── pyproject.toml
+└── Makefile
+```
+
+---
+
+## flashsales
+
+### 服务架构
+
+- `user-service` (端口 `8001`) → PostgreSQL
+- `product-service` (端口 `8002`) → PostgreSQL
+- `order-service` (端口 `8003`) → PostgreSQL / Redis / RabbitMQ
+- `order-service` → `user-service`（校验用户）
+- `order-service` → `product-service`（查询商品、扣库存）
+
+基础设施（自托管）：PostgreSQL · Redis · RabbitMQ（均为 StatefulSet + PVC）
+
+### 部署
+
+```bash
+# 创建命名空间
+kubectl create namespace flashsales --dry-run=client -o yaml | kubectl apply -f -
+
+# Helm 部署
+helm upgrade --install flashsales charts/flashsales -n flashsales
+
+# 或使用 Make
+make deploy KUBECONFIG_PATH=$HOME/.kube/config
+```
+
+### E2E 验证
+
+```bash
+./scripts/e2e-smoke.sh
+```
+
+通过标准：三个业务服务 + 中间件 Pod 全部 Running，脚本输出 `E2E PASS`。
+
+### 接口调试（port-forward）
+
+```bash
+kubectl port-forward -n flashsales svc/flashsales-user-service 8001:8001
+kubectl port-forward -n flashsales svc/flashsales-product-service 8002:8002
+kubectl port-forward -n flashsales svc/flashsales-order-service 8003:8003
+```
+
+```bash
+curl -X POST http://localhost:8001/users \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Alice","email":"alice@example.com"}'
+
+curl -X POST http://localhost:8002/products \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Keyboard","price":199,"stock":10}'
+
+curl -X POST http://localhost:8003/orders \
+  -H 'Content-Type: application/json' \
+  -d '{"user_id":1,"items":[{"product_id":1,"quantity":2}]}'
+```
+
+---
+
+## strategy-tester
+
+### 服务架构
+
+- `option-ingestor`：期权数据采集，CronJob 每天 **21:00 EST**（UTC `0 2 * * *`）
+- `snapshot-ingestor`：持仓快照采集，CronJob 每天 **23:00 EST**（UTC `0 4 * * *`）
+
+Secrets 通过 **External Secrets Operator** 从 AWS SSM Parameter Store 注入：
+
+| SSM 路径 | 注入为 |
+|---|---|
+| `/strategy-tester/prod/DATABASE_URL` | `DATABASE_URL` |
+| `/strategy-tester/prod/POLYGON_API_KEY` | `POLYGON_API_KEY` |
+
+### 部署
+
+```bash
+kubectl create namespace strategy-tester --dry-run=client -o yaml | kubectl apply -f -
+
+helm upgrade --install strategy-tester charts/strategy-tester \
+  -n strategy-tester \
+  --set externalSecrets.enabled=true
+```
+
+---
+
+## External Secrets Operator
+
+两个命名空间均使用 ESO 从 AWS SSM 拉取 Secrets：
+
+| Chart | ClusterSecretStore | SSM 前缀 |
+|---|---|---|
+| `flashsales` | `flashsales-aws-ssm` | `/flashsales/prod/` |
+| `strategy-tester` | `strategy-tester-aws-ssm` | `/strategy-tester/prod/` |
+
+ESO 凭据通过 `aws-ssm-credentials` Secret 注入（namespace `external-secrets`）。
+
+---
+
+## CI/CD (GitHub Actions)
+
+### 工作流概览
+
+| 工作流 | 触发 | 命名空间 |
+|---|---|---|
+| `deploy-flashsale.yml` | push → `flashsale/**` 或 `charts/flashsales/**` | `flashsales` |
+| `deploy-strategy-tester.yml` | push → `strategy-tester/**` 或 `charts/strategy-tester/**` | `strategy-tester` |
+| `perf-concurrency-suite.yml` | `deploy-flashsale` 成功后自动触发 | — |
+| `loadtest-manual.yml` | 手动 `workflow_dispatch` | — |
+| `terraform-provision.yml` | 手动 | — |
+
+两个 deploy 工作流**相互独立、可并行运行**。
+
+### 所需 Repository Secrets
+
+```
+KUBE_CONFIG_DATA       # base64 编码的 kubeconfig
+GHCR_PULL_USERNAME
+GHCR_PULL_TOKEN        # 需要 read:packages 权限
+AWS_ACCESS_KEY_ID      # 用于 ESO 读取 SSM
+AWS_SECRET_ACCESS_KEY
+```
+
+生成 `KUBE_CONFIG_DATA`：
+
+```bash
+base64 -w 0 secrets/.kube-config
+```
+
+---
+
+## 性能测试
+
+```bash
+# 标准压测
+make loadtest KUBECONFIG_PATH=secrets/.kube-config
+
+# 快速压测
+make loadtest-quick KUBECONFIG_PATH=secrets/.kube-config
+
+# 自定义参数
+bash ./perf/loadtest-k6.sh \
+  -e RAMP_UP=30s \
+  -e STEADY=180s \
+  -e TARGET_VUS=50
+```
+
+---
+
+## 开发工具
+
+### pre-commit hooks
+
+```bash
+uv sync --extra dev
+uv run pre-commit install
+```
+
+包含：trailing-whitespace · end-of-file-fixer · check-yaml（排除 Helm templates）· helm lint（flashsales + strategy-tester）
+
+### Make 命令
+
+```bash
+make deploy          # 本地 k3s 部署（有 localhost 保护）
+make status          # 查看 Pod / Service 状态
+make fix-images      # 重建本地镜像并导入 k3s containerd
+make loadtest        # 运行 k6 压测
+```
 - `order-service` -> `product-service` (查询商品和扣库存)
 - `user-service` -> `PostgreSQL` (用户持久化存储)
 - `product-service` -> `PostgreSQL` (商品与库存持久化存储)
