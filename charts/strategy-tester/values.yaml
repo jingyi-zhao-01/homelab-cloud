@@ -45,6 +45,8 @@ optionIngestor:
   cronJob:
     enabled: true
     schedule: "*/30 * * * *"
+    parallelism: 2
+    completions: 2
     restartPolicy: OnFailure
     backoffLimit: 3
 
@@ -74,5 +76,7 @@ snapshotIngestor:
   cronJob:
     enabled: true
     schedule: "*/30 * * * *"
+    parallelism: 2
+    completions: 2
     restartPolicy: OnFailure
     backoffLimit: 3

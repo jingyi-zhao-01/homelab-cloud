@@ -13,6 +13,8 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
+      parallelism: {{ .Values.optionIngestor.cronJob.parallelism }}
+      completions: {{ .Values.optionIngestor.cronJob.completions }}
       backoffLimit: {{ .Values.optionIngestor.cronJob.backoffLimit }}
       template:
         metadata:
