@@ -5,9 +5,6 @@ on:
     branches:
       - main
     paths:
-      - 'strategy-tester/microservices/**'
-      - 'strategy-tester/docker/**'
-      - 'strategy-tester/pyproject.toml'
       - 'charts/strategy-tester/**'
       - '.github/workflows/deploy-strategy-tester.yml'
   workflow_dispatch:
@@ -18,53 +15,14 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
 
 env:
   NAMESPACE: strategy-tester
 
 jobs:
-  build-and-push:
-    name: Build and Push Strategy Tester Images
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - option-ingestor
-          - snapshot-ingestor
-
-    steps:
-      - name: Checkout strategy-tester
-        uses: actions/checkout@v4
-        with:
-          repository: jingyi-zhao-01/strategy-tester
-          path: strategy-tester
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Push ${{ matrix.service }}
-        uses: docker/build-push-action@v6
-        with:
-          context: strategy-tester
-          file: strategy-tester/docker/${{ matrix.service }}.Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/strategy-tester-${{ matrix.service }}:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/strategy-tester-${{ matrix.service }}:latest
-
   deploy:
     name: Deploy to strategy-tester Namespace
     runs-on: ubuntu-latest
-    needs: build-and-push
 
     steps:
       - name: Checkout homelab-cloud
@@ -115,8 +73,8 @@ jobs:
             -n "$NAMESPACE" \
             --create-namespace \
             --set namespaceOverride="$NAMESPACE" \
-            --set optionIngestor.image.tag=${{ github.sha }} \
-            --set snapshotIngestor.image.tag=${{ github.sha }}
+            --set optionIngestor.image.tag=latest \
+            --set snapshotIngestor.image.tag=latest
 
       - name: Wait for deployments
         run: |
