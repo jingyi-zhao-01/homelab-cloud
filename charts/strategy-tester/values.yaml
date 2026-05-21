@@ -44,7 +44,7 @@ optionIngestor:
     LOG_LEVEL: INFO
   cronJob:
     enabled: true
-    schedule: "*/30 * * * *"
+    schedule: "0 2 * * 2-6"  # 21:00 EST Mon-Fri
     parallelism: 2
     completions: 2
     restartPolicy: OnFailure
@@ -75,7 +75,7 @@ snapshotIngestor:
     LOG_LEVEL: INFO
   cronJob:
     enabled: true
-    schedule: "*/30 * * * *"
+    schedule: "0 3 * * 2-6"  # 22:00 EST Mon-Fri
     parallelism: 2
     completions: 2
     restartPolicy: OnFailure
