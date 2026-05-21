@@ -1,0 +1,4 @@
+[submodule "strategy-tester"]
+	path = strategy-tester
+	url = https://github.com/jingyi-zhao-01/strategy-tester.git
+	shallow = true
