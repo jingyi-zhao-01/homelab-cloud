@@ -28,6 +28,12 @@ A personal Kubernetes homelab running on k3s, used to practice platform engineer
 | `flashsales` | `flashsales-aws-ssm` | `/flashsales/prod/` |
 | `strategy-tester` | `strategy-tester-aws-ssm` | `/strategy-tester/prod/` |
 
+### Versioning
+- `charts/*/Chart.yaml.version` tracks the Helm chart package version.
+- `charts/*/Chart.yaml.appVersion` is a display label for the app version.
+- `values.yaml` image tags are the source of truth for deployed container images.
+- Keep chart/version bumps and image tag bumps separate unless you are intentionally releasing both together.
+
 ### CI/CD
 Two independent parallel deploy workflows — changes to one namespace never trigger the other.
 
