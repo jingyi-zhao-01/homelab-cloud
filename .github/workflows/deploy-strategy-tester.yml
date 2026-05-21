@@ -73,6 +73,7 @@ jobs:
             -n "$NAMESPACE" \
             --create-namespace \
             --set namespaceOverride="$NAMESPACE" \
+            --set externalSecrets.enabled=true \
             --set optionIngestor.image.tag=latest \
             --set snapshotIngestor.image.tag=latest
 
