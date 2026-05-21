@@ -44,7 +44,7 @@ optionIngestor:
     LOG_LEVEL: INFO
   cronJob:
     enabled: true
-    schedule: "*/20 * * * *"
+    schedule: "0 2 * * 2-6"  # 21:00 EST Mon-Fri
     restartPolicy: OnFailure
     backoffLimit: 3
 
@@ -73,6 +73,6 @@ snapshotIngestor:
     LOG_LEVEL: INFO
   cronJob:
     enabled: true
-    schedule: "*/20 * * * *"
+    schedule: "0 3 * * 2-6"  # 22:00 EST Mon-Fri
     restartPolicy: OnFailure
     backoffLimit: 3
