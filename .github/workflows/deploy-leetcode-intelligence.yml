@@ -93,9 +93,32 @@ jobs:
             --set image.repository=ghcr.io/${{ github.repository_owner }}/leetcode-intelligence-service \
             --set image.tag=latest
 
+      - name: Wait for ExternalSecret to sync
+        run: |
+          for i in $(seq 1 30); do
+            if kubectl -n "$NAMESPACE" get secret leetcode-intelligence-service-secrets >/dev/null 2>&1; then
+              echo "Secret leetcode-intelligence-service-secrets is ready"
+              break
+            fi
+            echo "Waiting for ExternalSecret to sync (attempt $i/30)..."
+            sleep 5
+          done
+
+          kubectl -n "$NAMESPACE" get secret leetcode-intelligence-service-secrets >/dev/null 2>&1 || {
+            echo "Secret was not created in time. ExternalSecret details:"
+            kubectl -n "$NAMESPACE" get externalsecret leetcode-intelligence-service-secrets -o yaml || true
+            exit 1
+          }
+
       - name: Wait for deployment
         run: |
-          kubectl -n "$NAMESPACE" rollout status deploy/leetcode-intelligence --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deploy/leetcode-intelligence --timeout=300s || {
+            echo "Rollout failed, dumping pod status and recent logs"
+            kubectl -n "$NAMESPACE" get pods -o wide || true
+            kubectl -n "$NAMESPACE" describe deploy leetcode-intelligence || true
+            kubectl -n "$NAMESPACE" logs deploy/leetcode-intelligence --tail=200 || true
+            exit 1
+          }
 
       - name: Show deployment status
         run: |
