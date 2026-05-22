@@ -115,17 +115,32 @@ jobs:
           }
 
       - name: Restart deployment after secret sync
-        run: kubectl -n "$NAMESPACE" rollout restart deploy/leetcode-intelligence
+        run: |
+          kubectl -n "$NAMESPACE" rollout restart deployment \
+            -l app.kubernetes.io/instance=leetcode-intelligence,app.kubernetes.io/name=leetcode-intelligence
 
       - name: Wait for deployment
         run: |
-          kubectl -n "$NAMESPACE" rollout status deploy/leetcode-intelligence --timeout=300s || {
-            echo "Rollout failed, dumping pod status and recent logs"
-            kubectl -n "$NAMESPACE" get pods -o wide || true
-            kubectl -n "$NAMESPACE" describe deploy leetcode-intelligence || true
-            kubectl -n "$NAMESPACE" logs deploy/leetcode-intelligence --tail=200 || true
+          deploys=$(kubectl -n "$NAMESPACE" get deploy \
+            -l app.kubernetes.io/instance=leetcode-intelligence,app.kubernetes.io/name=leetcode-intelligence \
+            -o jsonpath='{.items[*].metadata.name}')
+
+          if [ -z "$deploys" ]; then
+            echo "No deployments found for leetcode-intelligence release"
+            kubectl -n "$NAMESPACE" get deploy -o wide || true
             exit 1
-          }
+          fi
+
+          for d in $deploys; do
+            echo "Waiting rollout for deployment/$d"
+            kubectl -n "$NAMESPACE" rollout status "deploy/$d" --timeout=300s || {
+              echo "Rollout failed for deployment/$d, dumping diagnostics"
+              kubectl -n "$NAMESPACE" get pods -o wide || true
+              kubectl -n "$NAMESPACE" describe deploy "$d" || true
+              kubectl -n "$NAMESPACE" logs "deploy/$d" --tail=200 || true
+              exit 1
+            }
+          done
 
       - name: Show deployment status
         run: |
@@ -136,4 +151,4 @@ jobs:
         run: |
           kubectl get pods -n "$NAMESPACE" -o wide || true
           kubectl get events -n "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 50 || true
-          kubectl describe deploy -n "$NAMESPACE" leetcode-intelligence || true
+          kubectl get deploy -n "$NAMESPACE" -o wide || true
