@@ -8,6 +8,11 @@ on:
       - 'charts/leetcode-intelligence/**'
       - '.github/workflows/deploy-leetcode-intelligence.yml'
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (for example: sha-9ab83d6)'
+        required: false
+        type: string
 
 concurrency:
   group: deploy-leetcode-intelligence-${{ github.ref }}
@@ -83,6 +88,18 @@ jobs:
             --from-literal=secret-access-key="$AWS_SECRET_ACCESS_KEY" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Resolve image tag
+        id: image_tag
+        run: |
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+          else
+            IMAGE_TAG="sha-${GITHUB_SHA::7}"
+          fi
+
+          echo "Deploying image tag: $IMAGE_TAG"
+          echo "value=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
       - name: Deploy intelligence service via Helm
         run: |
           helm upgrade --install leetcode-intelligence \
@@ -91,7 +108,7 @@ jobs:
             --create-namespace \
             --set namespaceOverride="$NAMESPACE" \
             --set image.repository=ghcr.io/${{ github.repository_owner }}/leetcode-intelligence-service \
-            --set image.tag=latest \
+            --set image.tag=${{ steps.image_tag.outputs.value }} \
             --set image.pullPolicy=Always
 
       - name: Wait for ExternalSecret to sync
