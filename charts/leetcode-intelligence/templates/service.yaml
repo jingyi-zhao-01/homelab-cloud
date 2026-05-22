@@ -1,3 +1,4 @@
+{{- if .Values.workloads.server.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -9,8 +10,10 @@ spec:
   type: {{ .Values.service.type }}
   selector:
     {{- include "leetcode-intelligence.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: server
   ports:
     - name: http
       protocol: TCP
       port: {{ .Values.service.port }}
       targetPort: http
+{{- end }}

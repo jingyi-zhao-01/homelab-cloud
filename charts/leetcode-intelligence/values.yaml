@@ -1,14 +1,8 @@
+## Global deployment settings
 namespaceOverride: ""
 
 imagePullSecrets:
   - name: ghcr-pull-secret
-
-replicaCount: 1
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 2
-  targetCPUUtilizationPercentage: 70
 
 image:
   repository: ghcr.io/jingyi-zhao-01/leetcode-intelligence-service
@@ -23,10 +17,61 @@ resources:
     cpu: "500m"
     memory: "512Mi"
 
+## Per-workload process layout
+workloads:
+  server:
+    enabled: true
+    replicaCount: 1
+    command:
+      - npm
+      - run
+      - --workspace
+      - services/leetcode-intelligence-service
+      - intelligence-server
+
+  promptDispatch:
+    enabled: true
+    replicaCount: 1
+    command:
+      - npm
+      - run
+      - --workspace
+      - services/leetcode-intelligence-service
+      - intelligence-prompt-dispatch
+
+  promptListener:
+    enabled: true
+    replicaCount: 1
+    command:
+      - npm
+      - run
+      - --workspace
+      - services/leetcode-intelligence-service
+      - intelligence-prompt-listener
+
+  recommender:
+    enabled: true
+    replicaCount: 1
+    command:
+      - npm
+      - run
+      - --workspace
+      - services/leetcode-intelligence-service
+      - intelligence-recommender
+
+## HTTP exposure for server workload
 service:
   type: ClusterIP
   port: 8030
 
+## Server autoscaling (used when enabled)
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 70
+
+## Runtime env vars shared by all workloads
 env:
   MODEL: deepseek/deepseek-v4-flash
   INTELLIGENCE_HOST: "0.0.0.0"
@@ -42,6 +87,7 @@ env:
   INTELLIGENCE_MIN_WEIGHT: "0.25"
   INTELLIGENCE_MAX_WEIGHT: "5"
 
+## Secret sources
 secrets:
   existingSecretName: leetcode-intelligence-service-secrets
 
