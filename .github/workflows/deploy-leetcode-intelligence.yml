@@ -96,19 +96,26 @@ jobs:
       - name: Wait for ExternalSecret to sync
         run: |
           for i in $(seq 1 30); do
-            if kubectl -n "$NAMESPACE" get secret leetcode-intelligence-service-secrets >/dev/null 2>&1; then
-              echo "Secret leetcode-intelligence-service-secrets is ready"
+            if kubectl -n "$NAMESPACE" get secret leetcode-intelligence-service-secrets >/dev/null 2>&1 && \
+               [ -n "$(kubectl -n "$NAMESPACE" get secret leetcode-intelligence-service-secrets -o jsonpath='{.data.OPEN_ROUTER_API_KEY}' 2>/dev/null)" ]; then
+              echo "Secret leetcode-intelligence-service-secrets contains OPEN_ROUTER_API_KEY"
               break
             fi
-            echo "Waiting for ExternalSecret to sync (attempt $i/30)..."
+            echo "Waiting for ExternalSecret to sync OPEN_ROUTER_API_KEY (attempt $i/30)..."
             sleep 5
           done
 
-          kubectl -n "$NAMESPACE" get secret leetcode-intelligence-service-secrets >/dev/null 2>&1 || {
-            echo "Secret was not created in time. ExternalSecret details:"
+          kubectl -n "$NAMESPACE" get secret leetcode-intelligence-service-secrets >/dev/null 2>&1 && \
+          [ -n "$(kubectl -n "$NAMESPACE" get secret leetcode-intelligence-service-secrets -o jsonpath='{.data.OPEN_ROUTER_API_KEY}' 2>/dev/null)" ] || {
+            echo "Secret did not contain OPEN_ROUTER_API_KEY in time. ExternalSecret details:"
             kubectl -n "$NAMESPACE" get externalsecret leetcode-intelligence-service-secrets -o yaml || true
+            echo "Current secret keys:"
+            kubectl -n "$NAMESPACE" get secret leetcode-intelligence-service-secrets -o json | jq -r '.data | keys[]' || true
             exit 1
           }
+
+      - name: Restart deployment after secret sync
+        run: kubectl -n "$NAMESPACE" rollout restart deploy/leetcode-intelligence
 
       - name: Wait for deployment
         run: |
