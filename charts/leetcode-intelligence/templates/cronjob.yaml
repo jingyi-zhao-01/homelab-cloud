@@ -1,0 +1,59 @@
+{{- range $name, $workload := .Values.workloads }}
+{{- if and $workload.enabled (or (eq $name "promptDispatch") (eq $name "recommender")) }}
+{{- $component := kebabcase $name }}
+{{- $schedule := "" }}
+{{- if eq $name "promptDispatch" }}
+{{- $schedule = (index $.Values.env "INTELLIGENCE_PROMPT_CRON") }}
+{{- else if eq $name "recommender" }}
+{{- $schedule = (index $.Values.env "INTELLIGENCE_RECOMMEND_CRON") }}
+{{- end }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ printf "%s-%s" (include "leetcode-intelligence.fullname" $) $component }}
+  namespace: {{ include "leetcode-intelligence.namespace" $ }}
+  labels:
+    {{- include "leetcode-intelligence.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  schedule: {{ $schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "leetcode-intelligence.selectorLabels" $ | nindent 12 }}
+            app.kubernetes.io/component: {{ $component }}
+        spec:
+          {{- with $.Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          restartPolicy: OnFailure
+          containers:
+            - name: intelligence-service
+              image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+              imagePullPolicy: {{ $.Values.image.pullPolicy }}
+              command:
+                {{- toYaml $workload.command | nindent 16 }}
+              {{- with $.Values.env }}
+              env:
+                {{- range $key, $value := . }}
+                - name: {{ $key }}
+                  value: {{ $value | quote }}
+                {{- end }}
+              {{- end }}
+              {{- $secretName := include "leetcode-intelligence.secretName" $ | trim }}
+              {{- if $secretName }}
+              envFrom:
+                - secretRef:
+                    name: {{ $secretName }}
+              {{- end }}
+              resources:
+                {{- toYaml $.Values.resources | nindent 16 }}
+---
+{{- end }}
+{{- end }}
