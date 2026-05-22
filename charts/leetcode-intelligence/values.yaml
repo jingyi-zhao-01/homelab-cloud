@@ -47,7 +47,7 @@ workloads:
       - run
       - --workspace
       - services/leetcode-intelligence-service
-      - intelligence-prompt-response
+      - intelligence-prompt-listener
 
   recommender:
     enabled: true
