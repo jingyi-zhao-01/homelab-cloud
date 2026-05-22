@@ -51,7 +51,6 @@ externalSecrets:
   targetSecretName: leetcode-intelligence-service-secrets
   parameterPrefix: /leetcode-intelligence/prod
   optionalKeys:
-    openRouterApiKey: false
     apiKey: false
   store:
     kind: ClusterSecretStore
