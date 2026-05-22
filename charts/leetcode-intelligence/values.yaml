@@ -50,6 +50,9 @@ externalSecrets:
   refreshInterval: 1h
   targetSecretName: leetcode-intelligence-service-secrets
   parameterPrefix: /leetcode-intelligence/prod
+  optionalKeys:
+    openRouterApiKey: false
+    apiKey: false
   store:
     kind: ClusterSecretStore
     name: leetcode-intelligence-aws-ssm

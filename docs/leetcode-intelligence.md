@@ -25,6 +25,11 @@ The chart uses External Secrets Operator to read runtime secrets from AWS SSM Pa
 | `/leetcode-intelligence/prod/PROMPT_DISCORD_CHANNEL_ID` | `PROMPT_DISCORD_CHANNEL_ID` |
 | `/leetcode-intelligence/prod/RECOMMEND_DISCORD_CHANNEL_ID` | `RECOMMEND_DISCORD_CHANNEL_ID` |
 
+`OPEN_ROUTER_API_KEY` and `API_KEY` are optional in the chart and are only rendered into the `ExternalSecret` when these values are enabled:
+
+- `externalSecrets.optionalKeys.openRouterApiKey`
+- `externalSecrets.optionalKeys.apiKey`
+
 ## Config Defaults
 
 The chart sets non-secret env defaults in `values.yaml`:
