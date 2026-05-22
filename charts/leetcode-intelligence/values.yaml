@@ -31,10 +31,10 @@ env:
   MODEL: openai/gpt-4o-mini
   INTELLIGENCE_HOST: "0.0.0.0"
   INTELLIGENCE_PORT: "8030"
-  # Every 2 hours for prompt dispatch.
-  INTELLIGENCE_PROMPT_CRON: "0 */2 * * *"
-  # Every 2 hours for recommendation push.
-  INTELLIGENCE_RECOMMEND_CRON: "0 */2 * * *"
+  # Every 2 minutes for prompt dispatch.
+  INTELLIGENCE_PROMPT_CRON: "*/2 * * * *"
+  # Every 2 minutes for recommendation push.
+  INTELLIGENCE_RECOMMEND_CRON: "*/2 * * * *"
   INTELLIGENCE_RECOMMEND_TOP_K: "5"
   INTELLIGENCE_RECOMMEND_LOOKBACK_DAYS: "30"
   INTELLIGENCE_MAX_CANDIDATES: "500"
