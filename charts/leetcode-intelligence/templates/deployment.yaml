@@ -1,13 +1,14 @@
 {{- range $name, $workload := .Values.workloads }}
 {{- if $workload.enabled }}
+{{- $component := kebabcase $name }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ printf "%s-%s" (include "leetcode-intelligence.fullname" $) $name }}
+  name: {{ printf "%s-%s" (include "leetcode-intelligence.fullname" $) $component }}
   namespace: {{ include "leetcode-intelligence.namespace" $ }}
   labels:
     {{- include "leetcode-intelligence.labels" $ | nindent 4 }}
-    app.kubernetes.io/component: {{ $name }}
+    app.kubernetes.io/component: {{ $component }}
 spec:
   {{- if and (eq $name "server") (not $.Values.autoscaling.enabled) }}
   replicas: {{ $workload.replicaCount }}
@@ -17,12 +18,12 @@ spec:
   selector:
     matchLabels:
       {{- include "leetcode-intelligence.selectorLabels" $ | nindent 6 }}
-      app.kubernetes.io/component: {{ $name }}
+      app.kubernetes.io/component: {{ $component }}
   template:
     metadata:
       labels:
         {{- include "leetcode-intelligence.selectorLabels" $ | nindent 8 }}
-        app.kubernetes.io/component: {{ $name }}
+        app.kubernetes.io/component: {{ $component }}
     spec:
       {{- with $.Values.imagePullSecrets }}
       imagePullSecrets:
