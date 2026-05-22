@@ -7,7 +7,7 @@ imagePullSecrets:
 image:
   repository: ghcr.io/jingyi-zhao-01/leetcode-intelligence-service
   tag: latest
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 resources:
   requests:
@@ -42,6 +42,7 @@ workloads:
   promptListener:
     enabled: true
     replicaCount: 1
+    # Long-running listener service (not a cron workload).
     command:
       - npm
       - run

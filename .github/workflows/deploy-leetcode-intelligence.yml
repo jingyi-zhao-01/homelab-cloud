@@ -91,7 +91,8 @@ jobs:
             --create-namespace \
             --set namespaceOverride="$NAMESPACE" \
             --set image.repository=ghcr.io/${{ github.repository_owner }}/leetcode-intelligence-service \
-            --set image.tag=latest
+            --set image.tag=latest \
+            --set image.pullPolicy=Always
 
       - name: Wait for ExternalSecret to sync
         run: |
