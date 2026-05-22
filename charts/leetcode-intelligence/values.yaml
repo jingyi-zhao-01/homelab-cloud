@@ -1,0 +1,60 @@
+namespaceOverride: ""
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
+
+replicaCount: 1
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 70
+
+image:
+  repository: ghcr.io/jingyi-zhao-01/leetcode-intelligence-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+service:
+  type: ClusterIP
+  port: 8030
+
+env:
+  MODEL: openai/gpt-4o-mini
+  INTELLIGENCE_HOST: "0.0.0.0"
+  INTELLIGENCE_PORT: "8030"
+  INTELLIGENCE_PROMPT_CRON: "0 9 * * *"
+  INTELLIGENCE_RECOMMEND_CRON: "0 20 * * *"
+  INTELLIGENCE_RECOMMEND_TOP_K: "5"
+  INTELLIGENCE_RECOMMEND_LOOKBACK_DAYS: "30"
+  INTELLIGENCE_MAX_CANDIDATES: "500"
+  INTELLIGENCE_SELECTION_WINDOW: "200"
+  INTELLIGENCE_MIN_WEIGHT: "0.25"
+  INTELLIGENCE_MAX_WEIGHT: "5"
+
+secrets:
+  existingSecretName: leetcode-intelligence-service-secrets
+
+externalSecrets:
+  enabled: true
+  refreshInterval: 1h
+  targetSecretName: leetcode-intelligence-service-secrets
+  parameterPrefix: /leetcode-intelligence/prod
+  store:
+    kind: ClusterSecretStore
+    name: leetcode-intelligence-aws-ssm
+    create: true
+    region: us-west-1
+    authSecret:
+      name: aws-ssm-credentials
+      namespace: external-secrets
+      accessKeyIdKey: access-key-id
+      secretAccessKeyKey: secret-access-key

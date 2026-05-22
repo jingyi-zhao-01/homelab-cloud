@@ -1,6 +1,6 @@
 # Repository Overview
 
-This repository is a personal Kubernetes homelab centered on two independent workloads:
+This repository is a personal Kubernetes homelab centered on three independent workloads:
 
 ## Why This Exists
 
@@ -12,6 +12,7 @@ This platform gives me a centralized layer where services can converge. The serv
 |---|---|
 | `flashsales` | Concurrency practice workload with three FastAPI services and self-hosted supporting data stores |
 | `strategy-tester` | Scheduled ingestion workload driven by cron jobs and external secrets |
+| `leetcode-intelligence` | Continuous API workload for prompt dispatch, reply scoring, and focus recommendations |
 
 ## Shared Shape
 
@@ -36,5 +37,6 @@ This platform gives me a centralized layer where services can converge. The serv
 - [Flashsales workload](flashsales.md)
 - [Strategy tester workload](strategy-tester.md)
 - [Operations and tooling](operations.md)
+- [LeetCode intelligence workload](leetcode-intelligence.md)
 
 Back to [README](../README.md).

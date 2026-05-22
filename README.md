@@ -15,6 +15,7 @@ This platform is the result: a shared place where services can converge, agent c
 | [Repository overview](docs/overview.md) | High-level architecture, layout, and shared conventions |
 | [Flashsales workload](docs/flashsales.md) | Concurrency practice app deployed to the VPS, smoke test, and debugging |
 | [Strategy tester workload](docs/strategy-tester.md) | Scheduled ingestion app, cron jobs, and secret wiring |
+| [LeetCode intelligence workload](docs/leetcode-intelligence.md) | Continuous intelligence API service with Discord and LLM secret wiring |
 | [Infrastructure](docs/infrastructure.md) | Terraform, Neon provisioning, AWS SSM secrets, and state backend |
 | [Operations and tooling](docs/operations.md) | CI/CD, perf tests, local workflows, and developer setup |
 
@@ -33,7 +34,7 @@ make loadtest KUBECONFIG_PATH=secrets/.kube-config
 
 ```text
 .
-├── charts/                 # Helm charts for flashsales and strategy-tester
+├── charts/                 # Helm charts for flashsales, strategy-tester, and leetcode-intelligence
 ├── flashsale/              # FastAPI service sources for the flashsales workload
 ├── perf/                   # k6 load test scripts and helpers
 ├── scripts/                # Smoke tests and local automation

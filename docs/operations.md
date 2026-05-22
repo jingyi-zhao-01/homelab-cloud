@@ -8,6 +8,7 @@ This page collects the operational commands and workflow details that used to be
 |---|---|---|
 | `deploy-flashsale.yml` | Pushes to `flashsale/**` or `charts/flashsales/**` | Flashsales |
 | `deploy-strategy-tester.yml` | Pushes to `strategy-tester/**` or `charts/strategy-tester/**` | Strategy tester |
+| `deploy-leetcode-intelligence.yml` | Pushes to `charts/leetcode-intelligence/**` | LeetCode intelligence |
 | `perf-concurrency-suite.yml` | After a successful flashsales deploy | Concurrency suite |
 | `loadtest-manual.yml` | Manual `workflow_dispatch` | Performance testing |
 | `terraform-provision.yml` | Manual | Infrastructure provisioning |
@@ -65,5 +66,6 @@ For the Neon and secrets workflow details, see [Infrastructure](infrastructure.m
 - [Infrastructure](infrastructure.md)
 - [Flashsales workload](flashsales.md)
 - [Strategy tester workload](strategy-tester.md)
+- [LeetCode intelligence workload](leetcode-intelligence.md)
 
 Back to [README](../README.md).

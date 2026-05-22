@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "leetcode-intelligence.fullname" . }}
+  namespace: {{ include "leetcode-intelligence.namespace" . }}
+  labels:
+    {{- include "leetcode-intelligence.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "leetcode-intelligence.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{ .Values.service.port }}
+      targetPort: http

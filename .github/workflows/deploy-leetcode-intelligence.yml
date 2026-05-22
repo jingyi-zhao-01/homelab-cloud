@@ -1,0 +1,109 @@
+name: Deploy LeetCode Intelligence to leetcode-intelligence Namespace
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/leetcode-intelligence/**'
+      - '.github/workflows/deploy-leetcode-intelligence.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-leetcode-intelligence-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NAMESPACE: leetcode-intelligence
+
+jobs:
+  deploy:
+    name: Deploy to leetcode-intelligence Namespace
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout homelab-cloud
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl version --client
+          kubectl get nodes
+
+      - name: Create namespace and image pull secret
+        env:
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          if [ -z "$GHCR_PULL_USERNAME" ] || [ -z "$GHCR_PULL_TOKEN" ]; then
+            echo "GHCR_PULL_USERNAME or GHCR_PULL_TOKEN is missing"
+            exit 1
+          fi
+
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl -n "$NAMESPACE" create secret docker-registry ghcr-pull-secret \
+            --docker-server=ghcr.io \
+            --docker-username="$GHCR_PULL_USERNAME" \
+            --docker-password="$GHCR_PULL_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create ESO AWS credentials secret
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY is missing"
+            exit 1
+          fi
+
+          kubectl create namespace external-secrets --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl -n external-secrets create secret generic aws-ssm-credentials \
+            --from-literal=access-key-id="$AWS_ACCESS_KEY_ID" \
+            --from-literal=secret-access-key="$AWS_SECRET_ACCESS_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy intelligence service via Helm
+        run: |
+          helm upgrade --install leetcode-intelligence \
+            charts/leetcode-intelligence/ \
+            -n "$NAMESPACE" \
+            --create-namespace \
+            --set namespaceOverride="$NAMESPACE" \
+            --set image.repository=ghcr.io/${{ github.repository_owner }}/leetcode-intelligence-service \
+            --set image.tag=latest
+
+      - name: Wait for deployment
+        run: |
+          kubectl -n "$NAMESPACE" rollout status deploy/leetcode-intelligence --timeout=300s
+
+      - name: Show deployment status
+        run: |
+          kubectl -n "$NAMESPACE" get all
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods -n "$NAMESPACE" -o wide || true
+          kubectl get events -n "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 50 || true
+          kubectl describe deploy -n "$NAMESPACE" leetcode-intelligence || true
