@@ -34,8 +34,8 @@ The chart uses External Secrets Operator to read runtime secrets from AWS SSM Pa
 The chart sets non-secret env defaults in `values.yaml`:
 
 - `MODEL=openai/gpt-4o-mini`
-- `INTELLIGENCE_PROMPT_CRON=0 7-23/2 * * *`
-- `INTELLIGENCE_RECOMMEND_CRON=0 19 * * *`
+- `INTELLIGENCE_PROMPT_CRON=*/2 * * * *`
+- `INTELLIGENCE_RECOMMEND_CRON=*/2 * * * *`
 - `cron.timeZone=America/Los_Angeles`
 - `INTELLIGENCE_RECOMMEND_TOP_K=5`
 - `INTELLIGENCE_RECOMMEND_LOOKBACK_DAYS=30`

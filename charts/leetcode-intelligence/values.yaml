@@ -80,10 +80,10 @@ env:
   MODEL: deepseek/deepseek-v4-flash
   INTELLIGENCE_HOST: "0.0.0.0"
   INTELLIGENCE_PORT: "8030"
-  # Every 2 hours from 07:00 through 23:00 (PST).
-  INTELLIGENCE_PROMPT_CRON: "0 7-23/2 * * *"
-  # Every day at 19:00 (PST).
-  INTELLIGENCE_RECOMMEND_CRON: "0 19 * * *"
+  # Every 2 minutes.
+  INTELLIGENCE_PROMPT_CRON: "*/2 * * * *"
+  # Every 2 minutes.
+  INTELLIGENCE_RECOMMEND_CRON: "*/2 * * * *"
   INTELLIGENCE_RECOMMEND_TOP_K: "5"
   INTELLIGENCE_RECOMMEND_LOOKBACK_DAYS: "30"
   INTELLIGENCE_MAX_CANDIDATES: "500"
