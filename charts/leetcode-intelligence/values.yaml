@@ -10,7 +10,7 @@ image:
   pullPolicy: Always
 
 submissionService:
-  enabled: false
+  enabled: true
   replicaCount: 1
   image:
     repository: ghcr.io/jingyi-zhao-01/leetcode-submission-service
