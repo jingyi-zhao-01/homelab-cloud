@@ -29,10 +29,8 @@ submissionService:
   env:
     SUBMISSION_HOST: "0.0.0.0"
     SUBMISSION_PORT: "3000"
-  # Add your own node label here, for example:
-  # nodeSelector:
-  #   kubernetes.io/hostname: archlinux-node
-  nodeSelector: {}
+  nodeSelector:
+    kubernetes.io/hostname: archlinux
   tolerations: []
   affinity: {}
 
