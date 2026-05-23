@@ -17,6 +17,9 @@ metadata:
     app.kubernetes.io/component: {{ $component }}
 spec:
   schedule: {{ $schedule | quote }}
+  {{- with $.Values.cron.timeZone }}
+  timeZone: {{ . | quote }}
+  {{- end }}
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 2
   failedJobsHistoryLimit: 3
