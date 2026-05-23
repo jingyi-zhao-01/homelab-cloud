@@ -83,6 +83,27 @@ jobs:
             --from-literal=secret-access-key="$AWS_SECRET_ACCESS_KEY" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Print deployment image digest
+        env:
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          image="ghcr.io/${{ github.repository_owner }}/leetcode-intelligence-service:latest"
+
+          echo "$GHCR_PULL_TOKEN" | docker login ghcr.io \
+            --username "$GHCR_PULL_USERNAME" \
+            --password-stdin
+
+          digest=$(docker manifest inspect --verbose "$image" | jq -r '.Descriptor.digest // .digest // empty')
+
+          if [ -z "$digest" ]; then
+            echo "Failed to resolve image digest for $image"
+            exit 1
+          fi
+
+          echo "Deploying image: $image"
+          echo "Deploying digest: $digest"
+
       - name: Deploy intelligence service via Helm
         run: |
           helm upgrade --install leetcode-intelligence \
