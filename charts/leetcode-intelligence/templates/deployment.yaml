@@ -1,5 +1,5 @@
 {{- range $name, $workload := .Values.workloads }}
-{{- if and $workload.enabled (not (or (eq $name "promptDispatch") (eq $name "recommender"))) }}
+{{- if $workload.enabled }}
 {{- $component := kebabcase $name }}
 apiVersion: apps/v1
 kind: Deployment
