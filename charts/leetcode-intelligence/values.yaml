@@ -47,6 +47,8 @@ workloads:
   server:
     enabled: true
     replicaCount: 1
+    nodeSelector:
+      kubernetes.io/hostname: srv1304323
     command:
       - npm
       - run
@@ -57,6 +59,8 @@ workloads:
   promptDispatch:
     enabled: true
     replicaCount: 1
+    nodeSelector:
+      kubernetes.io/hostname: srv1304323
     command:
       - npm
       - run
@@ -67,6 +71,8 @@ workloads:
   promptListener:
     enabled: true
     replicaCount: 1
+    nodeSelector:
+      kubernetes.io/hostname: srv1304323
     # Long-running listener service (not a cron workload).
     command:
       - npm
@@ -78,6 +84,8 @@ workloads:
   recommender:
     enabled: true
     replicaCount: 1
+    nodeSelector:
+      kubernetes.io/hostname: srv1304323
     command:
       - npm
       - run
