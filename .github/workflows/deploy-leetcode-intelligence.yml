@@ -94,7 +94,13 @@ jobs:
             --username "$GHCR_PULL_USERNAME" \
             --password-stdin
 
-          digest=$(docker manifest inspect --verbose "$image" | jq -r '.Descriptor.digest // .digest // empty')
+          digest=$(docker manifest inspect --verbose "$image" | jq -r '
+            if type == "array" then
+              (.[0].Descriptor.digest // .[0].digest // empty)
+            else
+              (.Descriptor.digest // .digest // empty)
+            end
+          ')
 
           if [ -z "$digest" ]; then
             echo "Failed to resolve image digest for $image"
