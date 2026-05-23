@@ -1,0 +1,20 @@
+{{- if .Values.submissionService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-%s" (include "leetcode-intelligence.fullname" .) "submission" }}
+  namespace: {{ include "leetcode-intelligence.namespace" . }}
+  labels:
+    {{- include "leetcode-intelligence.labels" . | nindent 4 }}
+    app.kubernetes.io/component: submission
+spec:
+  type: {{ .Values.submissionService.service.type }}
+  selector:
+    {{- include "leetcode-intelligence.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: submission
+  ports:
+    - name: tcp-submission
+      protocol: TCP
+      port: {{ .Values.submissionService.service.port }}
+      targetPort: tcp-submission
+{{- end }}

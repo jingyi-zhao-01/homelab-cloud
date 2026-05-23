@@ -1,0 +1,76 @@
+{{- if .Values.submissionService.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-%s" (include "leetcode-intelligence.fullname" .) "submission" }}
+  namespace: {{ include "leetcode-intelligence.namespace" . }}
+  labels:
+    {{- include "leetcode-intelligence.labels" . | nindent 4 }}
+    app.kubernetes.io/component: submission
+spec:
+  replicas: {{ .Values.submissionService.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "leetcode-intelligence.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: submission
+  template:
+    metadata:
+      labels:
+        {{- include "leetcode-intelligence.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: submission
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.submissionService.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.submissionService.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.submissionService.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: submission-service
+          image: "{{ .Values.submissionService.image.repository }}:{{ .Values.submissionService.image.tag }}"
+          imagePullPolicy: {{ .Values.submissionService.image.pullPolicy }}
+          ports:
+            - name: tcp-submission
+              containerPort: {{ .Values.submissionService.service.port }}
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: tcp-submission
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: tcp-submission
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            tcpSocket:
+              port: tcp-submission
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          {{- with .Values.submissionService.env }}
+          env:
+            {{- range $key, $value := . }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- end }}
+          {{- $secretName := include "leetcode-intelligence.secretName" . | trim }}
+          {{- if $secretName }}
+          envFrom:
+            - secretRef:
+                name: {{ $secretName }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.submissionService.resources | nindent 12 }}
+{{- end }}
