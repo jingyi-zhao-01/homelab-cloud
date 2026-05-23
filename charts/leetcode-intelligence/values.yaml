@@ -73,10 +73,11 @@ autoscaling:
   targetCPUUtilizationPercentage: 70
 
 ## Runtime env vars shared by all workloads
-cron:
-  timeZone: America/Los_Angeles
+# cron:
+#   timeZone: America/Los_Angeles
 
 env:
+  TZ: America/Los_Angeles
   MODEL: deepseek/deepseek-v4-flash
   INTELLIGENCE_HOST: "0.0.0.0"
   INTELLIGENCE_PORT: "8030"
