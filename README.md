@@ -4,7 +4,11 @@ Personal k3s native cloud for platform engineering practice, experimenting in re
 
 ## Why This Exists
 
-I use AI to generate a lot of dev-level code on a specific matter issue , but I do not want to spend the same energy provisioning infra for every service. I also wanted a real lab where I can test system design ideas on a live setup instead of only reading about them.
+I use AI to generate a lot of code on misc ideas, and then these problem surfaces. 
+- what works on your local does not work on production environment
+- what happens on your production environment is not exposed to agent
+- I do not want to spend the same energy provisioning infra for every service.
+- I need a real lab where I can organize release between what is stable vs what is not stable written by agent, and i need to expose production metrics to coding agent so it can fix it. 
 
 This platform is the result: a shared place where services can converge, agent can write code via github apps, can focus on code, logic, and implementation details, and the infra (which is currently manually handled by me) provisioning plus GitOps work is handled by a centralized platform layer.
 
