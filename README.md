@@ -6,7 +6,7 @@ Personal k3s native cloud for platform engineering practice, automate CICD, depl
 
 I use AI to generate a lot of code on misc ideas, and then these problem surfaces. 
 - what works on your local does not work on production environment
-- what happens on your production environment is not exposed to agent
+- what happens on your production environment is not exposed to your local thus not available to your agent
 - I do not want to spend the same energy provisioning infra for every service.
 - I need a real lab where I can organize release between what is stable vs what is not stable written by agent, and i need to expose production metrics to coding agent so it can fix it. 
 
