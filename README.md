@@ -1,6 +1,6 @@
 # homelab-cloud
 
-Personal k3s native cloud for platform engineering practice, experimenting in real world networks, infras, and risks.
+Personal k3s native cloud for platform engineering practice, automate CICD, deployments, infras, agent feedbacks and risks.
 
 ## Why This Exists
 
