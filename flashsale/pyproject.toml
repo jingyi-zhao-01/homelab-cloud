@@ -6,12 +6,24 @@ requires-python = ">=3.12"
 
 [project.optional-dependencies]
 dev = [
+  "pylint>=3.3.0",
   "pre-commit>=3.0.0",
 ]
 
 [tool.uv.workspace]
 members = [
-  "flashsale/user-service",
-  "flashsale/product-service",
-  "flashsale/order-service",
+  "user-service",
+  "product-service",
+  "order-service",
+]
+
+[tool.pylint.format]
+max-module-lines = 500
+
+[tool.pylint.messages_control]
+disable = [
+  "all",
+]
+enable = [
+  "too-many-lines",
 ]

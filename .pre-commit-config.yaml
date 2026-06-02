@@ -10,6 +10,13 @@ repos:
 
   - repo: local
     hooks:
+      - id: pylint-microservices
+        name: Pylint - microservice module size
+        entry: uv run --project flashsale pylint
+        language: system
+        files: ^flashsale/(user-service|product-service|order-service)/(app|tests)/.*\.py$
+        stages: [pre-commit]
+
       - id: helm-lint-flashsales
         name: Helm Lint - flashsales
         entry: helm lint charts/flashsales/

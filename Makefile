@@ -12,13 +12,14 @@ SSH_PORT ?= 22
 REMOTE_K3S_CMD ?= k3s ctr images import -
 SSH ?= ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
 
-.PHONY: help deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-init neon-apply neon-destroy
+.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-init neon-apply neon-destroy
 
 TAIL ?= 200
 SINCE ?= 10m
 
 help:
 >echo "Targets:"
+>echo "  make lint      # Run repo lint and shared pylint checks"
 >echo "  make deploy    # Deploy chart to local k3s"
 >echo "  make status    # Show pods and services"
 >echo "  make e2e       # Run E2E smoke test"
@@ -48,6 +49,9 @@ help:
 >echo "  make neon-destroy          # Destroy Neon resources (caution: data loss)"
 
 include flashsale/perf/perf.mk
+
+lint:
+>cd flashsale && uv run pre-commit run --all-files
 
 check-local:
 >API_SERVER=$$(KUBECONFIG=$(KUBECONFIG_PATH) kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'); \

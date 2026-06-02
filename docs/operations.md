@@ -5,7 +5,7 @@ This page collects the operational commands and workflow details that used to be
 ## CI/CD
 
 | Workflow | Trigger | Scope |
-|---|---|---|
+| --- | --- | --- |
 | `flashsales-deploy-pre.yml` | Pushes to `flashsale/**` or `charts/flashsales/**` | Flashsales pre-deploy gates |
 | `flashsales-deploy.yml` | After a successful `flashsales-deploy-pre.yml` or manual dispatch | Flashsales deploy |
 | `flashsales-deploy-post.yml` | After a successful `flashsales-deploy.yml` or manual dispatch | Flashsales post-deploy runtime consistency and perf |
@@ -42,11 +42,20 @@ bash ./flashsale/perf/loadtest-k6.sh -e RAMP_UP=30s -e STEADY=180s -e TARGET_VUS
 ## Developer Setup
 
 ```bash
+cd flashsale
 uv sync --extra dev
 uv run pre-commit install
 ```
 
-The repo uses pre-commit hooks for whitespace, end-of-file, YAML checks, and Helm linting.
+The repo uses pre-commit hooks for whitespace, end-of-file, YAML checks, Helm linting, and shared `pylint` checks for the flashsale microservices.
+
+## Lint Standard
+
+- `pylint` is the shared development linter for the three flashsale microservices.
+- The shared rule currently enforced is `too-many-lines`, with `max-module-lines = 500`.
+- If a Python module approaches the limit, split it by responsibility instead of appending another large section.
+- The shared lint hook runs against `app/` and `tests/` modules in `user-service`, `product-service`, and `order-service`.
+- Run `make lint` before pushing when you touch multiple files or refactor large modules.
 
 ## Terraform-Backed Infrastructure
 
@@ -57,7 +66,7 @@ For the Neon and secrets workflow details, see [Infrastructure](infrastructure.m
 ## Useful Make Targets
 
 | Target | Purpose |
-|---|---|
+| --- | --- |
 | `make deploy` | Deploy flashsales to the configured cluster |
 | `make status` | Show pods and services |
 | `make fix-images` | Rebuild, import, restart, and verify flashsales images |

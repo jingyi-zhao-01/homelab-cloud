@@ -3,3 +3,5 @@ secrets/
 .kube-config
 grafana-token
 __pycache__/
+.venv/
+flashsale/.venv/
