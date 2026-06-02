@@ -42,7 +42,7 @@ class OrderService:
 
     def _reserve_and_price_item(
         self, client: httpx.Client, product_id: int, quantity: int
-    ) -> tuple[float, int]:
+    ) -> tuple[float, int, int]:
         product_response = client.get(
             f"{PRODUCT_SERVICE_URL}/products/{product_id}",
             timeout=DEPENDENCY_TIMEOUT_SECONDS,
@@ -86,7 +86,63 @@ class OrderService:
             )
             raise HTTPException(status_code=502, detail="product reserve failed")
 
-        return price, quantity
+        reservation_payload = reserve_response.json()
+        reservation_id = int(reservation_payload["reservation_id"])
+
+        return price, quantity, reservation_id
+
+    def _release_reserved_items(
+        self, client: httpx.Client, reservation_ids: list[int]
+    ) -> None:
+        for reservation_id in reversed(reservation_ids):
+            try:
+                release_response = client.post(
+                    f"{PRODUCT_SERVICE_URL}/reservations/{reservation_id}/cancel",
+                    timeout=DEPENDENCY_TIMEOUT_SECONDS,
+                )
+                if release_response.status_code >= 400:
+                    self._logger.error(
+                        "event=order_cancel_failed reservation_id=%s status_code=%s",
+                        reservation_id,
+                        release_response.status_code,
+                    )
+            except Exception:
+                self._logger.exception(
+                    "event=order_cancel_error reservation_id=%s",
+                    reservation_id,
+                )
+
+    def _confirm_reserved_items(
+        self, client: httpx.Client, reservation_ids: list[int]
+    ) -> None:
+        for reservation_id in reservation_ids:
+            confirm_response = client.post(
+                f"{PRODUCT_SERVICE_URL}/reservations/{reservation_id}/confirm",
+                timeout=DEPENDENCY_TIMEOUT_SECONDS,
+            )
+            if confirm_response.status_code >= 400:
+                self._logger.error(
+                    "event=order_confirm_failed reservation_id=%s status_code=%s",
+                    reservation_id,
+                    confirm_response.status_code,
+                )
+                raise HTTPException(status_code=502, detail="product confirm failed")
+
+    def _mark_order_failed(self, order_id: int) -> None:
+        try:
+            updated = self._repository.update_order_status(order_id, "failed")
+            if not updated:
+                self._logger.error(
+                    "event=order_mark_failed_missing order_id=%s storage=%s",
+                    order_id,
+                    self._storage,
+                )
+        except Exception:
+            self._logger.exception(
+                "event=order_mark_failed_error order_id=%s storage=%s",
+                order_id,
+                self._storage,
+            )
 
     def create_order(self, payload: OrderCreateRequest) -> OrderOut:
         if not payload.items:
@@ -100,57 +156,80 @@ class OrderService:
             self._ensure_user_exists(client=client, user_id=payload.user_id)
             order_items: list[OrderItemOut] = []
             total_amount = 0.0
+            reservation_ids: list[int] = []
+            order_id: int | None = None
 
-            for item in payload.items:
-                unit_price, quantity = self._reserve_and_price_item(
-                    client=client,
-                    product_id=item.product_id,
-                    quantity=item.quantity,
-                )
-                line_total = unit_price * quantity
-                total_amount += line_total
-                order_items.append(
-                    OrderItemOut(
+            try:
+                for item in payload.items:
+                    unit_price, quantity, reservation_id = self._reserve_and_price_item(
+                        client=client,
                         product_id=item.product_id,
-                        quantity=quantity,
-                        unit_price=unit_price,
-                        line_total=line_total,
+                        quantity=item.quantity,
                     )
-                )
+                    reservation_ids.append(reservation_id)
+                    line_total = unit_price * quantity
+                    total_amount += line_total
+                    order_items.append(
+                        OrderItemOut(
+                            product_id=item.product_id,
+                            quantity=quantity,
+                            unit_price=unit_price,
+                            line_total=line_total,
+                        )
+                    )
 
-        try:
-            order = self._repository.create_order(
-                user_id=payload.user_id,
-                total_amount=total_amount,
-                order_items=order_items,
-            )
-            self._logger.info(
-                "event=order_created order_id=%s user_id=%s items=%s total_amount=%.2f storage=%s",
-                order.id,
-                order.user_id,
-                len(order.items),
-                order.total_amount,
-                self._storage,
-            )
-            return order
-        except RuntimeError:
-            self._logger.error(
-                "event=order_create_failed reason=persistence_empty user_id=%s storage=%s",
-                payload.user_id,
-                self._storage,
-            )
-            raise HTTPException(status_code=503, detail="order persistence failed")
-        except HTTPException:
-            raise
-        except Exception as exc:
-            self._logger.exception(
-                "event=order_create_error storage=%s user_id=%s",
-                self._storage,
-                payload.user_id,
-            )
-            raise HTTPException(
-                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
-            ) from exc
+                order = self._repository.create_order(
+                    user_id=payload.user_id,
+                    total_amount=total_amount,
+                    order_items=order_items,
+                    status="pending",
+                )
+                order_id = order.id
+                self._confirm_reserved_items(
+                    client=client, reservation_ids=reservation_ids
+                )
+                order = self._repository.update_order_status(order.id, "confirmed") or order
+                self._logger.info(
+                    "event=order_created order_id=%s user_id=%s items=%s total_amount=%.2f status=%s storage=%s",
+                    order.id,
+                    order.user_id,
+                    len(order.items),
+                    order.total_amount,
+                    order.status,
+                    self._storage,
+                )
+                return order
+            except RuntimeError:
+                self._release_reserved_items(client=client, reservation_ids=reservation_ids)
+                self._logger.error(
+                    "event=order_create_failed reason=persistence_empty user_id=%s storage=%s",
+                    payload.user_id,
+                    self._storage,
+                )
+                raise HTTPException(status_code=503, detail="order persistence failed")
+            except HTTPException:
+                if order_id is not None:
+                    self._mark_order_failed(order_id)
+                if reservation_ids:
+                    self._release_reserved_items(
+                        client=client, reservation_ids=reservation_ids
+                    )
+                raise
+            except Exception as exc:
+                if order_id is not None:
+                    self._mark_order_failed(order_id)
+                if reservation_ids:
+                    self._release_reserved_items(
+                        client=client, reservation_ids=reservation_ids
+                    )
+                self._logger.exception(
+                    "event=order_create_error storage=%s user_id=%s",
+                    self._storage,
+                    payload.user_id,
+                )
+                raise HTTPException(
+                    status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
+                ) from exc
 
     def get_order(self, order_id: int) -> OrderOut:
         try:

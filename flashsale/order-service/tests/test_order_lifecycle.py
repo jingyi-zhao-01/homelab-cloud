@@ -21,7 +21,8 @@ sys.modules.setdefault("psycopg.rows", psycopg_rows_stub)
 
 from fastapi import HTTPException
 
-from app.models import OrderCreateRequest, OrderItemOut
+from app.models import OrderCreateRequest
+from app.repositories import InMemoryOrderRepository
 from app.service import OrderService
 
 
@@ -44,8 +45,9 @@ class FakeProductState:
 
 
 class FakeHttpClient:
-    def __init__(self, product_state: FakeProductState) -> None:
+    def __init__(self, product_state: FakeProductState, confirm_status_code: int = 200) -> None:
         self.product_state = product_state
+        self.confirm_status_code = confirm_status_code
 
     def __enter__(self) -> "FakeHttpClient":
         return self
@@ -93,30 +95,32 @@ class FakeHttpClient:
             )
         if "/reservations/" in url and url.endswith("/cancel"):
             reservation_id = int(url.rstrip("/").split("/")[-2])
-            quantity = 1
             if self.product_state.reservations.get(reservation_id) == "reserved":
                 self.product_state.reservations[reservation_id] = "cancelled"
-                self.product_state.stock += quantity
+                self.product_state.stock += 1
             return FakeResponse(
                 200,
                 {
                     "reservation_id": reservation_id,
                     "product_id": 42,
-                    "quantity": quantity,
-                    "status": "cancelled",
+                    "quantity": 1,
+                    "status": self.product_state.reservations.get(
+                        reservation_id, "cancelled"
+                    ),
                     "expires_at": "2099-01-01T00:00:00+00:00",
                 },
             )
         if "/reservations/" in url and url.endswith("/confirm"):
             reservation_id = int(url.rstrip("/").split("/")[-2])
-            quantity = 1
+            if self.confirm_status_code >= 400:
+                return FakeResponse(self.confirm_status_code, {"detail": "confirm failed"})
             self.product_state.reservations[reservation_id] = "confirmed"
             return FakeResponse(
                 200,
                 {
                     "reservation_id": reservation_id,
                     "product_id": 42,
-                    "quantity": quantity,
+                    "quantity": 1,
                     "status": "confirmed",
                     "expires_at": "2099-01-01T00:00:00+00:00",
                 },
@@ -124,53 +128,78 @@ class FakeHttpClient:
         raise AssertionError(f"unexpected POST url: {url}")
 
 
-class FailingOrderRepository:
-    def init_db(self) -> None:
-        return None
+class OrderRepositoryStateMachineTest(unittest.TestCase):
+    def test_order_status_transitions_pending_to_confirmed(self) -> None:
+        repository = InMemoryOrderRepository()
+        order = repository.create_order(
+            user_id=1,
+            total_amount=9.99,
+            order_items=[],
+            status="pending",
+        )
 
-    def create_order(
-        self,
-        user_id: int,
-        total_amount: float,
-        order_items: list[OrderItemOut],
-        status: str = "pending",
-    ) -> None:
-        raise RuntimeError("simulated persistence failure")
+        confirmed = repository.update_order_status(order.id, "confirmed")
 
-    def get_order(self, order_id: int) -> None:
-        return None
+        self.assertIsNotNone(confirmed)
+        self.assertEqual(order.status, "pending")
+        self.assertEqual(confirmed.status, "confirmed")
 
-    def update_order_status(self, order_id: int, status: str) -> None:
-        return None
+    def test_order_status_rejects_invalid_transition(self) -> None:
+        repository = InMemoryOrderRepository()
+        order = repository.create_order(
+            user_id=1,
+            total_amount=9.99,
+            order_items=[],
+            status="pending",
+        )
+        repository.update_order_status(order.id, "confirmed")
 
-    def list_orders(self) -> list[object]:
-        return []
+        with self.assertRaises(ValueError):
+            repository.update_order_status(order.id, "failed")
 
 
-class OrderPersistenceFailureConsistencyTest(unittest.TestCase):
-    def test_persistence_failure_does_not_consume_inventory(self) -> None:
-        product_state = FakeProductState(stock=5, price=9.99)
-        service = OrderService(
-            repository=FailingOrderRepository(),
+class OrderServiceLifecycleTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.repository = InMemoryOrderRepository()
+        self.service = OrderService(
+            repository=self.repository,
             logger=logging.getLogger("test-order-service"),
             storage="test",
         )
-
-        payload = OrderCreateRequest(
+        self.payload = OrderCreateRequest(
             user_id=1,
             items=[{"product_id": 42, "quantity": 1}],
         )
 
-        with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
-            with self.assertRaises(HTTPException) as exc_info:
-                service.create_order(payload)
+    def test_successful_order_is_confirmed(self) -> None:
+        product_state = FakeProductState(stock=5, price=9.99)
 
-        self.assertEqual(exc_info.exception.status_code, 503)
-        self.assertEqual(
-            product_state.stock,
-            product_state.initial_stock,
-            "inventory changed even though order persistence failed",
-        )
+        with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
+            order = self.service.create_order(self.payload)
+
+        persisted = self.repository.get_order(order.id)
+        self.assertIsNotNone(persisted)
+        self.assertEqual(order.status, "confirmed")
+        self.assertEqual(persisted.status, "confirmed")
+        self.assertEqual(product_state.stock, 4)
+        self.assertEqual(product_state.reservations[1], "confirmed")
+
+    def test_confirm_failure_marks_order_failed_and_releases_inventory(self) -> None:
+        product_state = FakeProductState(stock=5, price=9.99)
+
+        with patch(
+            "app.service.httpx.Client",
+            return_value=FakeHttpClient(product_state, confirm_status_code=502),
+        ):
+            with self.assertRaises(HTTPException) as exc_info:
+                self.service.create_order(self.payload)
+
+        self.assertEqual(exc_info.exception.status_code, 502)
+        orders = self.repository.list_orders()
+        self.assertEqual(len(orders), 1)
+        self.assertEqual(orders[0].status, "failed")
+        self.assertEqual(product_state.stock, product_state.initial_stock)
+        self.assertEqual(product_state.reservations[1], "cancelled")
 
 
 if __name__ == "__main__":

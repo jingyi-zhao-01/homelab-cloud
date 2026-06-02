@@ -47,6 +47,19 @@ For correctness gates:
 - the deploy workflow contains a pre-deploy unit gate
 - the dedicated consistency workflow contains the post-deploy integration gate
 
+The current inventory flow uses an explicit reservation lifecycle:
+
+- `reserve`
+- `confirm`
+- `cancel`
+- `expire`
+
+The current order flow also uses explicit order states in `order-service`:
+
+- `pending`
+- `confirmed`
+- `failed`
+
 ## Debugging
 
 ```bash

@@ -32,8 +32,8 @@ This record covers:0.01
 | Component | Current role | Notes for harness interpretation |
 |---|---|---|
 | `user-service` | User persistence and lookup | Order creation synchronously depends on it |
-| `product-service` | Product read and stock reservation | Lock mode comparison centers here |
-| `order-service` | User validation, product reserve, order persistence | Current flow is not transactional across services |
+| `product-service` | Product read, reservation lifecycle, and stock management | Reservation state machine now owns `reserve/confirm/cancel/expire` |
+| `order-service` | User validation, reserve orchestration, and order persistence | Confirms or cancels reservations after persistence outcome |
 | `charts/flashsales` | Deployment source of truth | Ingress and HPA behavior directly affect perf conclusions |
 | `perf/concurrency-test.js` | Main concurrency harness | Measures business outcomes and latency, but has correctness blind spots |
 
@@ -157,8 +157,23 @@ The repository now includes a dedicated consistency lane for the public k3s life
 
 The two gates have different roles:
 
-- unit gate: runs before image build and deploy, using a mocked persistence-failure test in `flashsale/order-service/tests/test_persistence_failure_consistency.py`
+- unit gate: runs before image build and deploy, using service-local unit tests for both the product reservation lifecycle and the order compensation path
 - integration gate: runs after a successful deploy, using the public ingress path plus a cluster-side DB proxy fault injection lane
+
+## Reservation Lifecycle
+
+The current inventory model is now explicit about reservation phases:
+
+- `reserve`: create a pending reservation and reduce immediately available stock
+- `confirm`: finalize a reservation after order persistence succeeds
+- `cancel`: release a reservation after downstream failure
+- `expire`: reclaim stale pending reservations
+
+Current ownership:
+
+- `product-service` owns reservation state and stock transitions
+- `order-service` orchestrates `reserve -> persist order -> confirm/cancel`
+- `order-service` persists explicit order states: `pending -> confirmed` on success, and `pending -> failed` when post-reservation completion breaks
 
 This lane keeps the current external request path intact:
 

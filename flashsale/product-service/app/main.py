@@ -1,7 +1,13 @@
 from fastapi import FastAPI
 
 from .config import SEED_PRODUCT_COUNT, SEED_PRODUCT_QUANTITY, db_url, use_postgres
-from .models import ProductCreate, ProductOut, ReserveRequest
+from .models import (
+    ExpireReservationsResult,
+    ProductCreate,
+    ProductOut,
+    ReservationOut,
+    ReserveRequest,
+)
 from .observability import configure_service_logger, create_request_logging_middleware
 from .repositories import InMemoryProductRepository, PostgresProductRepository
 from .service import ProductService
@@ -67,6 +73,36 @@ def get_product(product_id: int) -> ProductOut:
 )
 def reserve_product(product_id: int, payload: ReserveRequest) -> ProductOut:
     return product_service.reserve_product(product_id, payload)
+
+
+@app.post(
+    "/reservations/{reservation_id}/confirm",
+    responses={
+        404: {"description": "Reservation not found"},
+        503: {"description": "Database unavailable"},
+    },
+)
+def confirm_reservation(reservation_id: int) -> ReservationOut:
+    return product_service.confirm_reservation(reservation_id)
+
+
+@app.post(
+    "/reservations/{reservation_id}/cancel",
+    responses={
+        404: {"description": "Reservation not found"},
+        503: {"description": "Database unavailable"},
+    },
+)
+def cancel_reservation(reservation_id: int) -> ReservationOut:
+    return product_service.cancel_reservation(reservation_id)
+
+
+@app.post(
+    "/admin/expire-reservations",
+    responses={503: {"description": "Database unavailable"}},
+)
+def expire_reservations() -> ExpireReservationsResult:
+    return product_service.expire_reservations()
 
 
 @app.get(

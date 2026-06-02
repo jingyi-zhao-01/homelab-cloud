@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -16,3 +18,18 @@ class ProductOut(BaseModel):
 
 class ReserveRequest(BaseModel):
     quantity: int = Field(gt=0)
+
+
+ReservationStatus = Literal["reserved", "confirmed", "cancelled", "expired"]
+
+
+class ReservationOut(BaseModel):
+    reservation_id: int
+    product_id: int
+    quantity: int
+    status: ReservationStatus
+    expires_at: str | None = None
+
+
+class ExpireReservationsResult(BaseModel):
+    expired_count: int

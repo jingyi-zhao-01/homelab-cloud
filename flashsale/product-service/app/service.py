@@ -3,7 +3,13 @@ import logging
 from fastapi import HTTPException
 
 from .config import DATABASE_UNAVAILABLE_MESSAGE, PRODUCT_NOT_FOUND_MESSAGE
-from .models import ProductCreate, ProductOut, ReserveRequest
+from .models import (
+    ExpireReservationsResult,
+    ProductCreate,
+    ProductOut,
+    ReservationOut,
+    ReserveRequest,
+)
 from .repositories import ProductRepository
 
 
@@ -70,10 +76,12 @@ class ProductService:
                 status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
             ) from exc
 
-    def reserve_product(self, product_id: int, payload: ReserveRequest) -> ProductOut:
+    def reserve_product(
+        self, product_id: int, payload: ReserveRequest
+    ) -> ReservationOut:
         try:
-            updated = self._repository.reserve_product(product_id, payload.quantity)
-            if not updated:
+            reservation = self._repository.reserve_product(product_id, payload.quantity)
+            if not reservation:
                 self._logger.info(
                     "event=product_not_found product_id=%s storage=%s",
                     product_id,
@@ -86,7 +94,7 @@ class ProductService:
                 payload.quantity,
                 self._storage,
             )
-            return updated
+            return reservation
         except ValueError as exc:
             self._logger.warning(
                 "event=product_reserve_conflict product_id=%s quantity=%s storage=%s",
@@ -103,6 +111,80 @@ class ProductService:
                 self._storage,
                 product_id,
                 payload.quantity,
+            )
+            raise HTTPException(
+                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
+            ) from exc
+
+    def confirm_reservation(self, reservation_id: int) -> ReservationOut:
+        try:
+            reservation = self._repository.confirm_reservation(reservation_id)
+            if not reservation:
+                self._logger.info(
+                    "event=reservation_not_found reservation_id=%s storage=%s",
+                    reservation_id,
+                    self._storage,
+                )
+                raise HTTPException(status_code=404, detail="reservation not found")
+            self._logger.info(
+                "event=reservation_confirmed reservation_id=%s storage=%s",
+                reservation_id,
+                self._storage,
+            )
+            return reservation
+        except HTTPException:
+            raise
+        except Exception as exc:
+            self._logger.exception(
+                "event=reservation_confirm_error storage=%s reservation_id=%s",
+                self._storage,
+                reservation_id,
+            )
+            raise HTTPException(
+                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
+            ) from exc
+
+    def cancel_reservation(self, reservation_id: int) -> ReservationOut:
+        try:
+            reservation = self._repository.cancel_reservation(reservation_id)
+            if not reservation:
+                self._logger.info(
+                    "event=reservation_not_found reservation_id=%s storage=%s",
+                    reservation_id,
+                    self._storage,
+                )
+                raise HTTPException(status_code=404, detail="reservation not found")
+            self._logger.info(
+                "event=reservation_cancelled reservation_id=%s storage=%s",
+                reservation_id,
+                self._storage,
+            )
+            return reservation
+        except HTTPException:
+            raise
+        except Exception as exc:
+            self._logger.exception(
+                "event=reservation_cancel_error storage=%s reservation_id=%s",
+                self._storage,
+                reservation_id,
+            )
+            raise HTTPException(
+                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
+            ) from exc
+
+    def expire_reservations(self) -> ExpireReservationsResult:
+        try:
+            expired_count = self._repository.expire_reservations()
+            self._logger.info(
+                "event=reservation_expired expired_count=%s storage=%s",
+                expired_count,
+                self._storage,
+            )
+            return ExpireReservationsResult(expired_count=expired_count)
+        except Exception as exc:
+            self._logger.exception(
+                "event=reservation_expire_error storage=%s",
+                self._storage,
             )
             raise HTTPException(
                 status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE

@@ -1,4 +1,8 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+OrderStatus = Literal["pending", "confirmed", "failed"]
 
 
 class OrderItemRequest(BaseModel):
@@ -23,4 +27,5 @@ class OrderOut(BaseModel):
     user_id: int
     created_at: str
     total_amount: float
+    status: OrderStatus
     items: list[OrderItemOut]
