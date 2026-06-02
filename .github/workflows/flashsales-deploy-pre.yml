@@ -90,12 +90,3 @@ jobs:
         if: failure()
         run: |
           docker compose -f flashsale/docker-compose.yaml logs --no-color || true
-
-  flashsales-runtime-consistency-gate:
-    name: Integration Gate - Runtime Consistency Harness
-    needs:
-      - product-service-unit-gate
-      - order-service-unit-gate
-      - flashsale-compose-integration-gate
-    uses: ./.github/workflows/flashsales-consistency.yml
-    secrets: inherit

@@ -46,9 +46,9 @@ For correctness gates:
 
 - `flashsales-deploy-pre.yml` contains the pre-deploy unit gates
 - `flashsales-deploy-pre.yml` also contains the pre-deploy Docker Compose integration gate based on `flashsale/docker-compose.yaml`
-- `flashsales-deploy-pre.yml` calls the reusable runtime consistency harness in `flashsales-consistency.yml`
+- `flashsales-deploy-pre.yml` does not run Helm or modify the live k3s deployment
 - `flashsales-deploy.yml` runs only after `flashsales-deploy-pre.yml` succeeds and performs the default k3s deploy
-- `flashsales-deploy-post.yml` runs only after `flashsales-deploy.yml` succeeds and calls the reusable perf suite in `flashsales-perf-concurrency-suite.yml`
+- `flashsales-deploy-post.yml` runs only after `flashsales-deploy.yml` succeeds, first calling the reusable runtime consistency harness in `flashsales-consistency.yml`, then the reusable perf suite in `flashsales-perf-concurrency-suite.yml`
 - the pre-deploy gate now covers lifecycle, out-of-stock, duplicate-order, duplicate-webhook, timeout-race, DB migration compatibility, and API contract compatibility
 
 The current inventory flow uses an explicit reservation lifecycle:

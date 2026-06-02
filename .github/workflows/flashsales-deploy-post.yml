@@ -16,7 +16,14 @@ permissions:
   contents: read
 
 jobs:
+  runtime-consistency:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/flashsales-consistency.yml
+    secrets: inherit
+
   perf-concurrency-suite:
+    needs:
+      - runtime-consistency
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/flashsales-perf-concurrency-suite.yml
     secrets: inherit

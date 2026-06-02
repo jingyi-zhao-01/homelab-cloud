@@ -162,8 +162,9 @@ The two gates have different roles:
 
 - unit gate: runs inside `flashsales-deploy-pre.yml` before image build and deploy, using service-local unit tests for product reservation lifecycle, out-of-stock handling, order lifecycle, duplicate-order replay, duplicate payment webhook handling, payment-timeout race handling, DB migration compatibility, and API contract compatibility
 - pre-deploy compose integration gate: also runs inside `flashsales-deploy-pre.yml`, bringing up `flashsale/docker-compose.yaml` on the GitHub runner and exercising end-to-end lifecycle scenarios before image publish
-- runtime consistency gate: runs from `flashsales-deploy-pre.yml` through the reusable `flashsales-consistency.yml` workflow, using the public ingress path plus a cluster-side DB proxy fault injection lane
-- post-deploy perf gate: runs from `flashsales-deploy-post.yml` through the reusable `flashsales-perf-concurrency-suite.yml` workflow
+- pre-deploy boundary: `flashsales-deploy-pre.yml` does not run Helm and does not modify the live k3s deployment
+- runtime consistency gate: runs from `flashsales-deploy-post.yml` through the reusable `flashsales-consistency.yml` workflow, using the public ingress path plus a cluster-side DB proxy fault injection lane
+- post-deploy perf gate: runs from `flashsales-deploy-post.yml` after the runtime consistency gate, through the reusable `flashsales-perf-concurrency-suite.yml` workflow
 
 ## Reservation Lifecycle
 

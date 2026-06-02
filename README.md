@@ -19,9 +19,9 @@ This platform is the result: a shared place where services can converge, agent c
 | [Repository overview](docs/overview.md) | High-level architecture, layout, and shared conventions |
 | [Flashsales workload](docs/flashsales.md) | Concurrency practice app deployed to the VPS, smoke test, and debugging |
 | [Flashsales harness engineering](docs/flashsales-harness-engineering.md) | Current flashsales correctness risks, perf harness interpretation, and priority backlog |
-| [Flashsales deploy pre](.github/workflows/flashsales-deploy-pre.yml) | Pre-deploy unit and integration gates, including Docker Compose and runtime consistency checks |
+| [Flashsales deploy pre](.github/workflows/flashsales-deploy-pre.yml) | Pre-deploy unit and Docker Compose integration gates that do not touch the live k3s deployment |
 | [Flashsales deploy](.github/workflows/flashsales-deploy.yml) | Image build, push, and default k3s deployment after pre-gates succeed |
-| [Flashsales deploy post](.github/workflows/flashsales-deploy-post.yml) | Post-deploy performance lane that runs the flashsales concurrency suite |
+| [Flashsales deploy post](.github/workflows/flashsales-deploy-post.yml) | Post-deploy runtime consistency and performance lanes against the live k3s deployment |
 | [Strategy tester workload](docs/strategy-tester.md) | Scheduled ingestion app, cron jobs, and secret wiring |
 | [LeetCode intelligence workload](docs/leetcode-intelligence.md) | Continuous intelligence API service with Discord and LLM secret wiring |
 | [Infrastructure](docs/infrastructure.md) | Terraform, Neon provisioning, AWS SSM secrets, and state backend |
