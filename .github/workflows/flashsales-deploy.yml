@@ -7,7 +7,7 @@ on:
     paths:
       - 'flashsale/**'
       - 'charts/flashsales/**'
-      - '.github/workflows/deploy-flashsale.yml'
+      - '.github/workflows/flashsales-deploy.yml'
   workflow_dispatch:
 
 concurrency:
@@ -24,9 +24,34 @@ permissions:
   packages: write
 
 jobs:
+  order-consistency-test:
+    name: Order Consistency Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install order-service dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r flashsale/order-service/requirements.txt
+
+      - name: Run persistence failure consistency test
+        working-directory: flashsale/order-service
+        run: |
+          python -m unittest discover -s tests -p 'test_*.py'
+
   build-and-push:
     name: Build and Push Images
     runs-on: ubuntu-latest
+    needs:
+      - order-consistency-test
     strategy:
       fail-fast: false
       matrix:

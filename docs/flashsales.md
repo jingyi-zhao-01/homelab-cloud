@@ -2,6 +2,13 @@
 
 Flashsales is the concurrency practice workload. It is composed of three FastAPI services in the `flashsale/` tree and a Helm chart in `charts/flashsales`.
 
+## Source Of Truth
+
+Use this repo as the source of truth for flashsales status.
+
+- For workload shape, deploy steps, and entry points, use this page.
+- For current harness interpretation, known risks, and perf status, use [Flashsales harness engineering](flashsales-harness-engineering.md).
+
 ## Services
 
 | Service | Responsibility |
@@ -47,6 +54,7 @@ Once forwarded, you can create users, products, and orders with the workload API
 
 ## Related Pages
 
+- [Flashsales harness engineering](flashsales-harness-engineering.md)
 - [Repository overview](overview.md)
 - [Operations and tooling](operations.md)
 

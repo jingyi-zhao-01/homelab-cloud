@@ -6,11 +6,11 @@ This page collects the operational commands and workflow details that used to be
 
 | Workflow | Trigger | Scope |
 |---|---|---|
-| `deploy-flashsale.yml` | Pushes to `flashsale/**` or `charts/flashsales/**` | Flashsales |
+| `flashsales-deploy.yml` | Pushes to `flashsale/**` or `charts/flashsales/**` | Flashsales |
 | `deploy-strategy-tester.yml` | Pushes to `strategy-tester/**` or `charts/strategy-tester/**` | Strategy tester |
 | `deploy-leetcode-intelligence.yml` | Pushes to `charts/leetcode-intelligence/**` | LeetCode intelligence |
-| `perf-concurrency-suite.yml` | After a successful flashsales deploy | Concurrency suite |
-| `loadtest-manual.yml` | Manual `workflow_dispatch` | Performance testing |
+| `flashsales-perf-concurrency-suite.yml` | After a successful flashsales deploy | Concurrency suite |
+| `flashsales-loadtest-manual.yml` | Manual `workflow_dispatch` | Performance testing |
 | `terraform-provision.yml` | Manual | Infrastructure provisioning |
 
 The deploy workflows are independent, so changes to one workload should not trigger the other.
@@ -28,6 +28,8 @@ AWS_SECRET_ACCESS_KEY
 ## Performance Testing
 
 Perf runs currently provision an ephemeral Neon database through Terraform before the load test executes.
+
+For the current interpretation limits and correctness caveats of the flashsales perf harness, use [Flashsales harness engineering](flashsales-harness-engineering.md) as the source of truth.
 
 ```bash
 make loadtest KUBECONFIG_PATH=secrets/.kube-config

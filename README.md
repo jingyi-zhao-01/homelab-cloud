@@ -18,6 +18,8 @@ This platform is the result: a shared place where services can converge, agent c
 |---|---|
 | [Repository overview](docs/overview.md) | High-level architecture, layout, and shared conventions |
 | [Flashsales workload](docs/flashsales.md) | Concurrency practice app deployed to the VPS, smoke test, and debugging |
+| [Flashsales harness engineering](docs/flashsales-harness-engineering.md) | Current flashsales correctness risks, perf harness interpretation, and priority backlog |
+| [Flashsales consistency harness](.github/workflows/flashsales-consistency.yml) | Deploy-time correctness gate that injects DB faults against the public k3s lifecycle |
 | [Strategy tester workload](docs/strategy-tester.md) | Scheduled ingestion app, cron jobs, and secret wiring |
 | [LeetCode intelligence workload](docs/leetcode-intelligence.md) | Continuous intelligence API service with Discord and LLM secret wiring |
 | [Infrastructure](docs/infrastructure.md) | Terraform, Neon provisioning, AWS SSM secrets, and state backend |

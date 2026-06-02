@@ -38,8 +38,8 @@ data:
   USER_SERVICE_URL: {{ .Values.orderService.env.userServiceUrl | quote }}
   PRODUCT_SERVICE_URL: {{ .Values.orderService.env.productServiceUrl | quote }}
   DEPENDENCY_TIMEOUT_SECONDS: {{ .Values.orderService.env.dependencyTimeoutSeconds | quote }}
-  DB_HOST: {{ .Values.orderService.env.dbHost | quote }}
-  DB_PORT: {{ .Values.orderService.env.dbPort | quote }}
+  DB_HOST: {{ ternary "flashsales-db-proxy" .Values.orderService.env.dbHost .Values.dbProxy.enabled | quote }}
+  DB_PORT: {{ ternary (.Values.dbProxy.service.dataPort | toString) .Values.orderService.env.dbPort .Values.dbProxy.enabled | quote }}
   DB_NAME: {{ .Values.orderService.env.dbName | quote }}
   REDIS_URL: {{ .Values.orderService.env.redisUrl | quote }}
   RABBITMQ_URL: {{ .Values.orderService.env.rabbitmqUrl | quote }}

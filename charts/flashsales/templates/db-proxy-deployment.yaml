@@ -1,0 +1,84 @@
+{{- if .Values.dbProxy.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flashsales-db-proxy
+  namespace: {{ include "flashsales.namespace" . }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: db-proxy
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: db-proxy
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: bootstrap-script
+          configMap:
+            name: flashsales-db-proxy-bootstrap
+            defaultMode: 0755
+      containers:
+        - name: toxiproxy
+          image: "{{ .Values.dbProxy.image.repository }}:{{ .Values.dbProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.dbProxy.image.pullPolicy }}
+          command:
+            - toxiproxy-server
+          args:
+            - -host
+            - 0.0.0.0
+          ports:
+            - containerPort: {{ .Values.dbProxy.service.dataPort }}
+              name: data
+            - containerPort: {{ .Values.dbProxy.service.adminPort }}
+              name: admin
+          readinessProbe:
+            tcpSocket:
+              port: admin
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: admin
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          {{- with .Values.dbProxy.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        - name: bootstrap
+          image: "{{ .Values.dbProxy.bootstrapImage.repository }}:{{ .Values.dbProxy.bootstrapImage.tag }}"
+          imagePullPolicy: {{ .Values.dbProxy.bootstrapImage.pullPolicy }}
+          command:
+            - /bin/sh
+            - /bootstrap/bootstrap.sh
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: flashsales-postgres-auth
+                  key: DATABASE_URL
+            - name: DB_PROXY_NAME
+              value: {{ .Values.dbProxy.proxyName | quote }}
+            - name: DB_PROXY_DATA_PORT
+              value: {{ .Values.dbProxy.service.dataPort | quote }}
+            - name: DB_PROXY_ADMIN_PORT
+              value: {{ .Values.dbProxy.service.adminPort | quote }}
+          volumeMounts:
+            - name: bootstrap-script
+              mountPath: /bootstrap
+          {{- with .Values.dbProxy.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

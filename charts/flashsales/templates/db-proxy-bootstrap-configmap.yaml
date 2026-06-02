@@ -1,0 +1,56 @@
+{{- if .Values.dbProxy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flashsales-db-proxy-bootstrap
+  namespace: {{ include "flashsales.namespace" . }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-proxy
+data:
+  bootstrap.sh: |
+    #!/bin/sh
+    set -eu
+
+    if [ -z "${DATABASE_URL:-}" ]; then
+      echo "DATABASE_URL is required for db proxy bootstrap"
+      exit 1
+    fi
+
+    admin_url="http://127.0.0.1:${DB_PROXY_ADMIN_PORT}"
+    upstream="${DATABASE_URL#*@}"
+    if [ "$upstream" = "$DATABASE_URL" ]; then
+      echo "Unable to parse upstream host from DATABASE_URL"
+      exit 1
+    fi
+
+    upstream="${upstream%%/*}"
+    upstream="${upstream%%\?*}"
+
+    case "$upstream" in
+      *:*) ;;
+      *) upstream="${upstream}:5432" ;;
+    esac
+
+    for _ in $(seq 1 60); do
+      if curl -fsS "${admin_url}/version" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+
+    curl -fsS -X DELETE "${admin_url}/proxies/${DB_PROXY_NAME}" >/dev/null 2>&1 || true
+
+    payload="$(printf '{"name":"%s","listen":"0.0.0.0:%s","upstream":"%s","enabled":true}' \
+      "${DB_PROXY_NAME}" "${DB_PROXY_DATA_PORT}" "${upstream}")"
+
+    curl -fsS \
+      -H "Content-Type: application/json" \
+      -X POST \
+      -d "${payload}" \
+      "${admin_url}/proxies"
+
+    echo "db proxy configured: ${DB_PROXY_NAME} -> ${upstream}"
+
+    sleep infinity
+{{- end }}

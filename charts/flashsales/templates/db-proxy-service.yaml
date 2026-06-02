@@ -1,0 +1,24 @@
+{{- if .Values.dbProxy.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: flashsales-db-proxy
+  namespace: {{ include "flashsales.namespace" . }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-proxy
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/component: db-proxy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: data
+      port: {{ .Values.dbProxy.service.dataPort }}
+      targetPort: data
+      protocol: TCP
+    - name: admin
+      port: {{ .Values.dbProxy.service.adminPort }}
+      targetPort: admin
+      protocol: TCP
+{{- end }}

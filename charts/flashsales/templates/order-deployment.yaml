@@ -42,12 +42,14 @@ spec:
                 secretKeyRef:
                   name: flashsales-postgres-auth
                   key: POSTGRES_PASSWORD
+            {{- if not .Values.dbProxy.enabled }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: flashsales-postgres-auth
                   key: DATABASE_URL
                   optional: true
+            {{- end }}
           ports:
             - containerPort: {{ .Values.orderService.service.port }}
           readinessProbe:
