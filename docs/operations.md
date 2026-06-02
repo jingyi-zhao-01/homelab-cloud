@@ -6,10 +6,12 @@ This page collects the operational commands and workflow details that used to be
 
 | Workflow | Trigger | Scope |
 |---|---|---|
-| `flashsales-deploy.yml` | Pushes to `flashsale/**` or `charts/flashsales/**` | Flashsales |
+| `flashsales-deploy-pre.yml` | Pushes to `flashsale/**` or `charts/flashsales/**` | Flashsales pre-deploy gates |
+| `flashsales-deploy.yml` | After a successful `flashsales-deploy-pre.yml` or manual dispatch | Flashsales deploy |
+| `flashsales-deploy-post.yml` | After a successful `flashsales-deploy.yml` or manual dispatch | Flashsales post-deploy perf |
 | `deploy-strategy-tester.yml` | Pushes to `strategy-tester/**` or `charts/strategy-tester/**` | Strategy tester |
 | `deploy-leetcode-intelligence.yml` | Pushes to `charts/leetcode-intelligence/**` | LeetCode intelligence |
-| `flashsales-perf-concurrency-suite.yml` | After a successful flashsales deploy | Concurrency suite |
+| `flashsales-perf-concurrency-suite.yml` | Manual or reusable via `flashsales-deploy-post.yml` | Concurrency suite |
 | `flashsales-loadtest-manual.yml` | Manual `workflow_dispatch` | Performance testing |
 | `terraform-provision.yml` | Manual | Infrastructure provisioning |
 

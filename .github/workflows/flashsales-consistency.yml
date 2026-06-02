@@ -1,12 +1,8 @@
-name: Flashsales Integration Gate
+name: Flashsales Runtime Consistency Harness
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Flashsales Deploy + Unit Gate
-    types:
-      - completed
+  workflow_call:
 
 concurrency:
   group: flashsale-consistency-${{ github.ref }}
@@ -30,7 +26,6 @@ jobs:
   consistency:
     name: Integration Gate - Runtime Consistency Harness
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     timeout-minutes: 20
 
     steps:
@@ -84,26 +79,11 @@ jobs:
       - name: Enable db proxy deployment for consistency lane
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            IMAGE_TAG="${{ github.event.workflow_run.head_sha }}"
-          else
-            IMAGE_TAG="${{ github.sha }}"
-          fi
-
           helm upgrade --install "$RELEASE" "$CHART_PATH" \
             -n "$NAMESPACE" \
             --create-namespace \
             --set dbProxy.enabled=true \
-            --set imagePullSecrets[0].name=ghcr-pull-secret \
-            --set userService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-user-service \
-            --set userService.image.tag="$IMAGE_TAG" \
-            --set userService.image.pullPolicy=IfNotPresent \
-            --set productService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-product-service \
-            --set productService.image.tag="$IMAGE_TAG" \
-            --set productService.image.pullPolicy=IfNotPresent \
-            --set orderService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-order-service \
-            --set orderService.image.tag="$IMAGE_TAG" \
-            --set orderService.image.pullPolicy=IfNotPresent
+            --set imagePullSecrets[0].name=ghcr-pull-secret
 
       - name: Wait for rollouts
         run: |

@@ -4,11 +4,11 @@ Personal k3s native cloud for platform engineering practice, automate CICD, depl
 
 ## Why This Exists
 
-I use AI to generate a lot of code on misc ideas, and then these problem surfaces. 
+I use AI to generate a lot of code on misc ideas, and then these problem surfaces.
 - what works on your local does not work on production environment
 - what happens on your production environment is not exposed to your local thus not available to your agent
 - I do not want to spend the same energy provisioning infra for every service.
-- I need a real lab where I can organize release between what is stable vs what is not stable written by agent, and i need to expose production metrics to coding agent so it can fix it. 
+- I need a real lab where I can organize release between what is stable vs what is not stable written by agent, and i need to expose production metrics to coding agent so it can fix it.
 
 This platform is the result: a shared place where services can converge, agent can write code via github apps, can focus on code, logic, and implementation details, and the infra (which is currently manually in a central way) provisioning plus GitOps work is handled by a centralized platform layer.
 
@@ -19,7 +19,9 @@ This platform is the result: a shared place where services can converge, agent c
 | [Repository overview](docs/overview.md) | High-level architecture, layout, and shared conventions |
 | [Flashsales workload](docs/flashsales.md) | Concurrency practice app deployed to the VPS, smoke test, and debugging |
 | [Flashsales harness engineering](docs/flashsales-harness-engineering.md) | Current flashsales correctness risks, perf harness interpretation, and priority backlog |
-| [Flashsales consistency harness](.github/workflows/flashsales-consistency.yml) | Deploy-time correctness gate that injects DB faults against the public k3s lifecycle |
+| [Flashsales deploy pre](.github/workflows/flashsales-deploy-pre.yml) | Pre-deploy unit and integration gates, including Docker Compose and runtime consistency checks |
+| [Flashsales deploy](.github/workflows/flashsales-deploy.yml) | Image build, push, and default k3s deployment after pre-gates succeed |
+| [Flashsales deploy post](.github/workflows/flashsales-deploy-post.yml) | Post-deploy performance lane that runs the flashsales concurrency suite |
 | [Strategy tester workload](docs/strategy-tester.md) | Scheduled ingestion app, cron jobs, and secret wiring |
 | [LeetCode intelligence workload](docs/leetcode-intelligence.md) | Continuous intelligence API service with Discord and LLM secret wiring |
 | [Infrastructure](docs/infrastructure.md) | Terraform, Neon provisioning, AWS SSM secrets, and state backend |

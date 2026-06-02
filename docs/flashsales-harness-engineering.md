@@ -150,15 +150,20 @@ Today the harness does not prove:
 
 The repository now includes a dedicated consistency lane for the public k3s lifecycle:
 
-- unit gate workflow: `.github/workflows/flashsales-deploy.yml`
-- integration gate workflow: `.github/workflows/flashsales-consistency.yml`
+- pre-deploy workflow: `.github/workflows/flashsales-deploy-pre.yml`
+- deploy workflow: `.github/workflows/flashsales-deploy.yml`
+- post-deploy workflow: `.github/workflows/flashsales-deploy-post.yml`
+- reusable runtime consistency workflow: `.github/workflows/flashsales-consistency.yml`
+- reusable perf workflow: `.github/workflows/flashsales-perf-concurrency-suite.yml`
 - runtime script: `perf/consistency_harness.py`
 - cluster component: optional `dbProxy` in `charts/flashsales`
 
 The two gates have different roles:
 
-- unit gate: runs before image build and deploy, using service-local unit tests for product reservation lifecycle, out-of-stock handling, order lifecycle, duplicate-order replay, duplicate payment webhook handling, payment-timeout race handling, DB migration compatibility, and API contract compatibility
-- integration gate: runs after a successful deploy, using the public ingress path plus a cluster-side DB proxy fault injection lane
+- unit gate: runs inside `flashsales-deploy-pre.yml` before image build and deploy, using service-local unit tests for product reservation lifecycle, out-of-stock handling, order lifecycle, duplicate-order replay, duplicate payment webhook handling, payment-timeout race handling, DB migration compatibility, and API contract compatibility
+- pre-deploy compose integration gate: also runs inside `flashsales-deploy-pre.yml`, bringing up `flashsale/docker-compose.yaml` on the GitHub runner and exercising end-to-end lifecycle scenarios before image publish
+- runtime consistency gate: runs from `flashsales-deploy-pre.yml` through the reusable `flashsales-consistency.yml` workflow, using the public ingress path plus a cluster-side DB proxy fault injection lane
+- post-deploy perf gate: runs from `flashsales-deploy-post.yml` through the reusable `flashsales-perf-concurrency-suite.yml` workflow
 
 ## Reservation Lifecycle
 

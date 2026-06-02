@@ -1,0 +1,22 @@
+name: Flashsales Deploy Post
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Flashsales Deploy
+    types:
+      - completed
+
+concurrency:
+  group: flashsales-deploy-post-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  perf-concurrency-suite:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/flashsales-perf-concurrency-suite.yml
+    secrets: inherit
