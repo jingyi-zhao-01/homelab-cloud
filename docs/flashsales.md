@@ -46,6 +46,7 @@ For correctness gates:
 
 - the deploy workflow contains a pre-deploy unit gate
 - the dedicated consistency workflow contains the post-deploy integration gate
+- the pre-deploy gate now covers lifecycle, out-of-stock, duplicate-order, duplicate-webhook, timeout-race, DB migration compatibility, and API contract compatibility
 
 The current inventory flow uses an explicit reservation lifecycle:
 
@@ -59,6 +60,13 @@ The current order flow also uses explicit order states in `order-service`:
 - `pending`
 - `confirmed`
 - `failed`
+- `expired`
+
+Order requests now also carry:
+
+- optional `idempotency_key`
+- internal default-success `payment_status`
+- pending-order timeout cleanup via `/admin/expire-orders`
 
 ## Debugging
 

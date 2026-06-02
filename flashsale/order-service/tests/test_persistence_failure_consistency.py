@@ -2,6 +2,7 @@ import logging
 import sys
 import types
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 psycopg_stub = types.ModuleType("psycopg")
@@ -125,6 +126,9 @@ class FakeHttpClient:
 
 
 class FailingOrderRepository:
+    def __init__(self) -> None:
+        self.created_orders: list[dict[str, object]] = []
+
     def init_db(self) -> None:
         return None
 
@@ -133,18 +137,41 @@ class FailingOrderRepository:
         user_id: int,
         total_amount: float,
         order_items: list[OrderItemOut],
+        reservation_ids: list[int],
+        idempotency_key: str | None = None,
         status: str = "pending",
+        payment_status: str = "pending",
     ) -> None:
+        self.created_orders.append(
+            {
+                "user_id": user_id,
+                "total_amount": total_amount,
+                "order_items": order_items,
+                "reservation_ids": reservation_ids,
+                "idempotency_key": idempotency_key,
+                "status": status,
+                "payment_status": payment_status,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
         raise RuntimeError("simulated persistence failure")
 
     def get_order(self, order_id: int) -> None:
         return None
 
-    def update_order_status(self, order_id: int, status: str) -> None:
+    def get_order_by_idempotency_key(self, idempotency_key: str) -> None:
         return None
 
     def list_orders(self) -> list[object]:
         return []
+
+    def list_stale_orders(self, expires_before) -> list[object]:
+        return []
+
+    def update_order_state(
+        self, order_id: int, status: str, payment_status: str | None = None
+    ) -> None:
+        return None
 
 
 class OrderPersistenceFailureConsistencyTest(unittest.TestCase):

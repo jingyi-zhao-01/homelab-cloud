@@ -3,6 +3,8 @@ import types
 import unittest
 from datetime import datetime, timedelta, timezone
 
+from fastapi import HTTPException
+
 psycopg_stub = types.ModuleType("psycopg")
 psycopg_rows_stub = types.ModuleType("psycopg.rows")
 psycopg_stub.connect = None
@@ -45,6 +47,13 @@ class ProductReservationLifecycleTest(unittest.TestCase):
         self.assertEqual(confirmed_once.status, "confirmed")
         self.assertEqual(confirmed_twice.status, "confirmed")
         self.assertEqual(self.service.get_product(self.product.id).stock, 3)
+
+    def test_reserve_out_of_stock_returns_conflict(self) -> None:
+        with self.assertRaises(HTTPException) as exc_info:
+            self.service.reserve_product(self.product.id, ReserveRequest(quantity=6))
+
+        self.assertEqual(exc_info.exception.status_code, 409)
+        self.assertEqual(self.service.get_product(self.product.id).stock, 5)
 
     def test_cancel_restores_stock_and_is_idempotent(self) -> None:
         reservation = self.service.reserve_product(self.product.id, ReserveRequest(quantity=2))

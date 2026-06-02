@@ -157,7 +157,7 @@ The repository now includes a dedicated consistency lane for the public k3s life
 
 The two gates have different roles:
 
-- unit gate: runs before image build and deploy, using service-local unit tests for both the product reservation lifecycle and the order compensation path
+- unit gate: runs before image build and deploy, using service-local unit tests for product reservation lifecycle, out-of-stock handling, order lifecycle, duplicate-order replay, duplicate payment webhook handling, payment-timeout race handling, DB migration compatibility, and API contract compatibility
 - integration gate: runs after a successful deploy, using the public ingress path plus a cluster-side DB proxy fault injection lane
 
 ## Reservation Lifecycle
@@ -173,7 +173,9 @@ Current ownership:
 
 - `product-service` owns reservation state and stock transitions
 - `order-service` orchestrates `reserve -> persist order -> confirm/cancel`
-- `order-service` persists explicit order states: `pending -> confirmed` on success, and `pending -> failed` when post-reservation completion breaks
+- `order-service` persists explicit order states: `pending -> confirmed` on success, `pending -> failed` when post-reservation completion breaks, and `pending -> expired` when local timeout cleanup reclaims abandoned work
+- `order-service` stores `payment_status` internally with default local success semantics, without involving an external payment provider
+- `order-service` accepts optional `idempotency_key` values so duplicate requests can replay the existing order instead of double-consuming stock
 
 This lane keeps the current external request path intact:
 
@@ -204,8 +206,8 @@ Use these rules when reading flashsales perf results:
 
 ### Correctness first
 
-1. Add a compensation or reservation-finalization strategy so failed order persistence cannot silently leak stock.
-2. Extend teardown verification to compare persisted orders against current product stock.
+1. Extend teardown verification to compare persisted orders against current product stock.
+2. Add a scheduled production path for `/admin/expire-orders` so timeout cleanup does not depend on manual execution.
 
 ### Harness trustworthiness
 

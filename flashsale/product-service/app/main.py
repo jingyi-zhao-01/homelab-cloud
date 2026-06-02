@@ -71,7 +71,7 @@ def get_product(product_id: int) -> ProductOut:
         503: {"description": "Database unavailable"},
     },
 )
-def reserve_product(product_id: int, payload: ReserveRequest) -> ProductOut:
+def reserve_product(product_id: int, payload: ReserveRequest) -> ReservationOut:
     return product_service.reserve_product(product_id, payload)
 
 

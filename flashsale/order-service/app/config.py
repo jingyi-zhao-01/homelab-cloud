@@ -5,6 +5,7 @@ DATABASE_UNAVAILABLE_MESSAGE = "database unavailable"
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://localhost:8001")
 PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://localhost:8002")
 DEPENDENCY_TIMEOUT_SECONDS = float(os.getenv("DEPENDENCY_TIMEOUT_SECONDS", "5"))
+ORDER_PENDING_TTL_SECONDS = int(os.getenv("ORDER_PENDING_TTL_SECONDS", "300"))
 DB_HOST = os.getenv("DB_HOST", "")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "")

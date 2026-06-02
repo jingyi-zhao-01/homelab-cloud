@@ -1,7 +1,12 @@
 from fastapi import FastAPI
 
 from .config import db_url, use_postgres
-from .models import OrderCreateRequest, OrderOut
+from .models import (
+    ExpireOrdersResult,
+    OrderCreateRequest,
+    OrderOut,
+    PaymentWebhookRequest,
+)
 from .observability import configure_service_logger, create_request_logging_middleware
 from .repositories import InMemoryOrderRepository, PostgresOrderRepository
 from .service import OrderService
@@ -72,9 +77,28 @@ def list_orders() -> list[OrderOut]:
 
 
 @app.post(
+    "/payments/webhook",
+    responses={
+        404: {"description": "Order not found"},
+        503: {"description": "Database unavailable"},
+    },
+)
+def payment_webhook(payload: PaymentWebhookRequest) -> OrderOut:
+    return order_service.process_payment_webhook(payload)
+
+
+@app.post(
     "/admin/reset",
     status_code=204,
     responses={503: {"description": "Database unavailable"}},
 )
 def admin_reset() -> None:
     order_service._repository.reset_db()
+
+
+@app.post(
+    "/admin/expire-orders",
+    responses={503: {"description": "Database unavailable"}},
+)
+def admin_expire_orders() -> ExpireOrdersResult:
+    return order_service.expire_orders()

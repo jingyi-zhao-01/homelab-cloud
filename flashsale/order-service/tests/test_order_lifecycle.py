@@ -2,6 +2,7 @@ import logging
 import sys
 import types
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 psycopg_stub = types.ModuleType("psycopg")
@@ -21,8 +22,8 @@ sys.modules.setdefault("psycopg.rows", psycopg_rows_stub)
 
 from fastapi import HTTPException
 
-from app.models import OrderCreateRequest
-from app.repositories import InMemoryOrderRepository
+from app.models import OrderCreateRequest, PaymentWebhookRequest
+from app.repositories import InMemoryOrderRepository, StoredOrder
 from app.service import OrderService
 
 
@@ -135,14 +136,16 @@ class OrderRepositoryStateMachineTest(unittest.TestCase):
             user_id=1,
             total_amount=9.99,
             order_items=[],
+            reservation_ids=[],
             status="pending",
         )
 
-        confirmed = repository.update_order_status(order.id, "confirmed")
+        confirmed = repository.update_order_state(order.id, "confirmed")
 
         self.assertIsNotNone(confirmed)
         self.assertEqual(order.status, "pending")
         self.assertEqual(confirmed.status, "confirmed")
+        self.assertEqual(confirmed.payment_status, "pending")
 
     def test_order_status_rejects_invalid_transition(self) -> None:
         repository = InMemoryOrderRepository()
@@ -150,12 +153,13 @@ class OrderRepositoryStateMachineTest(unittest.TestCase):
             user_id=1,
             total_amount=9.99,
             order_items=[],
+            reservation_ids=[],
             status="pending",
         )
-        repository.update_order_status(order.id, "confirmed")
+        repository.update_order_state(order.id, "confirmed", payment_status="succeeded")
 
         with self.assertRaises(ValueError):
-            repository.update_order_status(order.id, "failed")
+            repository.update_order_state(order.id, "failed", payment_status="cancelled")
 
 
 class OrderServiceLifecycleTest(unittest.TestCase):
@@ -180,7 +184,9 @@ class OrderServiceLifecycleTest(unittest.TestCase):
         persisted = self.repository.get_order(order.id)
         self.assertIsNotNone(persisted)
         self.assertEqual(order.status, "confirmed")
+        self.assertEqual(order.payment_status, "succeeded")
         self.assertEqual(persisted.status, "confirmed")
+        self.assertEqual(persisted.payment_status, "succeeded")
         self.assertEqual(product_state.stock, 4)
         self.assertEqual(product_state.reservations[1], "confirmed")
 
@@ -198,7 +204,126 @@ class OrderServiceLifecycleTest(unittest.TestCase):
         orders = self.repository.list_orders()
         self.assertEqual(len(orders), 1)
         self.assertEqual(orders[0].status, "failed")
+        self.assertEqual(orders[0].payment_status, "cancelled")
         self.assertEqual(product_state.stock, product_state.initial_stock)
+        self.assertEqual(product_state.reservations[1], "cancelled")
+
+    def test_out_of_stock_returns_conflict_and_does_not_persist_order(self) -> None:
+        product_state = FakeProductState(stock=0, price=9.99)
+
+        with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
+            with self.assertRaises(HTTPException) as exc_info:
+                self.service.create_order(self.payload)
+
+        self.assertEqual(exc_info.exception.status_code, 409)
+        self.assertEqual(self.repository.list_orders(), [])
+        self.assertEqual(product_state.stock, 0)
+
+    def test_idempotency_key_returns_existing_order_without_second_reserve(self) -> None:
+        product_state = FakeProductState(stock=5, price=9.99)
+        payload = OrderCreateRequest(
+            user_id=1,
+            idempotency_key="flashsale-key-1",
+            items=[{"product_id": 42, "quantity": 1}],
+        )
+
+        with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
+            first = self.service.create_order(payload)
+            second = self.service.create_order(payload)
+
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(first.status, "confirmed")
+        self.assertEqual(second.status, "confirmed")
+        self.assertEqual(product_state.stock, 4)
+        self.assertEqual(len(product_state.reservations), 1)
+
+    def test_expire_orders_cancels_pending_order_and_releases_inventory(self) -> None:
+        product_state = FakeProductState(stock=4, price=9.99)
+        product_state.reservations[1] = "reserved"
+        order = self.repository.create_order(
+            user_id=1,
+            total_amount=9.99,
+            order_items=[],
+            reservation_ids=[1],
+            idempotency_key="stale-key",
+            status="pending",
+            payment_status="pending",
+        )
+        stale_created_at = (
+            datetime.now(timezone.utc) - timedelta(seconds=301)
+        ).isoformat()
+        stored = self.repository._orders[order.id]
+        self.repository._orders[order.id] = StoredOrder(
+            order=stored.order.model_copy(update={"created_at": stale_created_at}),
+            reservation_ids=stored.reservation_ids,
+        )
+
+        with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
+            result = self.service.expire_orders()
+
+        expired_order = self.repository.get_order(order.id)
+        self.assertEqual(result.expired_count, 1)
+        self.assertIsNotNone(expired_order)
+        self.assertEqual(expired_order.status, "expired")
+        self.assertEqual(expired_order.payment_status, "cancelled")
+        self.assertEqual(product_state.stock, 5)
+        self.assertEqual(product_state.reservations[1], "cancelled")
+
+    def test_duplicate_payment_webhook_is_idempotent(self) -> None:
+        product_state = FakeProductState(stock=4, price=9.99)
+        product_state.reservations[1] = "reserved"
+        order = self.repository.create_order(
+            user_id=1,
+            total_amount=9.99,
+            order_items=[],
+            reservation_ids=[1],
+            idempotency_key="payment-order",
+            status="pending",
+            payment_status="pending",
+        )
+        payload = PaymentWebhookRequest(order_id=order.id, event_id="evt-1")
+
+        with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
+            first = self.service.process_payment_webhook(payload)
+            second = self.service.process_payment_webhook(payload)
+
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(first.status, "confirmed")
+        self.assertEqual(first.payment_status, "succeeded")
+        self.assertEqual(second.status, "confirmed")
+        self.assertEqual(second.payment_status, "succeeded")
+        self.assertEqual(product_state.stock, 4)
+        self.assertEqual(product_state.reservations[1], "confirmed")
+
+    def test_payment_success_after_timeout_race_keeps_order_expired(self) -> None:
+        product_state = FakeProductState(stock=4, price=9.99)
+        product_state.reservations[1] = "reserved"
+        order = self.repository.create_order(
+            user_id=1,
+            total_amount=9.99,
+            order_items=[],
+            reservation_ids=[1],
+            idempotency_key="timeout-race",
+            status="pending",
+            payment_status="pending",
+        )
+        stale_created_at = (
+            datetime.now(timezone.utc) - timedelta(seconds=301)
+        ).isoformat()
+        stored = self.repository._orders[order.id]
+        self.repository._orders[order.id] = StoredOrder(
+            order=stored.order.model_copy(update={"created_at": stale_created_at}),
+            reservation_ids=stored.reservation_ids,
+        )
+        payload = PaymentWebhookRequest(order_id=order.id, event_id="evt-timeout")
+
+        with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
+            self.service.expire_orders()
+            raced = self.service.process_payment_webhook(payload)
+
+        self.assertEqual(raced.status, "expired")
+        self.assertEqual(raced.payment_status, "cancelled")
+        self.assertEqual(product_state.stock, 5)
         self.assertEqual(product_state.reservations[1], "cancelled")
 
 
