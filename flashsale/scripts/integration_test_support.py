@@ -7,7 +7,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = Path(
@@ -24,8 +24,13 @@ def request_json(
     url: str,
     payload: dict[str, Any] | None = None,
     *,
-    expected_status: int = 200,
+    expected_status: int | Iterable[int] = 200,
 ) -> dict[str, Any]:
+    allowed_statuses = (
+        {expected_status}
+        if isinstance(expected_status, int)
+        else {status for status in expected_status}
+    )
     data = None
     headers: dict[str, str] = {}
     if payload is not None:
@@ -39,7 +44,7 @@ def request_json(
             status = response.getcode()
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8")
-        if exc.code != expected_status:
+        if exc.code not in allowed_statuses:
             raise AssertionError(
                 f"Unexpected HTTP {exc.code} for {method} {url}: {body}"
             ) from exc
@@ -50,7 +55,7 @@ def request_json(
         # resets/refusals as transient so the readiness poll can retry.
         raise AssertionError(f"Request failed for {method} {url}: {exc}") from exc
 
-    if status != expected_status:
+    if status not in allowed_statuses:
         raise AssertionError(f"Unexpected HTTP {status} for {method} {url}: {body}")
     return json.loads(body) if body else {}
 
@@ -101,6 +106,7 @@ class FlashsaleIntegrationClient:
                 "name": "Compose User",
                 "email": f"compose.user.{RUN_ID}.{time.time_ns()}@example.com",
             },
+            expected_status=(200, 201),
         )
         return int(response["id"])
 
@@ -109,6 +115,7 @@ class FlashsaleIntegrationClient:
             "POST",
             f"{BASE_PRODUCT_URL}/products",
             {"name": name, "price": price, "stock": stock},
+            expected_status=(200, 201),
         )
         return int(response["id"])
 
@@ -122,7 +129,7 @@ class FlashsaleIntegrationClient:
         product_id: int,
         quantity: int,
         idempotency_key: str,
-        expected_status: int = 200,
+        expected_status: int | Iterable[int] = (200, 201),
     ) -> dict[str, Any]:
         return request_json(
             "POST",
