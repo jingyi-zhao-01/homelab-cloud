@@ -1,10 +1,10 @@
-name: Flashsale Consistency Harness
+name: Flashsales Integration Gate
 
 on:
   workflow_dispatch:
   workflow_run:
     workflows:
-      - Deploy Flashsale Services
+      - Flashsales Deploy + Unit Gate
     types:
       - completed
 
@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   consistency:
-    name: Consistency Harness
+    name: Integration Gate - Runtime Consistency Harness
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     timeout-minutes: 20

@@ -42,6 +42,11 @@ This workload is deployed to the VPS-backed k3s cluster, not to a local-only env
 
 The smoke test checks that the business services and supporting stateful components are running and reports success with `E2E PASS`.
 
+For correctness gates:
+
+- the deploy workflow contains a pre-deploy unit gate
+- the dedicated consistency workflow contains the post-deploy integration gate
+
 ## Debugging
 
 ```bash

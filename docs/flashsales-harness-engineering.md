@@ -150,9 +150,15 @@ Today the harness does not prove:
 
 The repository now includes a dedicated consistency lane for the public k3s lifecycle:
 
-- workflow: `.github/workflows/flashsales-consistency.yml`
+- unit gate workflow: `.github/workflows/flashsales-deploy.yml`
+- integration gate workflow: `.github/workflows/flashsales-consistency.yml`
 - runtime script: `perf/consistency_harness.py`
 - cluster component: optional `dbProxy` in `charts/flashsales`
+
+The two gates have different roles:
+
+- unit gate: runs before image build and deploy, using a mocked persistence-failure test in `flashsale/order-service/tests/test_persistence_failure_consistency.py`
+- integration gate: runs after a successful deploy, using the public ingress path plus a cluster-side DB proxy fault injection lane
 
 This lane keeps the current external request path intact:
 

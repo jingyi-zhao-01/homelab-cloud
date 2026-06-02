@@ -1,4 +1,4 @@
-name: Deploy Flashsale Services
+name: Flashsales Deploy + Unit Gate
 
 on:
   push:
@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   order-consistency-test:
-    name: Order Consistency Test
+    name: Unit Gate - Order Consistency Test
     runs-on: ubuntu-latest
 
     steps:
