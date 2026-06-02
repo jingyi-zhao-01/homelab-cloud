@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 
 from .config import db_url, use_postgres
 from .models import (
+    ErrorResponse,
     ExpireOrdersResult,
+    HealthResponse,
     OrderCreateRequest,
     OrderOut,
     PaymentWebhookRequest,
@@ -37,20 +39,28 @@ def startup() -> None:
         pass
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": SERVICE_NAME}
+@app.get(
+    "/health",
+    summary="Service health check",
+    description="Returns a lightweight health payload for order-service.",
+    tags=["system"],
+)
+def health() -> HealthResponse:
+    return HealthResponse(status="ok", service=SERVICE_NAME)
 
 
 @app.post(
     "/orders",
     status_code=201,
+    summary="Create order",
+    description="Validates the user, reserves product stock, and persists a new order.",
+    tags=["orders"],
     responses={
-        400: {"description": "Order items cannot be empty"},
-        404: {"description": "User or product not found"},
-        409: {"description": "Insufficient product stock"},
-        502: {"description": "Dependent service unavailable"},
-        503: {"description": "Database unavailable"},
+        400: {"model": ErrorResponse, "description": "Order items cannot be empty"},
+        404: {"model": ErrorResponse, "description": "User or product not found"},
+        409: {"model": ErrorResponse, "description": "Insufficient product stock"},
+        502: {"model": ErrorResponse, "description": "Dependent service unavailable"},
+        503: {"model": ErrorResponse, "description": "Database unavailable"},
     },
 )
 def create_order(payload: OrderCreateRequest) -> OrderOut:
@@ -59,9 +69,12 @@ def create_order(payload: OrderCreateRequest) -> OrderOut:
 
 @app.get(
     "/orders/{order_id}",
+    summary="Get order",
+    description="Fetches a single order by identifier.",
+    tags=["orders"],
     responses={
-        404: {"description": "Order not found"},
-        503: {"description": "Database unavailable"},
+        404: {"model": ErrorResponse, "description": "Order not found"},
+        503: {"model": ErrorResponse, "description": "Database unavailable"},
     },
 )
 def get_order(order_id: int) -> OrderOut:
@@ -70,7 +83,10 @@ def get_order(order_id: int) -> OrderOut:
 
 @app.get(
     "/orders",
-    responses={503: {"description": "Database unavailable"}},
+    summary="List orders",
+    description="Returns all persisted orders visible to the service storage backend.",
+    tags=["orders"],
+    responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
 )
 def list_orders() -> list[OrderOut]:
     return order_service.list_orders()
@@ -78,9 +94,12 @@ def list_orders() -> list[OrderOut]:
 
 @app.post(
     "/payments/webhook",
+    summary="Process payment webhook",
+    description="Applies a successful payment event to the referenced order.",
+    tags=["payments"],
     responses={
-        404: {"description": "Order not found"},
-        503: {"description": "Database unavailable"},
+        404: {"model": ErrorResponse, "description": "Order not found"},
+        503: {"model": ErrorResponse, "description": "Database unavailable"},
     },
 )
 def payment_webhook(payload: PaymentWebhookRequest) -> OrderOut:
@@ -90,15 +109,22 @@ def payment_webhook(payload: PaymentWebhookRequest) -> OrderOut:
 @app.post(
     "/admin/reset",
     status_code=204,
-    responses={503: {"description": "Database unavailable"}},
+    summary="Reset order storage",
+    description="Clears order-service backing storage for local and integration test workflows.",
+    tags=["admin"],
+    responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
 )
-def admin_reset() -> None:
+def admin_reset() -> Response:
     order_service._repository.reset_db()
+    return Response(status_code=204)
 
 
 @app.post(
     "/admin/expire-orders",
-    responses={503: {"description": "Database unavailable"}},
+    summary="Expire pending orders",
+    description="Marks elapsed pending orders as expired and releases their reservations.",
+    tags=["admin"],
+    responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
 )
 def admin_expire_orders() -> ExpireOrdersResult:
     return order_service.expire_orders()

@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 
 from .config import SEED_PRODUCT_COUNT, SEED_PRODUCT_QUANTITY, db_url, use_postgres
 from .models import (
+    ErrorResponse,
     ExpireReservationsResult,
+    HealthResponse,
     ProductCreate,
     ProductOut,
     ReservationOut,
@@ -38,15 +40,23 @@ def startup() -> None:
         pass
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": SERVICE_NAME}
+@app.get(
+    "/health",
+    summary="Service health check",
+    description="Returns a lightweight health payload for product-service.",
+    tags=["system"],
+)
+def health() -> HealthResponse:
+    return HealthResponse(status="ok", service=SERVICE_NAME)
 
 
 @app.post(
     "/products",
     status_code=201,
-    responses={503: {"description": "Database unavailable"}},
+    summary="Create product",
+    description="Creates a product record that can later be reserved by orders.",
+    tags=["products"],
+    responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
 )
 def create_product(payload: ProductCreate) -> ProductOut:
     return product_service.create_product(payload)
@@ -54,9 +64,12 @@ def create_product(payload: ProductCreate) -> ProductOut:
 
 @app.get(
     "/products/{product_id}",
+    summary="Get product",
+    description="Fetches a single product by identifier.",
+    tags=["products"],
     responses={
-        404: {"description": "Product not found"},
-        503: {"description": "Database unavailable"},
+        404: {"model": ErrorResponse, "description": "Product not found"},
+        503: {"model": ErrorResponse, "description": "Database unavailable"},
     },
 )
 def get_product(product_id: int) -> ProductOut:
@@ -65,10 +78,13 @@ def get_product(product_id: int) -> ProductOut:
 
 @app.post(
     "/products/{product_id}/reserve",
+    summary="Reserve product stock",
+    description="Reserves available stock for a product before order persistence is finalized.",
+    tags=["reservations"],
     responses={
-        404: {"description": "Product not found"},
-        409: {"description": "Insufficient stock"},
-        503: {"description": "Database unavailable"},
+        404: {"model": ErrorResponse, "description": "Product not found"},
+        409: {"model": ErrorResponse, "description": "Insufficient stock"},
+        503: {"model": ErrorResponse, "description": "Database unavailable"},
     },
 )
 def reserve_product(product_id: int, payload: ReserveRequest) -> ReservationOut:
@@ -77,9 +93,12 @@ def reserve_product(product_id: int, payload: ReserveRequest) -> ReservationOut:
 
 @app.post(
     "/reservations/{reservation_id}/confirm",
+    summary="Confirm reservation",
+    description="Marks a reservation as confirmed after order persistence succeeds.",
+    tags=["reservations"],
     responses={
-        404: {"description": "Reservation not found"},
-        503: {"description": "Database unavailable"},
+        404: {"model": ErrorResponse, "description": "Reservation not found"},
+        503: {"model": ErrorResponse, "description": "Database unavailable"},
     },
 )
 def confirm_reservation(reservation_id: int) -> ReservationOut:
@@ -88,9 +107,12 @@ def confirm_reservation(reservation_id: int) -> ReservationOut:
 
 @app.post(
     "/reservations/{reservation_id}/cancel",
+    summary="Cancel reservation",
+    description="Cancels a reservation and restores stock when order persistence fails.",
+    tags=["reservations"],
     responses={
-        404: {"description": "Reservation not found"},
-        503: {"description": "Database unavailable"},
+        404: {"model": ErrorResponse, "description": "Reservation not found"},
+        503: {"model": ErrorResponse, "description": "Database unavailable"},
     },
 )
 def cancel_reservation(reservation_id: int) -> ReservationOut:
@@ -99,7 +121,10 @@ def cancel_reservation(reservation_id: int) -> ReservationOut:
 
 @app.post(
     "/admin/expire-reservations",
-    responses={503: {"description": "Database unavailable"}},
+    summary="Expire reservations",
+    description="Expires stale reservations and restores stock for the associated products.",
+    tags=["admin"],
+    responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
 )
 def expire_reservations() -> ExpireReservationsResult:
     return product_service.expire_reservations()
@@ -107,7 +132,10 @@ def expire_reservations() -> ExpireReservationsResult:
 
 @app.get(
     "/products",
-    responses={503: {"description": "Database unavailable"}},
+    summary="List products",
+    description="Returns all products visible to the service storage backend.",
+    tags=["products"],
+    responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
 )
 def list_products() -> list[ProductOut]:
     return product_service.list_products()
@@ -116,18 +144,26 @@ def list_products() -> list[ProductOut]:
 @app.post(
     "/admin/reset",
     status_code=204,
-    responses={503: {"description": "Database unavailable"}},
+    summary="Reset product storage",
+    description="Clears product-service backing storage for local and integration test workflows.",
+    tags=["admin"],
+    responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
 )
-def admin_reset() -> None:
+def admin_reset() -> Response:
     product_service._repository.reset_db()
+    return Response(status_code=204)
 
 
 @app.post(
     "/admin/seed",
     status_code=204,
-    responses={503: {"description": "Database unavailable"}},
+    summary="Seed products",
+    description="Seeds the repository with default products for local or smoke test workflows.",
+    tags=["admin"],
+    responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
 )
-def admin_seed() -> None:
+def admin_seed() -> Response:
     product_service._repository.seed_with_quantity(
         SEED_PRODUCT_COUNT, SEED_PRODUCT_QUANTITY
     )
+    return Response(status_code=204)

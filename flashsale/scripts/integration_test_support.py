@@ -76,9 +76,9 @@ def wait_for_stack() -> None:
 
 
 def reset_services() -> None:
-    request_json("POST", f"{BASE_USER_URL}/admin/reset")
-    request_json("POST", f"{BASE_PRODUCT_URL}/admin/reset")
-    request_json("POST", f"{BASE_ORDER_URL}/admin/reset")
+    request_json("POST", f"{BASE_USER_URL}/admin/reset", expected_status=204)
+    request_json("POST", f"{BASE_PRODUCT_URL}/admin/reset", expected_status=204)
+    request_json("POST", f"{BASE_ORDER_URL}/admin/reset", expected_status=204)
 
 
 def compose_exec(*args: str, env: dict[str, str] | None = None) -> str:

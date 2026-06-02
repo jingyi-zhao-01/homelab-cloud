@@ -28,6 +28,16 @@ class OrderServiceApiContractTest(unittest.TestCase):
             request_schema["$ref"], "#/components/schemas/PaymentWebhookRequest"
         )
 
+        create_order = spec["paths"]["/orders"]["post"]
+        self.assertEqual(create_order["summary"], "Create order")
+        self.assertIn("orders", create_order["tags"])
+        self.assertEqual(
+            create_order["responses"]["409"]["content"]["application/json"]["schema"][
+                "$ref"
+            ],
+            "#/components/schemas/ErrorResponse",
+        )
+
     def test_order_schemas_include_idempotency_and_payment_fields(self) -> None:
         spec = app.openapi()
         create_schema = spec["components"]["schemas"]["OrderCreateRequest"]
@@ -37,6 +47,10 @@ class OrderServiceApiContractTest(unittest.TestCase):
         self.assertIn("status", order_schema["properties"])
         self.assertIn("payment_status", order_schema["properties"])
         self.assertIn("idempotency_key", order_schema["properties"])
+        self.assertIn("description", create_schema["properties"]["items"])
+        self.assertIn("description", order_schema["properties"]["payment_status"])
+        self.assertIn("ErrorResponse", spec["components"]["schemas"])
+        self.assertIn("HealthResponse", spec["components"]["schemas"])
 
 
 if __name__ == "__main__":

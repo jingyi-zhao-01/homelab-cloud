@@ -22,11 +22,21 @@ class ProductServiceApiContractTest(unittest.TestCase):
         self.assertIn("/admin/expire-reservations", spec["paths"])
 
         reserve_post = spec["paths"]["/products/{product_id}/reserve"]["post"]
-        reserve_response = reserve_post["responses"]["200"]["content"]["application/json"][
-            "schema"
-        ]
+        reserve_response = reserve_post["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]
         self.assertEqual(
             reserve_response["$ref"], "#/components/schemas/ReservationOut"
+        )
+
+        reserve_post = spec["paths"]["/products/{product_id}/reserve"]["post"]
+        self.assertEqual(reserve_post["summary"], "Reserve product stock")
+        self.assertIn("reservations", reserve_post["tags"])
+        self.assertEqual(
+            reserve_post["responses"]["409"]["content"]["application/json"]["schema"][
+                "$ref"
+            ],
+            "#/components/schemas/ErrorResponse",
         )
 
     def test_product_create_schema_stays_backward_compatible(self) -> None:
@@ -38,6 +48,13 @@ class ProductServiceApiContractTest(unittest.TestCase):
             {"name", "price", "stock"},
         )
         self.assertIn("stock", create_schema["properties"])
+        self.assertIn("description", create_schema["properties"]["stock"])
+        self.assertIn(
+            "description",
+            spec["components"]["schemas"]["ReservationOut"]["properties"]["status"],
+        )
+        self.assertIn("ErrorResponse", spec["components"]["schemas"])
+        self.assertIn("HealthResponse", spec["components"]["schemas"])
 
 
 if __name__ == "__main__":
