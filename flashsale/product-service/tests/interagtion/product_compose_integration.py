@@ -1,11 +1,9 @@
-import sys
+"""Docker Compose integration coverage for the product service."""
+
+# pylint: disable=duplicate-code
+
 import unittest
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(REPO_ROOT / "flashsale" / "scripts"))
-
-from integration_test_support import (
+from tests.integration_test_support import (
     FlashsaleIntegrationClient,
     reset_services,
     wait_for_stack,
@@ -13,11 +11,15 @@ from integration_test_support import (
 
 
 class ProductServiceComposeIntegrationTest(unittest.TestCase):
+    """Exercise product-service inventory flows against the compose stack."""
+
     @classmethod
     def setUpClass(cls) -> None:
+        """Wait until the compose stack is ready for integration traffic."""
         wait_for_stack()
 
     def setUp(self) -> None:
+        """Reset shared state and seed a user plus product for each test."""
         reset_services()
         self.client = FlashsaleIntegrationClient()
         self.user_id = self.client.create_user()
@@ -28,6 +30,7 @@ class ProductServiceComposeIntegrationTest(unittest.TestCase):
         )
 
     def test_order_consumes_stock(self) -> None:
+        """A successful order should reduce the available product stock."""
         self.client.create_order(
             user_id=self.user_id,
             product_id=self.product_id,
@@ -39,6 +42,7 @@ class ProductServiceComposeIntegrationTest(unittest.TestCase):
         self.assertEqual(str(product["stock"]), "3")
 
     def test_duplicate_order_replay_does_not_change_stock(self) -> None:
+        """Idempotent order replays must not consume stock twice."""
         first = self.client.create_order(
             user_id=self.user_id,
             product_id=self.product_id,
@@ -57,6 +61,7 @@ class ProductServiceComposeIntegrationTest(unittest.TestCase):
         self.assertEqual(str(product["stock"]), "3")
 
     def test_out_of_stock_order_returns_conflict(self) -> None:
+        """Orders beyond remaining stock should fail without further stock loss."""
         self.client.create_order(
             user_id=self.user_id,
             product_id=self.product_id,

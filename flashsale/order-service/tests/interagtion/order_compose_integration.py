@@ -1,11 +1,9 @@
-import sys
+"""Docker Compose integration coverage for the order service."""
+
+# pylint: disable=duplicate-code
+
 import unittest
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(REPO_ROOT / "flashsale" / "scripts"))
-
-from integration_test_support import (
+from tests.integration_test_support import (
     FlashsaleIntegrationClient,
     reset_services,
     wait_for_stack,
@@ -13,11 +11,15 @@ from integration_test_support import (
 
 
 class OrderServiceComposeIntegrationTest(unittest.TestCase):
+    """Exercise order-service flows against the compose-backed stack."""
+
     @classmethod
     def setUpClass(cls) -> None:
+        """Wait until the compose stack is ready for integration traffic."""
         wait_for_stack()
 
     def setUp(self) -> None:
+        """Reset shared state and seed a user plus product for each test."""
         reset_services()
         self.client = FlashsaleIntegrationClient()
         self.user_id = self.client.create_user()
@@ -28,6 +30,7 @@ class OrderServiceComposeIntegrationTest(unittest.TestCase):
         )
 
     def test_create_order_confirms_payment(self) -> None:
+        """Creating an order through compose should confirm payment."""
         response = self.client.create_order(
             user_id=self.user_id,
             product_id=self.product_id,
@@ -39,6 +42,7 @@ class OrderServiceComposeIntegrationTest(unittest.TestCase):
         self.assertEqual(response["payment_status"], "succeeded")
 
     def test_duplicate_payment_webhook_is_idempotent(self) -> None:
+        """Replaying a succeeded payment webhook should not alter the outcome."""
         order = self.client.create_order(
             user_id=self.user_id,
             product_id=self.product_id,
@@ -56,6 +60,7 @@ class OrderServiceComposeIntegrationTest(unittest.TestCase):
         self.assertEqual(replay["payment_status"], "succeeded")
 
     def test_expired_order_stays_expired_after_late_payment(self) -> None:
+        """Late payment notifications must not revive an expired pending order."""
         pending_product_id = self.client.create_product(
             name="Pending Product",
             price=29.99,

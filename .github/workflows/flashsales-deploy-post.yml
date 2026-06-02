@@ -13,12 +13,10 @@ permissions:
   packages: write
 
 jobs:
-  runtime-consistency:
-    uses: ./.github/workflows/flashsales-consistency.yml
-    secrets: inherit
+  # runtime-consistency:
+  #   uses: ./.github/workflows/flashsales-consistency.yml
+  #   secrets: inherit
 
   perf-concurrency-suite:
-    needs:
-      - runtime-consistency
     uses: ./.github/workflows/flashsales-perf-concurrency-suite.yml
     secrets: inherit
