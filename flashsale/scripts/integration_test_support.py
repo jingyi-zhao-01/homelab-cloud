@@ -44,7 +44,10 @@ def request_json(
                 f"Unexpected HTTP {exc.code} for {method} {url}: {body}"
             ) from exc
         return json.loads(body) if body else {}
-    except urllib.error.URLError as exc:
+    except (urllib.error.URLError, OSError) as exc:
+        # Docker Compose can report a container as started slightly before the
+        # HTTP server is ready to answer health probes. Treat those socket-level
+        # resets/refusals as transient so the readiness poll can retry.
         raise AssertionError(f"Request failed for {method} {url}: {exc}") from exc
 
     if status != expected_status:
