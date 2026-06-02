@@ -1,17 +1,7 @@
 name: Flashsales Deploy Pre
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'flashsale/**'
-      - 'charts/flashsales/**'
-      - '.github/workflows/flashsales-deploy-pre.yml'
-      - '.github/workflows/flashsales-deploy.yml'
-      - '.github/workflows/flashsales-deploy-post.yml'
-      - '.github/workflows/flashsales-consistency.yml'
-      - '.github/workflows/flashsales-perf-concurrency-suite.yml'
+  workflow_call:
   workflow_dispatch:
 
 concurrency:

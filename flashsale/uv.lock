@@ -156,6 +156,11 @@ wheels = [
 name = "homelab-cloud"
 version = "0.1.0"
 source = { virtual = "." }
+dependencies = [
+    { name = "order-service" },
+    { name = "product-service" },
+    { name = "user-service" },
+]
 
 [package.optional-dependencies]
 dev = [
@@ -165,8 +170,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "order-service", editable = "order-service" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0.0" },
+    { name = "product-service", editable = "product-service" },
     { name = "pylint", marker = "extra == 'dev'", specifier = ">=3.3.0" },
+    { name = "user-service", editable = "user-service" },
 ]
 provides-extras = ["dev"]
 

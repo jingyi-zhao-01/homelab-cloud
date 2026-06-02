@@ -3,6 +3,11 @@ name = "homelab-cloud"
 version = "0.1.0"
 description = "Homelab flashsales microservices on k3s"
 requires-python = ">=3.12"
+dependencies = [
+  "user-service",
+  "product-service",
+  "order-service",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -16,6 +21,11 @@ members = [
   "product-service",
   "order-service",
 ]
+
+[tool.uv.sources]
+user-service = { workspace = true }
+product-service = { workspace = true }
+order-service = { workspace = true }
 
 [tool.pylint.format]
 max-module-lines = 500

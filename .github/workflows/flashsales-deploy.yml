@@ -2,14 +2,20 @@ name: Flashsales Deploy
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - Flashsales Deploy Pre
-    types:
-      - completed
+  push:
+    branches:
+      - main
+    paths:
+      - 'flashsale/**'
+      - 'charts/flashsales/**'
+      - '.github/workflows/flashsales-deploy-pre.yml'
+      - '.github/workflows/flashsales-deploy.yml'
+      - '.github/workflows/flashsales-deploy-post.yml'
+      - '.github/workflows/flashsales-consistency.yml'
+      - '.github/workflows/flashsales-perf-concurrency-suite.yml'
 
 concurrency:
-  group: flashsales-deploy-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+  group: flashsales-deploy-${{ github.sha }}
   cancel-in-progress: true
 
 env:
@@ -22,10 +28,16 @@ permissions:
   packages: write
 
 jobs:
+  predeploy:
+    name: Predeploy Gates
+    uses: ./.github/workflows/flashsales-deploy-pre.yml
+    secrets: inherit
+
   build-and-push:
     name: Build and Push Images
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    needs:
+      - predeploy
     strategy:
       fail-fast: false
       matrix:
@@ -38,7 +50,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -56,7 +68,7 @@ jobs:
           context: flashsale/${{ matrix.service }}
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/flashsales-${{ matrix.service }}:${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+            ghcr.io/${{ github.repository_owner }}/flashsales-${{ matrix.service }}:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/flashsales-${{ matrix.service }}:latest
 
   deploy:
@@ -70,7 +82,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
@@ -113,7 +125,7 @@ jobs:
 
       - name: Deploy Helm release
         run: |
-          IMAGE_TAG="${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}"
+          IMAGE_TAG="${{ github.sha }}"
           helm upgrade --install "$RELEASE" "$CHART_PATH" \
             -n "$NAMESPACE" \
             --create-namespace \
@@ -147,3 +159,11 @@ jobs:
         run: |
           kubectl get pods -n "$NAMESPACE" -o wide
           kubectl get svc -n "$NAMESPACE"
+
+  postdeploy:
+    name: Postdeploy Runtime Gates
+    needs:
+      - deploy
+    if: ${{ needs.deploy.result == 'success' }}
+    uses: ./.github/workflows/flashsales-deploy-post.yml
+    secrets: inherit
