@@ -68,8 +68,8 @@ jobs:
         run: |
           python -m unittest discover -s tests/unit -t . -p 'test_*.py'
 
-  flashsale-compose-integration-gate:
-    name: Integration Gate - Docker Compose Flashsale
+  product-service-compose-integration-gate:
+    name: Integration Gate - Docker Compose Product Service
     runs-on: ubuntu-latest
     needs:
       - product-service-unit-gate
@@ -82,9 +82,32 @@ jobs:
       - name: Ensure Docker Compose is available
         run: docker compose version
 
-      - name: Run flashsale compose integration
+      - name: Run product-service compose integration
         run: |
-          python3 flashsale/scripts/flashsale_compose_integration.py
+          python3 flashsale/scripts/flashsale_compose_integration.py --suite product
+
+      - name: Dump compose logs on failure
+        if: failure()
+        run: |
+          docker compose -f flashsale/docker-compose.yaml logs --no-color || true
+
+  order-service-compose-integration-gate:
+    name: Integration Gate - Docker Compose Order Service
+    runs-on: ubuntu-latest
+    needs:
+      - product-service-unit-gate
+      - order-service-unit-gate
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure Docker Compose is available
+        run: docker compose version
+
+      - name: Run order-service compose integration
+        run: |
+          python3 flashsale/scripts/flashsale_compose_integration.py --suite order
 
       - name: Dump compose logs on failure
         if: failure()

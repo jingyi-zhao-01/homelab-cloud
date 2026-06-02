@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import atexit
+import argparse
 import shutil
 import subprocess
 import sys
@@ -61,7 +62,22 @@ def run_tests(start_dir: Path) -> None:
     )
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run flashsale Docker Compose integration tests."
+    )
+    parser.add_argument(
+        "--suite",
+        choices=["order", "product", "all"],
+        default="all",
+        help="Choose which integration test suite to execute.",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
+
     require_cmd("docker")
     require_cmd("python3")
 
@@ -76,11 +92,13 @@ def main() -> int:
     wait_for_stack()
     log(f"Services ready: {BASE_USER_URL}, {BASE_PRODUCT_URL}, {BASE_ORDER_URL}")
 
-    log("Running product-service integration tests")
-    run_tests(REPO_ROOT / "flashsale" / "product-service" / "tests" / "interagtion")
+    if args.suite in {"product", "all"}:
+        log("Running product-service integration tests")
+        run_tests(REPO_ROOT / "flashsale" / "product-service" / "tests" / "interagtion")
 
-    log("Running order-service integration tests")
-    run_tests(REPO_ROOT / "flashsale" / "order-service" / "tests" / "interagtion")
+    if args.suite in {"order", "all"}:
+        log("Running order-service integration tests")
+        run_tests(REPO_ROOT / "flashsale" / "order-service" / "tests" / "interagtion")
 
     log("Integration PASS")
     return 0
