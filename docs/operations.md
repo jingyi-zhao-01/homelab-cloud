@@ -27,6 +27,8 @@ AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
 ```
 
+`GHCR_PULL_TOKEN` must be able to read private packages in GHCR. In practice that means a classic PAT with `read:packages`, or an equivalent fine-grained token scoped to the repository packages that back the flashsales images.
+
 ## Performance Testing
 
 Perf runs currently provision an ephemeral Neon database through Terraform before the load test executes.

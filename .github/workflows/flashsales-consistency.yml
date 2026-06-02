@@ -21,6 +21,7 @@ env:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   consistency:
@@ -31,6 +32,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Login to GHCR for helper image publishing
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -76,6 +84,38 @@ jobs:
             --docker-password="$GHCR_PULL_TOKEN" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Mirror db proxy helper images to GHCR
+        env:
+          TOXIPROXY_SOURCE: shopify/toxiproxy:2.12.0
+          TOXIPROXY_TARGET: ghcr.io/${{ github.repository_owner }}/flashsales-toxiproxy:2.12.0
+          BOOTSTRAP_SOURCE: curlimages/curl:8.8.0
+          BOOTSTRAP_TARGET: ghcr.io/${{ github.repository_owner }}/flashsales-db-proxy-bootstrap:8.8.0
+        run: |
+          set -euo pipefail
+          docker pull "$TOXIPROXY_SOURCE"
+          docker tag "$TOXIPROXY_SOURCE" "$TOXIPROXY_TARGET"
+          docker push "$TOXIPROXY_TARGET"
+
+          docker pull "$BOOTSTRAP_SOURCE"
+          docker tag "$BOOTSTRAP_SOURCE" "$BOOTSTRAP_TARGET"
+          docker push "$BOOTSTRAP_TARGET"
+
+      - name: Verify GHCR pull credentials can read runtime images
+        env:
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "$GHCR_PULL_TOKEN" | docker login ghcr.io \
+            --username "$GHCR_PULL_USERNAME" \
+            --password-stdin
+
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-user-service:latest >/dev/null
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-product-service:latest >/dev/null
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-order-service:latest >/dev/null
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-toxiproxy:2.12.0 >/dev/null
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-db-proxy-bootstrap:8.8.0 >/dev/null
+
       - name: Enable db proxy deployment for consistency lane
         run: |
           set -euo pipefail
@@ -83,6 +123,16 @@ jobs:
             -n "$NAMESPACE" \
             --create-namespace \
             --set dbProxy.enabled=true \
+            --set dbProxy.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-toxiproxy \
+            --set dbProxy.image.tag=2.12.0 \
+            --set dbProxy.bootstrapImage.repository=ghcr.io/${{ github.repository_owner }}/flashsales-db-proxy-bootstrap \
+            --set dbProxy.bootstrapImage.tag=8.8.0 \
+            --set userService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-user-service \
+            --set userService.image.tag=latest \
+            --set productService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-product-service \
+            --set productService.image.tag=latest \
+            --set orderService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-order-service \
+            --set orderService.image.tag=latest \
             --set imagePullSecrets[0].name=ghcr-pull-secret
 
       - name: Wait for rollouts

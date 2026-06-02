@@ -123,6 +123,22 @@ jobs:
             --docker-password="$GHCR_PULL_TOKEN" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Verify GHCR pull credentials can read deployed images
+        env:
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          set -euo pipefail
+          IMAGE_TAG="${{ github.sha }}"
+
+          echo "$GHCR_PULL_TOKEN" | docker login ghcr.io \
+            --username "$GHCR_PULL_USERNAME" \
+            --password-stdin
+
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-user-service:"$IMAGE_TAG" >/dev/null
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-product-service:"$IMAGE_TAG" >/dev/null
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-order-service:"$IMAGE_TAG" >/dev/null
+
       - name: Deploy Helm release
         run: |
           IMAGE_TAG="${{ github.sha }}"
