@@ -43,7 +43,7 @@ jobs:
       - name: Run product-service unit tests
         working-directory: flashsale/product-service
         run: |
-          python -m unittest discover -s tests -p 'test_*.py'
+          python -m unittest discover -s tests/unit -t . -p 'test_*.py'
 
   order-service-unit-gate:
     name: Unit Gate - Order Service Lifecycle, Webhooks, Contract, And Migration
@@ -66,7 +66,7 @@ jobs:
       - name: Run order-service unit tests
         working-directory: flashsale/order-service
         run: |
-          python -m unittest discover -s tests -p 'test_*.py'
+          python -m unittest discover -s tests/unit -t . -p 'test_*.py'
 
   flashsale-compose-integration-gate:
     name: Integration Gate - Docker Compose Flashsale
@@ -84,7 +84,7 @@ jobs:
 
       - name: Run flashsale compose integration
         run: |
-          bash scripts/flashsale-compose-integration.sh
+          python3 flashsale/scripts/flashsale_compose_integration.py
 
       - name: Dump compose logs on failure
         if: failure()

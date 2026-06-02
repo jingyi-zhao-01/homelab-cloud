@@ -47,7 +47,7 @@ help:
 >echo "  make neon-apply            # Provision Neon DB and write K8s secret"
 >echo "  make neon-destroy          # Destroy Neon resources (caution: data loss)"
 
-include perf/perf.mk
+include flashsale/perf/perf.mk
 
 check-local:
 >API_SERVER=$$(KUBECONFIG=$(KUBECONFIG_PATH) kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'); \
@@ -71,7 +71,7 @@ undeploy:
 
 
 e2e: check-local
->KUBECONFIG_PATH=$(KUBECONFIG_PATH) NAMESPACE=$(NAMESPACE) ./scripts/e2e-smoke.sh
+>KUBECONFIG_PATH=$(KUBECONFIG_PATH) NAMESPACE=$(NAMESPACE) bash ./flashsale/scripts/e2e-smoke.sh
 
 build-images:
 >$(CONTAINER_CLI) build -t flashsales/user-service:$(IMAGE_TAG) flashsale/user-service

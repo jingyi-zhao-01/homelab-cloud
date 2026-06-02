@@ -31,12 +31,12 @@ AWS_SECRET_ACCESS_KEY
 
 Perf runs currently provision an ephemeral Neon database through Terraform before the load test executes.
 
-For the current interpretation limits and correctness caveats of the flashsales perf harness, use [Flashsales harness engineering](flashsales-harness-engineering.md) as the source of truth.
+For the current interpretation limits and correctness caveats of the flashsales perf harness, use [Flashsales harness engineering](../flashsale/docs/flashsales-harness-engineering.md) as the source of truth.
 
 ```bash
 make loadtest KUBECONFIG_PATH=secrets/.kube-config
 make loadtest-lite KUBECONFIG_PATH=secrets/.kube-config
-bash ./perf/loadtest-k6.sh -e RAMP_UP=30s -e STEADY=180s -e TARGET_VUS=50
+bash ./flashsale/perf/loadtest-k6.sh -e RAMP_UP=30s -e STEADY=180s -e TARGET_VUS=50
 ```
 
 ## Developer Setup
@@ -68,7 +68,7 @@ For the Neon and secrets workflow details, see [Infrastructure](infrastructure.m
 
 - [Repository overview](overview.md)
 - [Infrastructure](infrastructure.md)
-- [Flashsales workload](flashsales.md)
+- [Flashsales workload](../flashsale/docs/flashsales.md)
 - [Strategy tester workload](strategy-tester.md)
 - [LeetCode intelligence workload](leetcode-intelligence.md)
 

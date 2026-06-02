@@ -89,7 +89,7 @@ jobs:
 
       - name: Run perf test
         run: |
-          KUBECONFIG_PATH="$HOME/.kube/config" bash ./perf/loadtest-k6.sh \
+          KUBECONFIG_PATH="$HOME/.kube/config" bash ./flashsale/perf/loadtest-k6.sh \
             -e TARGET_VUS=${{ github.event.inputs.target_vus }} \
             -e RAMP_UP=${{ github.event.inputs.ramp_up }} \
             -e STEADY=${{ github.event.inputs.steady }} \

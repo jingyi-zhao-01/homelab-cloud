@@ -37,7 +37,7 @@ This workload is deployed to the VPS-backed k3s cluster, not to a local-only env
 ## Verification
 
 ```bash
-./scripts/e2e-smoke.sh
+bash ./flashsale/scripts/e2e-smoke.sh
 ```
 
 The smoke test checks that the business services and supporting stateful components are running and reports success with `E2E PASS`.
@@ -84,7 +84,7 @@ Once forwarded, you can create users, products, and orders with the workload API
 ## Related Pages
 
 - [Flashsales harness engineering](flashsales-harness-engineering.md)
-- [Repository overview](overview.md)
-- [Operations and tooling](operations.md)
+- [Repository overview](../../docs/overview.md)
+- [Operations and tooling](../../docs/operations.md)
 
-Back to [README](../README.md).
+Back to [README](../../README.md).

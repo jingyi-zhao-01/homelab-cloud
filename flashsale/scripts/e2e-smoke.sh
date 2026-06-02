@@ -6,7 +6,8 @@ USER_PORT="${USER_PORT:-18001}"
 PRODUCT_PORT="${PRODUCT_PORT:-18002}"
 ORDER_PORT="${ORDER_PORT:-18003}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_KUBECONFIG="$(cd "$SCRIPT_DIR/.." && pwd)/.kube-config"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_KUBECONFIG="$REPO_ROOT/.kube-config"
 if [[ -f "$REPO_KUBECONFIG" ]]; then
   DEFAULT_KUBECONFIG_PATH="$REPO_KUBECONFIG"
 else

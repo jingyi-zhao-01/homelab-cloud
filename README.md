@@ -17,8 +17,8 @@ This platform is the result: a shared place where services can converge, agent c
 | Page | What it covers |
 |---|---|
 | [Repository overview](docs/overview.md) | High-level architecture, layout, and shared conventions |
-| [Flashsales workload](docs/flashsales.md) | Concurrency practice app deployed to the VPS, smoke test, and debugging |
-| [Flashsales harness engineering](docs/flashsales-harness-engineering.md) | Current flashsales correctness risks, perf harness interpretation, and priority backlog |
+| [Flashsales workload](flashsale/docs/flashsales.md) | Concurrency practice app deployed to the VPS, smoke test, and debugging |
+| [Flashsales harness engineering](flashsale/docs/flashsales-harness-engineering.md) | Current flashsales correctness risks, perf harness interpretation, and priority backlog |
 | [Flashsales deploy pre](.github/workflows/flashsales-deploy-pre.yml) | Pre-deploy unit and Docker Compose integration gates that do not touch the live k3s deployment |
 | [Flashsales deploy](.github/workflows/flashsales-deploy.yml) | Image build, push, and default k3s deployment after pre-gates succeed |
 | [Flashsales deploy post](.github/workflows/flashsales-deploy-post.yml) | Post-deploy runtime consistency and performance lanes against the live k3s deployment |
@@ -43,9 +43,7 @@ make loadtest KUBECONFIG_PATH=secrets/.kube-config
 ```text
 .
 ├── charts/                 # Helm charts for flashsales, strategy-tester, and leetcode-intelligence
-├── flashsale/              # FastAPI service sources for the flashsales workload
-├── perf/                   # k6 load test scripts and helpers
-├── scripts/                # Smoke tests and local automation
+├── flashsale/              # FastAPI service sources, local scripts, and perf harnesses for the flashsales workload
 ├── secrets/                # Local and shared secret material
 ├── terraform/              # Neon and SSM provisioning
 ├── docs/                   # Split documentation pages

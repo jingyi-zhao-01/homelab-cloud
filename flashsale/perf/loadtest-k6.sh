@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 if [[ -n "${KUBECONFIG_PATH:-}" ]]; then
   KUBECONFIG_PATH="$KUBECONFIG_PATH"
 elif [[ -f .kube-config ]]; then
@@ -10,7 +12,7 @@ else
 fi
 
 NAMESPACE="${NAMESPACE:-flashsales}"
-LOADTEST_SCRIPT="${LOADTEST_SCRIPT:-./perf/loadtest.js}"
+LOADTEST_SCRIPT="${LOADTEST_SCRIPT:-$SCRIPT_DIR/loadtest.js}"
 
 if [[ ! -r "$KUBECONFIG_PATH" ]]; then
   echo "Kubeconfig not found or not readable: $KUBECONFIG_PATH" >&2
