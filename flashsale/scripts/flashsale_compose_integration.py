@@ -47,6 +47,7 @@ def cleanup() -> None:
 
 
 def run_tests(start_dir: Path) -> None:
+    top_level_dir = start_dir.parents[1]
     subprocess.run(
         [
             sys.executable,
@@ -55,6 +56,8 @@ def run_tests(start_dir: Path) -> None:
             "discover",
             "-s",
             str(start_dir),
+            "-t",
+            str(top_level_dir),
             "-p",
             "*_integration.py",
         ],
