@@ -33,6 +33,12 @@ data "aws_ssm_parameter" "ubuntu_ami" {
   name = var.ami_ssm_parameter
 }
 
+data "aws_key_pair" "spot_node" {
+  count = var.key_name == null ? 0 : 1
+
+  key_name = var.key_name
+}
+
 data "aws_iam_policy_document" "ec2_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -151,7 +157,7 @@ resource "aws_launch_template" "spot_node" {
   name_prefix   = "${local.name_prefix}-"
   image_id      = data.aws_ssm_parameter.ubuntu_ami.value
   instance_type = var.instance_types[0]
-  key_name      = var.key_name
+  key_name      = try(data.aws_key_pair.spot_node[0].key_name, null)
 
   update_default_version = true
 
@@ -206,6 +212,8 @@ resource "aws_autoscaling_group" "spot_node" {
   termination_policies      = ["OldestLaunchTemplate", "ClosestToNextInstanceHour"]
 
   mixed_instances_policy {
+    # Keep Spot selection at the ASG layer. AWS rejects launch templates that
+    # also hard-code instance_market_options when used with mixed instances.
     instances_distribution {
       on_demand_base_capacity                  = 0
       on_demand_percentage_above_base_capacity = 0
