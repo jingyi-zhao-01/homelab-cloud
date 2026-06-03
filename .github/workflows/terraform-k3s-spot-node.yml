@@ -111,8 +111,8 @@ jobs:
       ACTION: ${{ inputs.action || 'apply' }}
       CLUSTER_NAME: ${{ inputs.cluster_name || vars.K3S_SPOT_CLUSTER_NAME || 'homelab-k3s' }}
       NODE_GROUP_NAME: ${{ inputs.node_group_name || vars.K3S_SPOT_NODE_GROUP_NAME || 'spot-worker' }}
-      VPC_ID: ${{ inputs.vpc_id || vars.K3S_SPOT_VPC_ID }}
-      SUBNET_IDS: ${{ inputs.subnet_ids || fromJson(toJson(vars)).K3S_SPOT_SUBNET_IDS }}
+      VPC_ID: ${{ inputs.vpc_id }}
+      SUBNET_IDS: ${{ inputs.subnet_ids }}
       INSTANCE_TYPES: ${{ inputs.instance_types || vars.K3S_SPOT_INSTANCE_TYPES || 't3.small,t3a.small' }}
       KEY_NAME: ${{ inputs.key_name || fromJson(toJson(vars)).K3S_SPOT_KEY_NAME }}
       ALLOWED_SSH_CIDRS: ${{ inputs.allowed_ssh_cidrs || fromJson(toJson(vars)).K3S_SPOT_ALLOWED_SSH_CIDRS }}
@@ -164,6 +164,12 @@ jobs:
               ($raw | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0)))
             '
           }
+
+          if [ -n "$VPC_ID" ] || [ -n "$SUBNET_IDS" ]; then
+            echo "Using explicit workflow network inputs"
+          else
+            echo "Using remote network state from s3://${TF_STATE_BUCKET}/${NETWORK_STATE_KEY}"
+          fi
 
           cat > github.auto.tfvars <<EOF
           aws_region      = "${AWS_REGION}"
