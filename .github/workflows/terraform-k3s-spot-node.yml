@@ -118,11 +118,145 @@ jobs:
       K3S_SERVER_TOKEN: ${{ secrets.K3S_SERVER_TOKEN }}
       TS_SPOT_AUTH_KEY: ${{ secrets.TS_SPOT_AUTH_KEY }}
 
-  grafana-monitoring:
-    name: Reconcile Grafana K8s Monitoring
-    if: ${{ inputs.action == 'apply' && inputs.reconcile_grafana_monitoring && needs.node.result == 'success' }}
+  verify-spot-node:
+    name: Verify Spot Node Joined K3s
+    if: ${{ inputs.action == 'apply' && needs.node.result == 'success' }}
     needs:
       - node
+    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}
+      CLUSTER_NAME: ${{ inputs.cluster_name }}
+      NODE_GROUP_NAME: ${{ inputs.node_group_name }}
+      K3S_SERVER_URL_TAILSCALE: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+      TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+
+    steps:
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Validate cluster access settings
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          set -euo pipefail
+          if [ -z "${AWS_REGION:-}" ]; then
+            echo "AWS_REGION variable is missing"
+            exit 1
+          fi
+          if [ -z "${KUBE_CONFIG_DATA:-}" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+
+          if [ -z "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
+            echo "K3S_SERVER_URL_TAILSCALE is not set; kubeconfig server will be used as-is."
+            exit 0
+          fi
+
+          API_HOST="${K3S_SERVER_URL_TAILSCALE#https://}"
+          API_HOST="${API_HOST#http://}"
+          API_HOST="${API_HOST%%:*}"
+
+          case "$API_HOST" in
+            100.*)
+              if [ -z "${TS_OAUTH_CLIENT_ID:-}" ] || [ -z "${TS_OAUTH_SECRET:-}" ] || [ -z "${TS_CI_TAGS:-}" ]; then
+                echo "K3S_SERVER_URL_TAILSCALE points to Tailscale address ${K3S_SERVER_URL_TAILSCALE}, but TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET / TS_CI_TAGS are not all configured."
+                exit 1
+              fi
+              ;;
+          esac
+
+      - name: Connect Tailscale for private k3s access
+        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
+          tags: ${{ env.TS_CI_TAGS }}
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+          if [ -n "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
+            CURRENT_CLUSTER="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
+            kubectl config set-cluster "$CURRENT_CLUSTER" --server="$K3S_SERVER_URL_TAILSCALE"
+          fi
+
+          kubectl get nodes -o wide
+
+      - name: Verify spot node joined and is Ready
+        run: |
+          set -euo pipefail
+          asg_name="${CLUSTER_NAME}-${NODE_GROUP_NAME}"
+          echo "Waiting for spot instance from ASG ${asg_name} to register as a Ready k3s node..."
+
+          instance_id=""
+          for attempt in $(seq 1 30); do
+            instance_id="$(aws autoscaling describe-auto-scaling-groups \
+              --auto-scaling-group-names "$asg_name" \
+              --region "$AWS_REGION" \
+              --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`].InstanceId | [0]' \
+              --output text)"
+            if [ -n "${instance_id:-}" ] && [ "$instance_id" != "None" ]; then
+              break
+            fi
+            echo "Attempt ${attempt}/30: ASG has no InService instance yet."
+            sleep 10
+          done
+
+          if [ -z "${instance_id:-}" ] || [ "$instance_id" = "None" ]; then
+            echo "No InService EC2 instance found in ASG ${asg_name}."
+            exit 1
+          fi
+
+          private_dns="$(aws ec2 describe-instances \
+            --instance-ids "$instance_id" \
+            --region "$AWS_REGION" \
+            --query 'Reservations[0].Instances[0].PrivateDnsName' \
+            --output text)"
+          node_prefix="${private_dns%%.*}"
+
+          echo "Found EC2 instance ${instance_id} with private DNS prefix ${node_prefix}"
+
+          for attempt in $(seq 1 36); do
+            matched_node="$(kubectl get nodes -o name | sed 's|^node/||' | grep "^${node_prefix}" | head -n1 || true)"
+            if [ -n "${matched_node:-}" ]; then
+              ready_status="$(kubectl get node "$matched_node" -o jsonpath='{range .status.conditions[?(@.type=="Ready")]}{.status}{end}')"
+              if [ "$ready_status" = "True" ]; then
+                echo "Ready node matched: ${matched_node}"
+                kubectl get nodes -o wide
+                exit 0
+              fi
+              echo "Matched node ${matched_node}, but Ready=${ready_status:-unknown}"
+            else
+              echo "No node with prefix ${node_prefix} found yet."
+            fi
+
+            echo "Attempt ${attempt}/36: worker has not become Ready yet."
+            kubectl get nodes -o wide || true
+            sleep 10
+          done
+
+          echo "Spot instance ${instance_id} never became a Ready k3s node."
+          kubectl get nodes -o wide || true
+          exit 1
+
+  grafana-monitoring:
+    name: Reconcile Grafana K8s Monitoring
+    if: ${{ inputs.action == 'apply' && inputs.reconcile_grafana_monitoring && needs.verify-spot-node.result == 'success' }}
+    needs:
+      - verify-spot-node
     runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
     env:
       MONITORING_NAMESPACE: monitoring
