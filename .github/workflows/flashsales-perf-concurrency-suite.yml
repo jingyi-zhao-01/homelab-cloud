@@ -10,6 +10,9 @@ concurrency:
 
 env:
   NAMESPACE: ${{ vars.K8S_NAMESPACE || 'flashsales' }}
+  TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
+  TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+  TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
 
 permissions:
   contents: read
@@ -35,12 +38,12 @@ jobs:
         uses: grafana/setup-k6-action@v1
 
       - name: Connect Tailscale for private k3s access
-        if: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' && vars.TS_CI_TAGS != '' }}
+        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
         uses: tailscale/github-action@v4
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: ${{ vars.TS_CI_TAGS }}
+          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
+          tags: ${{ env.TS_CI_TAGS }}
 
       - name: Configure kubeconfig
         env:
@@ -90,12 +93,12 @@ jobs:
         uses: grafana/setup-k6-action@v1
 
       - name: Connect Tailscale for private k3s access
-        if: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' && vars.TS_CI_TAGS != '' }}
+        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
         uses: tailscale/github-action@v4
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: ${{ vars.TS_CI_TAGS }}
+          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
+          tags: ${{ env.TS_CI_TAGS }}
 
       - name: Configure kubeconfig
         env:
@@ -146,12 +149,12 @@ jobs:
         uses: grafana/setup-k6-action@v1
 
       - name: Connect Tailscale for private k3s access
-        if: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' && vars.TS_CI_TAGS != '' }}
+        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
         uses: tailscale/github-action@v4
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: ${{ vars.TS_CI_TAGS }}
+          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
+          tags: ${{ env.TS_CI_TAGS }}
 
       - name: Configure kubeconfig
         env:
