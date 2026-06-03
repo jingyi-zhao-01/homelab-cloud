@@ -50,6 +50,8 @@ Without that ingress, the worker may still appear `Ready`, but cross-node pod tr
 
 For clusters that span multiple networks or public IPs, the k3s server side should also follow the official multicloud guidance for external node addresses and Flannel external-IP routing.
 
+For GitHub Actions based deploys and runtime gates, the most reliable operating mode is a private network path to the control-plane. In practice, that usually means GitHub-hosted runners joining your Tailscale tailnet during the workflow, or a self-hosted runner with private/VPN reachability. In both cases, the kubeconfig server override should point at the private endpoint instead of the public API address.
+
 ## State and Backends
 
 Terraform state is not kept locally as the source of truth. The workflow configures an S3 backend, and CI passes the bucket name through `TF_STATE_BUCKET`.

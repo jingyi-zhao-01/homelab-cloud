@@ -73,7 +73,7 @@ jobs:
 
   deploy:
     name: Deploy to k3s
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
     needs:
       - build-and-push
     if: ${{ needs.build-and-push.result == 'success' }}
@@ -90,9 +90,18 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
 
+      - name: Connect Tailscale for private k3s access
+        if: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' && vars.TS_CI_TAGS != '' }}
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: ${{ vars.TS_CI_TAGS }}
+
       - name: Configure kubeconfig
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+          K8S_API_SERVER_URL_OVERRIDE: ${{ vars.K8S_API_SERVER_URL_OVERRIDE }}
         run: |
           set -euo pipefail
           if [ -z "$KUBE_CONFIG_DATA" ]; then
@@ -104,8 +113,25 @@ jobs:
           chmod 600 "$HOME/.kube/config"
           kubectl version --client
 
+          if [ -n "${K8S_API_SERVER_URL_OVERRIDE:-}" ]; then
+            CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
+            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K8S_API_SERVER_URL_OVERRIDE}"
+            kubectl config set-cluster "$CLUSTER_NAME" --server="$K8S_API_SERVER_URL_OVERRIDE"
+          fi
+
           API_SERVER="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
           echo "Target API server: $API_SERVER"
+
+          API_HOSTPORT="${API_SERVER#https://}"
+          API_HOSTPORT="${API_HOSTPORT#http://}"
+          API_HOST="${API_HOSTPORT%%/*}"
+          API_HOST="${API_HOST%%:*}"
+          API_PORT="${API_HOSTPORT##*:}"
+          if [ "$API_PORT" = "$API_HOSTPORT" ]; then
+            API_PORT="443"
+          fi
+          echo "Resolved API host: $API_HOST"
+          echo "Resolved API port: $API_PORT"
 
           for attempt in 1 2 3 4 5; do
             echo "Checking Kubernetes API reachability (attempt ${attempt}/5)"
@@ -117,10 +143,15 @@ jobs:
             if [ "$attempt" -eq 5 ]; then
               echo "Kubernetes API remained unreachable after 5 attempts"
               echo "This usually indicates transient network reachability issues from GitHub Actions to the public k3s API endpoint."
+              echo "Capturing final network diagnostics for ${API_HOST}:${API_PORT}"
+              getent ahostsv4 "$API_HOST" || true
+              getent ahostsv6 "$API_HOST" || true
+              curl -vk --connect-timeout 10 --max-time 20 "${API_SERVER}/version" || true
               exit 1
             fi
 
             echo "kubectl get nodes failed; retrying in 15 seconds"
+            curl -sk --connect-timeout 5 --max-time 10 "${API_SERVER}/version" >/dev/null || true
             sleep 15
           done
 

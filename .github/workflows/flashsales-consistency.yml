@@ -26,7 +26,7 @@ permissions:
 jobs:
   consistency:
     name: Integration Gate - Runtime Consistency Harness
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
     timeout-minutes: 20
 
     steps:
@@ -51,9 +51,18 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
 
+      - name: Connect Tailscale for private k3s access
+        if: ${{ secrets.TS_OAUTH_CLIENT_ID != '' && secrets.TS_OAUTH_SECRET != '' && vars.TS_CI_TAGS != '' }}
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: ${{ vars.TS_CI_TAGS }}
+
       - name: Configure kubeconfig
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+          K8S_API_SERVER_URL_OVERRIDE: ${{ vars.K8S_API_SERVER_URL_OVERRIDE }}
         run: |
           set -euo pipefail
           if [ -z "$KUBE_CONFIG_DATA" ]; then
@@ -63,6 +72,11 @@ jobs:
           mkdir -p "$HOME/.kube"
           echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
+          if [ -n "${K8S_API_SERVER_URL_OVERRIDE:-}" ]; then
+            CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
+            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K8S_API_SERVER_URL_OVERRIDE}"
+            kubectl config set-cluster "$CLUSTER_NAME" --server="$K8S_API_SERVER_URL_OVERRIDE"
+          fi
           kubectl version --client
           kubectl get nodes
 

@@ -76,6 +76,40 @@ The reusable workflow pair is:
 
 The manual entrypoint is `terraform-k3s-spot-node.yml`, and the most important remote-worker inputs are `trusted_cluster_cidrs` plus optional `extra_k3s_agent_args`.
 
+## Private Network Access For Public GitHub Actions
+
+If you want to keep using GitHub-hosted runners, the recommended path is to connect those runners to your private cluster network instead of exposing deploy reliability to the public `6443` endpoint.
+
+The flashsales deploy, runtime consistency, and perf workflows support three repository variables/secrets for this:
+
+- `K8S_RUNNER_LABELS_JSON`
+- `K8S_API_SERVER_URL_OVERRIDE`
+- `TS_CI_TAGS`
+
+And the following repository secrets when using Tailscale OAuth:
+
+- `TS_OAUTH_CLIENT_ID`
+- `TS_OAUTH_SECRET`
+
+Recommended setup:
+
+1. Put the k3s control-plane machine on Tailscale.
+2. Create a reusable tagged OAuth client for GitHub Actions in Tailscale, and make sure the ephemeral CI nodes can reach the control-plane.
+3. Store `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET` as repository secrets.
+4. Set `TS_CI_TAGS` to something like `tag:ci`.
+5. Set `K8S_API_SERVER_URL_OVERRIDE` to the Tailscale URL for the control-plane, for example `https://100.x.y.z:6443`.
+6. Leave `K8S_RUNNER_LABELS_JSON` unset if you want to stay on GitHub-hosted runners.
+
+The workflows still read `KUBE_CONFIG_DATA`, but when `K8S_API_SERVER_URL_OVERRIDE` is set they rewrite the active cluster server in that kubeconfig before running `kubectl`.
+
+This is the preferred path when:
+
+- the k3s API server is on a home ISP connection
+- inbound `6443` is occasionally unreachable from GitHub-hosted runners
+- you want to keep using public GitHub Actions runners
+
+If you later decide to move the k8s-touching jobs onto a self-hosted runner, `K8S_RUNNER_LABELS_JSON` can still point those workflows at labels such as `["self-hosted","linux","x64","homelab-k3s"]`.
+
 Local state is not a supported operating mode. Use the GitHub workflows or pass `TF_STATE_BUCKET` and `AWS_REGION` so local Make targets initialize the S3 backend explicitly.
 
 ## Useful Make Targets
