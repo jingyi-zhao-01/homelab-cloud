@@ -1,22 +1,24 @@
-This record covers:0.01
+# Flashsales Harness Engineering
+
+This record covers:
 
 - `flashsale/user-service`
 - `flashsale/product-service`
 - `flashsale/order-service`
 - `charts/flashsales`
-- `flashsale/perf/concurrency-test.js`
-- `flashsale/perf/loadtest-k6.sh`
-- `flashsale/perf/CONCURRENCY_TEST_PLAN.md`
+- `flashsale/perf/k6/scenarios/concurrency-test.js`
+- `flashsale/perf/scripts/loadtest-k6.sh`
+- `flashsale/perf/docs/CONCURRENCY_TEST_PLAN.md`
 
 ## Current Architecture Summary
 
 | Component | Current role | Notes for harness interpretation |
-|---|---|---|
+| --- | --- | --- |
 | `user-service` | User persistence and lookup | Order creation synchronously depends on it |
 | `product-service` | Product read, reservation lifecycle, and stock management | Reservation state machine now owns `reserve/confirm/cancel/expire` |
 | `order-service` | User validation, reserve orchestration, and order persistence | Confirms or cancels reservations after persistence outcome |
 | `charts/flashsales` | Deployment source of truth | Ingress and HPA behavior directly affect perf conclusions |
-| `flashsale/perf/concurrency-test.js` | Main concurrency harness | Measures business outcomes and latency, but has correctness blind spots |
+| `flashsale/perf/k6/scenarios/concurrency-test.js` | Main concurrency harness | Measures business outcomes and latency, but has correctness blind spots |
 
 ## Confirmed Findings
 
@@ -31,7 +33,7 @@ Implication:
 
 Primary files:
 
-- `flashsale/perf/concurrency-test.js`
+- `flashsale/perf/k6/scenarios/concurrency-test.js`
 
 ## What The Harness Currently Proves
 
@@ -54,11 +56,11 @@ The runtime consistency harness exists because the perf harness alone is not eno
 Primary files:
 
 - `.github/workflows/flashsales-consistency.yml`
-- `flashsale/perf/consistency_harness.py`
+- `flashsale/perf/python/consistency_harness.py`
 
 ### 3. The hotspot profile overstates post-sellout behavior
 
-The `hotspot` profile in `flashsale/perf/concurrency-test.js` uses one product with `initialStock=1` while driving `100 TPS` for three minutes.
+The `hotspot` profile in `flashsale/perf/k6/scenarios/concurrency-test.js` uses one product with `initialStock=1` while driving `100 TPS` for three minutes.
 
 Implication:
 
@@ -68,8 +70,8 @@ Implication:
 
 Primary files:
 
-- `flashsale/perf/concurrency-test.js`
-- `flashsale/perf/CONCURRENCY_TEST_PLAN.md`
+- `flashsale/perf/k6/scenarios/concurrency-test.js`
+- `flashsale/perf/docs/CONCURRENCY_TEST_PLAN.md`
 
 ### 5. Order-service HPA is unlikely to scale meaningfully as configured
 
@@ -85,7 +87,7 @@ Implication:
 - post-deploy workflow: `.github/workflows/flashsales-deploy-post.yml`
 - reusable runtime consistency workflow: `.github/workflows/flashsales-consistency.yml`
 - reusable perf workflow: `.github/workflows/flashsales-perf-concurrency-suite.yml`
-- runtime script: `flashsale/perf/consistency_harness.py`
+- runtime script: `flashsale/perf/python/consistency_harness.py`
 - cluster component: optional `dbProxy` in `charts/flashsales`
 
 The two gates have different roles:
@@ -107,7 +109,7 @@ make concurrency-hotspot
 For correctness-sensitive changes, also run:
 
 ```bash
-python3 ./flashsale/perf/consistency_harness.py
+python3 ./flashsale/perf/python/consistency_harness.py
 ```
 
 ## Related Pages

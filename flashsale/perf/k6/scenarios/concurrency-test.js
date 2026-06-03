@@ -1,7 +1,19 @@
 import http from "k6/http";
-import { check } from "k6";
 import exec from "k6/execution";
 import { Counter, Rate } from "k6/metrics";
+
+// Main throughput harness used by the named concurrency profiles in Makefile and CI.
+// It spreads traffic across seeded users/products, then checks for oversell in teardown.
+
+import {
+  buildConstantArrivalRateOptions,
+  createPostJson,
+  createRuntimeReporter,
+  checkStatus,
+  createUser,
+  createProduct,
+  resetService,
+} from "../lib/k6-common.js";
 
 const BASE_URL = __ENV.BASE_URL || "http://homelab-order-service.jzhao62.com";
 const USER_URL = __ENV.USER_URL || "http://homelab-user-service.jzhao62.com";
@@ -10,6 +22,7 @@ const K6_HTTP_TIMEOUT = __ENV.K6_HTTP_TIMEOUT || "20s";
 const PROFILE = __ENV.PROFILE || "smoke";
 const REPORT_INTERVAL_MS = Number(__ENV.REPORT_INTERVAL_MS || 5000);
 
+// These defaults encode the intended operating point for each perf lane.
 const PROFILE_DEFAULTS = {
   smoke: {
     tps: 10,
@@ -93,22 +106,20 @@ const oversellViolations = new Counter("oversell_violations");
 const orderSuccessTotal = new Counter("order_success_total");
 const businessRejectTotal = new Counter("business_reject_total");
 
-let lastReportAt = Date.now();
-let lastCompletedIterations = 0;
+const postJson = createPostJson(K6_HTTP_TIMEOUT);
+const reportRuntime = createRuntimeReporter(
+  REPORT_INTERVAL_MS,
+  ({ tps }) => `[k6-runtime] profile=${PROFILE} approx_tps=${tps.toFixed(2)}`,
+);
 
 http.setResponseCallback(http.expectedStatuses({ min: 200, max: 204 }, 409, 404));
 
-export const options = {
-  scenarios: {
-    concurrency_test: {
-      executor: "constant-arrival-rate",
-      rate: TARGET_TPS,
-      timeUnit: "1s",
-      duration: TEST_DURATION,
-      preAllocatedVUs: PRE_ALLOCATED_VUS,
-      maxVUs: MAX_VUS,
-    },
-  },
+export const options = buildConstantArrivalRateOptions({
+  scenarioName: "concurrency_test",
+  rate: TARGET_TPS,
+  duration: TEST_DURATION,
+  preAllocatedVUs: PRE_ALLOCATED_VUS,
+  maxVUs: MAX_VUS,
   thresholds: {
     http_req_duration: [
       `p(50)<${P50_MS}`,
@@ -118,29 +129,15 @@ export const options = {
     http_5xx_rate: [`rate<=${MAX_5XX_RATE}`],
     oversell_violations: ["count==0"],
   },
-};
-
-function postJson(url, body) {
-  return http.post(url, JSON.stringify(body), {
-    headers: { "Content-Type": "application/json" },
-    timeout: K6_HTTP_TIMEOUT,
-  });
-}
+});
 
 function failIfNotStatus(res, expectedStatus, message) {
-  check(res, {
-    [message]: (r) => r.status === expectedStatus,
-  });
+  checkStatus(res, message, expectedStatus);
 }
 
 function resetServiceDb(url, serviceName) {
-  const res = http.post(`${url}/admin/reset`, null, {
-    timeout: K6_HTTP_TIMEOUT,
-  });
+  const res = resetService(url, serviceName, K6_HTTP_TIMEOUT);
   const ok = res.status === 204;
-  check(res, {
-    [`post-cleanup ${serviceName} database reset`]: (r) => r.status === 204,
-  });
   if (!ok) {
     console.log(
       `[k6-post-cleanup] reset_failed service=${serviceName} status=${res.status}`,
@@ -167,44 +164,37 @@ function runPostCleanup() {
 export function setup() {
   console.log(`[k6-scenario] ${TEST_DESCRIPTION}`);
 
-  const resetOrderRes = http.post(`${BASE_URL}/admin/reset`, null, {
-    timeout: K6_HTTP_TIMEOUT,
-  });
+  // Start each run from a clean data set so profile comparisons stay meaningful.
+  const resetOrderRes = resetService(BASE_URL, "order", K6_HTTP_TIMEOUT);
   failIfNotStatus(resetOrderRes, 204, "order database reset");
 
-  const resetUserRes = http.post(`${USER_URL}/admin/reset`, null, {
-    timeout: K6_HTTP_TIMEOUT,
-  });
+  const resetUserRes = resetService(USER_URL, "user", K6_HTTP_TIMEOUT);
   failIfNotStatus(resetUserRes, 204, "user database reset");
 
-  const resetProductRes = http.post(`${PRODUCT_URL}/admin/reset`, null, {
-    timeout: K6_HTTP_TIMEOUT,
-  });
+  const resetProductRes = resetService(PRODUCT_URL, "product", K6_HTTP_TIMEOUT);
   failIfNotStatus(resetProductRes, 204, "product database reset");
 
   const users = [];
   for (let i = 0; i < USER_COUNT; i += 1) {
-    const userRes = postJson(`${USER_URL}/users`, {
+    const user = createUser({
+      userUrl: USER_URL,
       email: `k6-${PROFILE}-u${i}-${Date.now()}@example.com`,
       name: `k6 user ${i}`,
+      postJson,
     });
-    check(userRes, {
-      "setup user created": (r) => r.status === 200 || r.status === 201,
-    });
-    users.push(userRes.json().id);
+    users.push(user.id);
   }
 
   const products = [];
   for (let i = 0; i < PRODUCT_COUNT; i += 1) {
-    const productRes = postJson(`${PRODUCT_URL}/products`, {
+    const product = createProduct({
+      productUrl: PRODUCT_URL,
       name: `k6-${PROFILE}-p${i}-${Date.now()}`,
       price: 9.99,
       stock: INITIAL_STOCK,
+      postJson,
     });
-    check(productRes, {
-      "setup product created": (r) => r.status === 200 || r.status === 201,
-    });
-    products.push(productRes.json().id);
+    products.push(product.id);
   }
 
   return {
@@ -217,6 +207,7 @@ export function setup() {
 export default function concurrencyTest(data) {
   const userId = data.users[exec.scenario.iterationInTest % data.users.length];
   const productId =
+    // The hotspot profile intentionally keeps all demand on a single product.
     PROFILE === "hotspot"
       ? data.products[0]
       : data.products[exec.scenario.iterationInTest % data.products.length];
@@ -235,20 +226,7 @@ export default function concurrencyTest(data) {
     businessRejectTotal.add(1);
   }
 
-  if (__VU === 1) {
-    const now = Date.now();
-    if (now - lastReportAt >= REPORT_INTERVAL_MS) {
-      const completedIterations = exec.instance.iterationsCompleted;
-      const elapsedSec = (now - lastReportAt) / 1000;
-      const tps =
-        elapsedSec > 0
-          ? (completedIterations - lastCompletedIterations) / elapsedSec
-          : 0;
-      console.log(`[k6-runtime] profile=${PROFILE} approx_tps=${tps.toFixed(2)}`);
-      lastReportAt = now;
-      lastCompletedIterations = completedIterations;
-    }
-  }
+  reportRuntime();
 }
 
 export function teardown(data) {
@@ -257,11 +235,8 @@ export function teardown(data) {
   });
   let violations = 0;
 
-  if (listOrdersRes.status !== 200) {
-    oversellViolations.add(1);
-    violations += 1;
-    console.log("[k6-correctness] unable to list orders for oversell check");
-  } else {
+  if (listOrdersRes.status === 200) {
+    // Oversell is validated after the traffic run because k6 VUs do not share state cheaply.
     const orders = listOrdersRes.json();
     const soldByProduct = {};
     for (const order of orders) {
@@ -281,6 +256,10 @@ export function teardown(data) {
         );
       }
     }
+  } else {
+    oversellViolations.add(1);
+    violations += 1;
+    console.log("[k6-correctness] unable to list orders for oversell check");
   }
 
   if (violations > 0) {

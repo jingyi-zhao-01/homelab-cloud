@@ -38,7 +38,7 @@ For the current interpretation limits and correctness caveats of the flashsales 
 ```bash
 make loadtest KUBECONFIG_PATH=secrets/.kube-config
 make loadtest-lite KUBECONFIG_PATH=secrets/.kube-config
-bash ./flashsale/perf/loadtest-k6.sh -e RAMP_UP=30s -e STEADY=180s -e TARGET_VUS=50
+bash ./flashsale/perf/scripts/loadtest-k6.sh -e RAMP_UP=30s -e STEADY=180s -e TARGET_VUS=50
 ```
 
 ## Developer Setup

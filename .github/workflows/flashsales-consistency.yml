@@ -166,7 +166,7 @@ jobs:
           TOXIPROXY_URL: http://127.0.0.1:${{ env.DB_PROXY_ADMIN_PORT }}
           DB_PROXY_NAME: ${{ env.DB_PROXY_NAME }}
         run: |
-          python3 ./flashsale/perf/consistency_harness.py
+          python3 ./flashsale/perf/python/consistency_harness.py
 
       - name: Diagnostics on failure
         if: failure()

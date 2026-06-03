@@ -12,7 +12,7 @@ SSH_PORT ?= 22
 REMOTE_K3S_CMD ?= k3s ctr images import -
 SSH ?= ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
 
-.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-init neon-apply neon-destroy
+.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-init neon-apply neon-destroy loadtest loadtest-lite loadtest-lite-idempotency loadtest-high-safe concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot
 
 TAIL ?= 200
 SINCE ?= 10m
@@ -48,10 +48,11 @@ help:
 >echo "  make neon-apply            # Provision Neon DB and write K8s secret"
 >echo "  make neon-destroy          # Destroy Neon resources (caution: data loss)"
 
-include flashsale/perf/perf.mk
-
 lint:
 >cd flashsale && uv run pre-commit run --all-files
+
+loadtest loadtest-lite loadtest-lite-idempotency loadtest-high-safe concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot:
+>$(MAKE) -C flashsale/perf $@
 
 check-local:
 >API_SERVER=$$(KUBECONFIG=$(KUBECONFIG_PATH) kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'); \

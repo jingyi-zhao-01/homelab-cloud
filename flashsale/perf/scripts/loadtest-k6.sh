@@ -12,7 +12,7 @@ else
 fi
 
 NAMESPACE="${NAMESPACE:-flashsales}"
-LOADTEST_SCRIPT="${LOADTEST_SCRIPT:-$SCRIPT_DIR/loadtest.js}"
+LOADTEST_SCRIPT="${LOADTEST_SCRIPT:-$SCRIPT_DIR/../k6/scenarios/loadtest.js}"
 
 if [[ ! -r "$KUBECONFIG_PATH" ]]; then
   echo "Kubeconfig not found or not readable: $KUBECONFIG_PATH" >&2
