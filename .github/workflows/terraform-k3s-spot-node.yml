@@ -24,11 +24,11 @@ on:
         type: string
       vpc_id:
         description: Target VPC ID
-        required: true
+        required: false
         type: string
       subnet_ids:
         description: Comma-separated subnet IDs for the spot Auto Scaling Group
-        required: true
+        required: false
         type: string
       instance_types:
         description: Comma-separated instance types, ordered by preference
@@ -45,7 +45,7 @@ on:
         type: string
       k3s_server_url:
         description: Existing k3s server URL, for example https://server:6443
-        required: true
+        required: false
         type: string
 
   workflow_call:
@@ -111,14 +111,14 @@ jobs:
       TF_VAR_k3s_token: ${{ secrets.K3S_SERVER_TOKEN }}
       STACK_DIR: terraform/k3s-spot-node
       ACTION: ${{ inputs.action || 'apply' }}
-      CLUSTER_NAME: ${{ inputs.cluster_name || 'homelab-k3s' }}
-      NODE_GROUP_NAME: ${{ inputs.node_group_name || 'spot-worker' }}
-      VPC_ID: ${{ inputs.vpc_id }}
-      SUBNET_IDS: ${{ inputs.subnet_ids }}
-      INSTANCE_TYPES: ${{ inputs.instance_types || 't3.small,t3a.small' }}
-      KEY_NAME: ${{ inputs.key_name }}
-      ALLOWED_SSH_CIDRS: ${{ inputs.allowed_ssh_cidrs }}
-      K3S_SERVER_URL: ${{ inputs.k3s_server_url }}
+      CLUSTER_NAME: ${{ inputs.cluster_name || vars.K3S_SPOT_CLUSTER_NAME || 'homelab-k3s' }}
+      NODE_GROUP_NAME: ${{ inputs.node_group_name || vars.K3S_SPOT_NODE_GROUP_NAME || 'spot-worker' }}
+      VPC_ID: ${{ inputs.vpc_id || vars.K3S_SPOT_VPC_ID }}
+      SUBNET_IDS: ${{ inputs.subnet_ids || fromJson(toJson(vars)).K3S_SPOT_SUBNET_IDS }}
+      INSTANCE_TYPES: ${{ inputs.instance_types || vars.K3S_SPOT_INSTANCE_TYPES || 't3.small,t3a.small' }}
+      KEY_NAME: ${{ inputs.key_name || fromJson(toJson(vars)).K3S_SPOT_KEY_NAME }}
+      ALLOWED_SSH_CIDRS: ${{ inputs.allowed_ssh_cidrs || fromJson(toJson(vars)).K3S_SPOT_ALLOWED_SSH_CIDRS }}
+      K3S_SERVER_URL: ${{ inputs.k3s_server_url || vars.K3S_SERVER_URL }}
 
     defaults:
       run:
