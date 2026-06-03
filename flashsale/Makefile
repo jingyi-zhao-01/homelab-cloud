@@ -1,18 +1,9 @@
 .PHONY: concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot
 
-# Shared wrapper and scenario entrypoints used by the perf targets below.
-LOADTEST_WRAPPER := bash ./scripts/loadtest-k6.sh
-CONCURRENCY_SCENARIO := ./k6/scenarios/concurrency-test.js
-IDEMPOTENCY_SCENARIO := ./k6/scenarios/loadtest-lite-idempotency.js
+LOADTEST_WRAPPER := bash ./perf/scripts/loadtest-k6.sh
+CONCURRENCY_SCENARIO := ./perf/k6/scenarios/concurrency-test.js
+IDEMPOTENCY_SCENARIO := ./perf/k6/scenarios/loadtest-lite-idempotency.js
 
-# Default thresholds can still be overridden from the CLI or CI environment.
-K6_P50_THRESHOLD_MS ?= 800
-K6_P90_THRESHOLD_MS ?= 1200
-K6_P95_THRESHOLD_MS ?= 1500
-K6_P99_THRESHOLD_MS ?= 500
-MAX_5XX_RATE ?= 0
-
-# Profile-specific perf lanes used by CI and manual runs.
 concurrency-smoke:
 	LOADTEST_SCRIPT=$(CONCURRENCY_SCENARIO) $(LOADTEST_WRAPPER) -e PROFILE=smoke -e K6_P50_THRESHOLD_MS=100 -e K6_P90_THRESHOLD_MS=200 -e K6_P99_THRESHOLD_MS=500 -e MAX_5XX_RATE=0
 

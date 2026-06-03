@@ -50,7 +50,7 @@ lint:
 >cd flashsale && uv run pre-commit run --all-files
 
 concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot:
->$(MAKE) -C flashsale/perf $@
+>$(MAKE) -C flashsale $@
 
 check-local:
 >API_SERVER=$$(KUBECONFIG=$(KUBECONFIG_PATH) kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'); \
