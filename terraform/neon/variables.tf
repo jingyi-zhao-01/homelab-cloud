@@ -15,15 +15,3 @@ variable "neon_history_retention_seconds" {
   type        = number
   default     = 21600
 }
-
-variable "kubeconfig_path" {
-  description = "Path to kubeconfig used to write the K8s secret"
-  type        = string
-  default     = "../../secrets/.kube-config"
-}
-
-variable "k8s_namespace" {
-  description = "Kubernetes namespace where flashsales is deployed"
-  type        = string
-  default     = "flashsales"
-}

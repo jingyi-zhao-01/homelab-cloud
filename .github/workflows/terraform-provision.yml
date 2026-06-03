@@ -1,6 +1,6 @@
 name: Terraform Provision
 
-# This workflow provisions Neon, reconciles Kubernetes Secret,
+# This workflow provisions Neon
 # and syncs Neon credentials into AWS SSM Parameter Store.
 # Design goal: idempotent apply with safe rollback when partial failures happen.
 on:
@@ -27,8 +27,6 @@ on:
     secrets:
       NEON_API_KEY:
         required: true
-      KUBE_CONFIG_DATA:
-        required: true
       AWS_ACCESS_KEY_ID:
         required: true
       AWS_SECRET_ACCESS_KEY:
@@ -50,8 +48,6 @@ concurrency:
   cancel-in-progress: false   # never cancel infra runs mid-flight
 
 env:
-  TF_VAR_k8s_namespace: flashsales
-
 permissions:
   contents: read
 
@@ -82,14 +78,9 @@ jobs:
       - name: Validate required secrets
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
         run: |
           if [ -z "$NEON_API_KEY" ]; then
             echo "NEON_API_KEY secret is missing"
-            exit 1
-          fi
-          if [ -z "$KUBE_CONFIG_DATA" ]; then
-            echo "KUBE_CONFIG_DATA secret is missing"
             exit 1
           fi
           if [ -z "$TF_STATE_BUCKET" ]; then
@@ -101,21 +92,6 @@ jobs:
             exit 1
           fi
 
-      - name: Configure kubeconfig
-        env:
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
-        run: |
-          mkdir -p "$HOME/.kube"
-          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
-
-      # Override kubeconfig_path for CI (default value points to secrets/ dir which doesn't exist here)
-      - name: Set CI variable overrides
-        run: |
-          cat > ci.auto.tfvars <<EOF
-          kubeconfig_path = "$HOME/.kube/config"
-          EOF
-
       - name: Terraform Init
         run: |
           terraform init \
@@ -123,24 +99,6 @@ jobs:
             -backend-config="key=flashsales/neon/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
-
-      # If the Secret already exists (for example, created by Helm previously),
-      # import it first so apply updates it instead of failing on "already exists".
-      - name: Import existing secret into Terraform state
-        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
-        env:
-          NAMESPACE: ${{ env.TF_VAR_k8s_namespace }}
-        run: |
-          if terraform state show kubernetes_secret_v1.neon_credentials >/dev/null 2>&1; then
-            echo "kubernetes_secret_v1.neon_credentials already managed by Terraform"
-            exit 0
-          fi
-
-          if kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth >/dev/null 2>&1; then
-            terraform import -input=false kubernetes_secret_v1.neon_credentials "$NAMESPACE/flashsales-postgres-auth"
-          else
-            echo "flashsales-postgres-auth does not exist yet; Terraform will create it"
-          fi
 
       # If the Neon project already exists but Terraform state was lost, import it
       # before apply so we do not create another flashsales project on every deploy.
@@ -193,22 +151,6 @@ jobs:
       - name: Terraform Apply
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         run: terraform apply -auto-approve -input=false
-
-      - name: Verify secret was reconciled to Neon
-        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
-        env:
-          NAMESPACE: ${{ env.TF_VAR_k8s_namespace }}
-        run: |
-          DB_URL=$(kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth -o jsonpath='{.data.DATABASE_URL}' | base64 -d)
-          if [ -z "$DB_URL" ]; then
-            echo "DATABASE_URL is empty in flashsales-postgres-auth"
-            exit 1
-          fi
-          if ! echo "$DB_URL" | grep -qi 'neon\.tech'; then
-            echo "DATABASE_URL does not look like a Neon endpoint"
-            exit 1
-          fi
-          echo "flashsales-postgres-auth has been reconciled to Neon credentials"
 
       - name: Sync Neon credentials to SSM via Terraform
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
