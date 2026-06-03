@@ -199,6 +199,20 @@ jobs:
           kubectl version --client
           kubectl get nodes
 
+      - name: Materialize monitoring values
+        env:
+          GRAFANA_MONITORING_VALUES: ${{ secrets.GRAFANA_MONITORING_VALUES }}
+        run: |
+          set -euo pipefail
+          if [ -n "${GRAFANA_MONITORING_VALUES:-}" ]; then
+            printf '%s\n' "$GRAFANA_MONITORING_VALUES" > /tmp/grafana-k8s-monitoring-values.yaml
+          elif [ -f secrets/grafana-k8s-monitoring-values.yaml ]; then
+            cp secrets/grafana-k8s-monitoring-values.yaml /tmp/grafana-k8s-monitoring-values.yaml
+          else
+            echo "Missing Grafana monitoring values. Set GRAFANA_MONITORING_VALUES secret or commit secrets/grafana-k8s-monitoring-values.yaml."
+            exit 1
+          fi
+
       - name: Reconcile grafana k8s monitoring
         run: |
           set -euo pipefail
@@ -209,7 +223,7 @@ jobs:
             -n "$MONITORING_NAMESPACE" \
             --wait \
             --timeout 10m \
-            -f secrets/grafana-k8s-monitoring-values.yaml
+            -f /tmp/grafana-k8s-monitoring-values.yaml
 
       - name: Show monitoring status
         run: |
