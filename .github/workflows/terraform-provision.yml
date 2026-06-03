@@ -33,8 +33,6 @@ on:
         required: true
       AWS_SECRET_ACCESS_KEY:
         required: true
-      AWS_REGION:
-        required: true
       TF_STATE_BUCKET:
         required: true
 
@@ -68,7 +66,7 @@ jobs:
       # AWS credentials are needed for the S3 backend.
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}
       TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
     defaults:
       run:
@@ -99,7 +97,7 @@ jobs:
             exit 1
           fi
           if [ -z "$AWS_REGION" ]; then
-            echo "AWS_REGION secret is missing"
+            echo "AWS_REGION variable is missing"
             exit 1
           fi
 

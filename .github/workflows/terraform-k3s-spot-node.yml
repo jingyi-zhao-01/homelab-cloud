@@ -86,8 +86,6 @@ on:
         required: true
       AWS_SECRET_ACCESS_KEY:
         required: true
-      AWS_REGION:
-        required: true
       TF_STATE_BUCKET:
         required: true
       K3S_SERVER_TOKEN:
@@ -106,7 +104,7 @@ jobs:
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}
       TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
       TF_VAR_k3s_token: ${{ secrets.K3S_SERVER_TOKEN }}
       STACK_DIR: terraform/k3s-spot-node
@@ -138,7 +136,7 @@ jobs:
             exit 1
           fi
           if [ -z "$AWS_REGION" ]; then
-            echo "AWS_REGION secret is missing"
+            echo "AWS_REGION variable is missing"
             exit 1
           fi
           if [ -z "$TF_STATE_BUCKET" ]; then
