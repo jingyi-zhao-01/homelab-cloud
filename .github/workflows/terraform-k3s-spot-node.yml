@@ -62,6 +62,11 @@ on:
         description: Existing k3s server URL, for example https://server:6443
         required: false
         type: string
+      reconcile_grafana_monitoring:
+        description: Reconcile the cluster-level grafana k8s monitoring Helm release after a successful apply
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -100,6 +105,75 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
       K3S_SERVER_TOKEN: ${{ secrets.K3S_SERVER_TOKEN }}
+
+  grafana-monitoring:
+    name: Reconcile Grafana K8s Monitoring
+    if: ${{ inputs.action == 'apply' && inputs.reconcile_grafana_monitoring && needs.node.result == 'success' }}
+    needs:
+      - node
+    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
+    env:
+      MONITORING_NAMESPACE: monitoring
+      TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Connect Tailscale for private k3s access
+        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
+          tags: ${{ env.TS_CI_TAGS }}
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+          K8S_API_SERVER_URL_OVERRIDE: ${{ vars.K8S_API_SERVER_URL_OVERRIDE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+          if [ -n "${K8S_API_SERVER_URL_OVERRIDE:-}" ]; then
+            CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
+            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K8S_API_SERVER_URL_OVERRIDE}"
+            kubectl config set-cluster "$CLUSTER_NAME" --server="$K8S_API_SERVER_URL_OVERRIDE"
+          fi
+
+          kubectl version --client
+          kubectl get nodes
+
+      - name: Reconcile grafana k8s monitoring
+        run: |
+          set -euo pipefail
+          kubectl create namespace "$MONITORING_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          helm repo add grafana https://grafana.github.io/helm-charts
+          helm repo update
+          helm upgrade --install grafana-k8s-monitoring grafana/k8s-monitoring \
+            -n "$MONITORING_NAMESPACE" \
+            --wait \
+            --timeout 10m \
+            -f secrets/grafana-k8s-monitoring-values.yaml
+
+      - name: Show monitoring status
+        run: |
+          kubectl get pods -n "$MONITORING_NAMESPACE" -o wide
 
   destroy_node:
     if: ${{ inputs.action == 'destroy' }}

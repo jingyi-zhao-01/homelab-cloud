@@ -76,6 +76,14 @@ The reusable workflow pair is:
 
 The manual entrypoint is `terraform-k3s-spot-node.yml`, and the most important remote-worker inputs are `trusted_cluster_cidrs` plus optional `extra_k3s_agent_args`.
 
+After a successful spot-node `apply`, the top-level workflow can also reconcile the cluster-level `grafana-k8s-monitoring` Helm release. This is the preferred automation shape for Alloy-based monitoring:
+
+- the EC2 bootstrap only has to join k3s successfully
+- the monitoring stack stays managed as a Kubernetes Helm release instead of a node-local install
+- when a new spot worker becomes `Ready`, the chart-managed DaemonSet collectors can land on it automatically
+
+Use the `reconcile_grafana_monitoring` workflow input if you need to disable that post-apply reconcile for a specific run.
+
 ## Private Network Access For Public GitHub Actions
 
 If you want to keep using GitHub-hosted runners, the recommended path is to connect those runners to your private cluster network instead of exposing deploy reliability to the public `6443` endpoint.
