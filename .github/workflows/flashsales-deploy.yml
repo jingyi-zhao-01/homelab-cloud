@@ -104,7 +104,7 @@ jobs:
       - name: Configure kubeconfig
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
-          K8S_API_SERVER_URL_OVERRIDE: ${{ vars.K8S_API_SERVER_URL_OVERRIDE }}
+          K3S_SERVER_URL_TAILSCALE: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
         run: |
           set -euo pipefail
           if [ -z "$KUBE_CONFIG_DATA" ]; then
@@ -116,10 +116,10 @@ jobs:
           chmod 600 "$HOME/.kube/config"
           kubectl version --client
 
-          if [ -n "${K8S_API_SERVER_URL_OVERRIDE:-}" ]; then
+          if [ -n "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
             CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
-            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K8S_API_SERVER_URL_OVERRIDE}"
-            kubectl config set-cluster "$CLUSTER_NAME" --server="$K8S_API_SERVER_URL_OVERRIDE"
+            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K3S_SERVER_URL_TAILSCALE}"
+            kubectl config set-cluster "$CLUSTER_NAME" --server="$K3S_SERVER_URL_TAILSCALE"
           fi
 
           API_SERVER="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"

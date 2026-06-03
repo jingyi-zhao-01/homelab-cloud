@@ -112,10 +112,10 @@ That usually gives more stable kubelet scraping, CoreDNS reachability, and Grafa
 
 If you want to keep using GitHub-hosted runners, the recommended path is to connect those runners to your private cluster network instead of exposing deploy reliability to the public `6443` endpoint.
 
-The flashsales deploy, runtime consistency, and perf workflows support three repository variables/secrets for this:
+The flashsales deploy, runtime consistency, and perf workflows support these repository variables/secrets for this:
 
 - `K8S_RUNNER_LABELS_JSON`
-- `K8S_API_SERVER_URL_OVERRIDE`
+- `K3S_SERVER_URL_TAILSCALE`
 - `TS_CI_TAGS`
 
 And the following repository secrets when using Tailscale OAuth:
@@ -129,10 +129,10 @@ Recommended setup:
 2. Create a reusable tagged OAuth client for GitHub Actions in Tailscale, and make sure the ephemeral CI nodes can reach the control-plane.
 3. Store `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET` as repository secrets.
 4. Set `TS_CI_TAGS` to something like `tag:ci`.
-5. Set `K8S_API_SERVER_URL_OVERRIDE` to the Tailscale URL for the control-plane, for example `https://100.x.y.z:6443`.
+5. Set `K3S_SERVER_URL_TAILSCALE` to the Tailscale URL for the control-plane, for example `https://100.x.y.z:6443`.
 6. Leave `K8S_RUNNER_LABELS_JSON` unset if you want to stay on GitHub-hosted runners.
 
-The workflows still read `KUBE_CONFIG_DATA`, but when `K8S_API_SERVER_URL_OVERRIDE` is set they rewrite the active cluster server in that kubeconfig before running `kubectl`.
+The workflows still read `KUBE_CONFIG_DATA`, but when `K3S_SERVER_URL_TAILSCALE` is set they rewrite the active cluster server in that kubeconfig before running `kubectl`.
 
 This is the preferred path when:
 
