@@ -44,7 +44,7 @@ variable "tags" {
   description = "Tags applied to all SSM parameters"
   type        = map(string)
   default = {
-    project   = "flashsales"
+    project    = "flashsales"
     managed_by = "terraform"
   }
 }

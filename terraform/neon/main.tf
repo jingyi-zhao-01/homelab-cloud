@@ -18,8 +18,8 @@ provider "neon" {
 }
 
 resource "neon_project" "flashsales" {
-  name      = "flashsales"
-  region_id = var.neon_region
+  name                      = "flashsales"
+  region_id                 = var.neon_region
   history_retention_seconds = var.neon_history_retention_seconds
 }
 

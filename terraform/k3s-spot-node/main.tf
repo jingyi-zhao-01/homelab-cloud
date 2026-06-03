@@ -58,7 +58,7 @@ data "aws_iam_policy_document" "asg_tag_access" {
 }
 
 locals {
-  name_prefix = "${var.cluster_name}-${var.node_group_name}"
+  name_prefix        = "${var.cluster_name}-${var.node_group_name}"
   use_remote_network = var.network_state_bucket != null && (var.vpc_id == null || length(var.subnet_ids) == 0)
   effective_vpc_id = coalesce(
     var.vpc_id,
