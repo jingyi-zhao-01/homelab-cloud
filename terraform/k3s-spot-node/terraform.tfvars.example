@@ -1,0 +1,29 @@
+aws_region    = "us-east-1"
+cluster_name  = "homelab-k3s"
+node_group_name = "spot-worker"
+
+vpc_id = "vpc-0123456789abcdef0"
+subnet_ids = [
+  "subnet-0123456789abcdef0",
+  "subnet-abcdef01234567890",
+]
+
+key_name = "my-admin-key"
+allowed_ssh_cidrs = ["203.0.113.10/32"]
+
+instance_types = ["t3.small", "t3a.small"]
+
+k3s_server_url = "https://76.13.108.14:6443"
+k3s_token      = "replace-me-with-the-current-k3s-token"
+
+node_labels = [
+  "node-role.kubernetes.io/worker=true",
+  "capacity-type=spot",
+  "topology.kubernetes.io/region=us-east-1",
+]
+
+tags = {
+  project     = "homelab-cloud"
+  environment = "prod"
+  managed_by  = "terraform"
+}

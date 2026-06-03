@@ -12,7 +12,7 @@ SSH_PORT ?= 22
 REMOTE_K3S_CMD ?= k3s ctr images import -
 SSH ?= ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
 
-.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-init neon-apply neon-destroy concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot
+.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-plan neon-apply neon-destroy k3s-spot-plan k3s-spot-apply k3s-spot-destroy concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot require-tf-remote-state
 
 TAIL ?= 200
 SINCE ?= 10m
@@ -42,9 +42,12 @@ help:
 >echo "  make concurrency-stress100 # 100 TPS stress stage"
 >echo "  make concurrency-stress200 # 200 TPS stress stage"
 >echo "  make concurrency-hotspot   # High-conflict hotspot correctness test"
->echo "  make neon-init             # terraform init for Neon provider"
+>echo "  make neon-plan             # terraform plan for Neon using remote S3 state"
 >echo "  make neon-apply            # Provision Neon DB and write K8s secret"
 >echo "  make neon-destroy          # Destroy Neon resources (caution: data loss)"
+>echo "  make k3s-spot-plan         # terraform plan for the AWS spot k3s worker stack using remote S3 state"
+>echo "  make k3s-spot-apply        # create or reconcile one self-healing AWS spot worker"
+>echo "  make k3s-spot-destroy      # tear down the AWS spot k3s worker stack"
 
 lint:
 >cd flashsale && uv run pre-commit run --all-files
@@ -131,12 +134,42 @@ logs-since:
 >KUBECONFIG=$(KUBECONFIG_PATH) kubectl logs -n $(NAMESPACE) deploy/flashsales-order-service --since=$(SINCE) --tail=$(TAIL)
 
 TERRAFORM_NEON_DIR ?= terraform/neon
+TERRAFORM_K3S_SPOT_DIR ?= terraform/k3s-spot-node
+AWS_REGION ?=
+TF_STATE_BUCKET ?=
 
-neon-init:
->cd $(TERRAFORM_NEON_DIR) && terraform init
+define terraform_init_remote
+terraform init \
+	-backend-config="bucket=$(TF_STATE_BUCKET)" \
+	-backend-config="key=$(1)" \
+	-backend-config="region=$(AWS_REGION)" \
+	-backend-config="encrypt=true"
+endef
 
-neon-apply:
->cd $(TERRAFORM_NEON_DIR) && terraform apply
+require-tf-remote-state:
+>if [ -z "$(TF_STATE_BUCKET)" ]; then \
+>  echo "TF_STATE_BUCKET is required. Local Terraform state is not supported in this repo."; \
+>  exit 1; \
+>fi
+>if [ -z "$(AWS_REGION)" ]; then \
+>  echo "AWS_REGION is required for remote S3 backend init."; \
+>  exit 1; \
+>fi
 
-neon-destroy:
->cd $(TERRAFORM_NEON_DIR) && terraform destroy
+neon-plan: require-tf-remote-state
+>cd $(TERRAFORM_NEON_DIR) && $(call terraform_init_remote,flashsales/neon/terraform.tfstate) && terraform plan
+
+neon-apply: require-tf-remote-state
+>cd $(TERRAFORM_NEON_DIR) && $(call terraform_init_remote,flashsales/neon/terraform.tfstate) && terraform apply
+
+neon-destroy: require-tf-remote-state
+>cd $(TERRAFORM_NEON_DIR) && $(call terraform_init_remote,flashsales/neon/terraform.tfstate) && terraform destroy
+
+k3s-spot-plan: require-tf-remote-state
+>cd $(TERRAFORM_K3S_SPOT_DIR) && $(call terraform_init_remote,k3s/spot-node/terraform.tfstate) && terraform plan
+
+k3s-spot-apply: require-tf-remote-state
+>cd $(TERRAFORM_K3S_SPOT_DIR) && $(call terraform_init_remote,k3s/spot-node/terraform.tfstate) && terraform apply
+
+k3s-spot-destroy: require-tf-remote-state
+>cd $(TERRAFORM_K3S_SPOT_DIR) && $(call terraform_init_remote,k3s/spot-node/terraform.tfstate) && terraform destroy

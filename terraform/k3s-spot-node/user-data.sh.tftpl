@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+retry() {
+  local attempts="$1"
+  shift
+
+  local try=1
+  until "$@"; do
+    if [ "$try" -ge "$attempts" ]; then
+      return 1
+    fi
+
+    try=$((try + 1))
+    sleep 5
+  done
+}
+
+PRIVATE_IP="$(curl -fsS http://169.254.169.254/latest/meta-data/local-ipv4)"
+PUBLIC_IP="$(curl -fsS http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
+
+export K3S_URL='${k3s_server_url}'
+export K3S_TOKEN='${k3s_token}'
+
+INSTALL_K3S_EXEC="agent --node-ip $${PRIVATE_IP} --with-node-id"
+
+if [ -n "${node_labels}" ]; then
+  IFS=',' read -r -a LABELS <<< '${node_labels}'
+  for label in "$${LABELS[@]}"; do
+    INSTALL_K3S_EXEC+=" --node-label $${label}"
+  done
+fi
+
+if [ -n "${node_taints}" ]; then
+  IFS=',' read -r -a TAINTS <<< '${node_taints}'
+  for taint in "$${TAINTS[@]}"; do
+    INSTALL_K3S_EXEC+=" --node-taint $${taint}"
+  done
+fi
+
+if [ -n "$PUBLIC_IP" ]; then
+  INSTALL_K3S_EXEC+=" --node-external-ip $${PUBLIC_IP}"
+fi
+
+if [ -n "${extra_k3s_args}" ]; then
+  INSTALL_K3S_EXEC+=" ${extra_k3s_args}"
+fi
+
+export INSTALL_K3S_EXEC
+
+retry 12 bash -lc "curl -fsSL https://get.k3s.io | sh -"
+systemctl enable k3s-agent
+systemctl restart k3s-agent

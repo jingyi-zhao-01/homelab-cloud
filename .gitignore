@@ -5,3 +5,13 @@ grafana-token
 __pycache__/
 .venv/
 flashsale/.venv/
+
+# Terraform local working state and provider cache
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

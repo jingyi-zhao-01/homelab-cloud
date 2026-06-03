@@ -36,6 +36,7 @@ make deploy KUBECONFIG_PATH=$HOME/.kube/config
 make status KUBECONFIG_PATH=$HOME/.kube/config
 make e2e KUBECONFIG_PATH=$HOME/.kube/config
 make concurrency-baseline KUBECONFIG_PATH=secrets/.kube-config
+make k3s-spot-plan
 ```
 
 ## Repository Layout
@@ -45,7 +46,7 @@ make concurrency-baseline KUBECONFIG_PATH=secrets/.kube-config
 ├── charts/                 # Helm charts for flashsales, strategy-tester, and leetcode-intelligence
 ├── flashsale/              # FastAPI service sources, local scripts, and perf harnesses for the flashsales workload
 ├── secrets/                # Local and shared secret material
-├── terraform/              # Neon and SSM provisioning
+├── terraform/              # Neon, SSM, and k3s spot-node provisioning
 ├── docs/                   # Split documentation pages
 └── Makefile                # Local deployment and maintenance targets
 ```

@@ -13,7 +13,8 @@ This page collects the operational commands and workflow details that used to be
 | `deploy-leetcode-intelligence.yml` | Pushes to `charts/leetcode-intelligence/**` | LeetCode intelligence |
 | `flashsales-perf-concurrency-suite.yml` | Manual or reusable via `flashsales-deploy-post.yml` | Concurrency suite |
 | `flashsales-loadtest-manual.yml` | Manual `workflow_dispatch` | Performance testing |
-| `terraform-provision.yml` | Manual | Infrastructure provisioning |
+| `terraform-provision.yml` | Manual | Neon and SSM infrastructure provisioning |
+| `terraform-k3s-spot-node.yml` | Manual | One self-healing AWS spot k3s worker |
 
 The deploy workflows are independent, so changes to one workload should not trigger the other.
 
@@ -61,9 +62,11 @@ The repo uses pre-commit hooks for whitespace, end-of-file, YAML checks, Helm li
 
 ## Terraform-Backed Infrastructure
 
-The current k3s setup relies on Terraform-provisioned AWS SSM parameters for secrets delivery, and Terraform state is stored in an S3 bucket configured at init time.
+The current k3s setup relies on Terraform-provisioned AWS SSM parameters for secrets delivery, Terraform can also maintain one AWS spot-backed k3s worker, and Terraform state is stored in an S3 bucket configured at init time.
 
 For the Neon and secrets workflow details, see [Infrastructure](infrastructure.md).
+
+Local state is not a supported operating mode. Use the GitHub workflows or pass `TF_STATE_BUCKET` and `AWS_REGION` so local Make targets initialize the S3 backend explicitly.
 
 ## Useful Make Targets
 
@@ -73,7 +76,10 @@ For the Neon and secrets workflow details, see [Infrastructure](infrastructure.m
 | `make status` | Show pods and services |
 | `make fix-images` | Rebuild, import, restart, and verify flashsales images |
 | `make e2e` | Run the flashsales smoke test |
-| `make neon-apply` | Provision Neon resources through Terraform |
+| `make neon-plan` | Preview Neon Terraform changes using remote S3 state |
+| `make neon-apply` | Provision Neon resources through Terraform using remote S3 state |
+| `make k3s-spot-plan` | Preview the AWS spot-backed k3s worker Terraform changes |
+| `make k3s-spot-apply` | Create or reconcile one self-healing AWS spot-backed k3s worker using remote S3 state |
 
 ## Related Pages
 
