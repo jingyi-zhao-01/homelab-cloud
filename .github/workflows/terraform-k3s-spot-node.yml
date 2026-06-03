@@ -15,7 +15,7 @@ on:
       cluster_name:
         description: Logical cluster name
         required: false
-        default: homelab-k3s
+        default: openhands-k3s
         type: string
       network_name:
         description: Name suffix for the low-cost VPC stack

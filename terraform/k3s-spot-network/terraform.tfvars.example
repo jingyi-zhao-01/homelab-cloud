@@ -1,5 +1,5 @@
 aws_region         = "us-west-2"
-cluster_name       = "homelab-k3s"
+cluster_name       = "openhands-k3s"
 network_name       = "spot-network"
 vpc_cidr           = "10.44.0.0/16"
 public_subnet_count = 2

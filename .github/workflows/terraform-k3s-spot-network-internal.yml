@@ -9,7 +9,7 @@ on:
         type: string
       cluster_name:
         required: false
-        default: homelab-k3s
+        default: openhands-k3s
         type: string
       network_name:
         required: false
@@ -48,7 +48,7 @@ jobs:
       TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
       STACK_DIR: terraform/k3s-spot-network
       ACTION: ${{ inputs.action || 'apply' }}
-      CLUSTER_NAME: ${{ inputs.cluster_name || vars.K3S_SPOT_CLUSTER_NAME || 'homelab-k3s' }}
+      CLUSTER_NAME: ${{ inputs.cluster_name || vars.K3S_SPOT_CLUSTER_NAME || 'openhands-k3s' }}
       NETWORK_NAME: ${{ inputs.network_name || fromJson(toJson(vars)).K3S_SPOT_NETWORK_NAME || 'spot-network' }}
       VPC_CIDR: ${{ inputs.vpc_cidr || fromJson(toJson(vars)).K3S_SPOT_VPC_CIDR || '10.44.0.0/16' }}
       PUBLIC_SUBNET_COUNT: ${{ inputs.public_subnet_count || fromJson(toJson(vars)).K3S_SPOT_PUBLIC_SUBNET_COUNT || '2' }}

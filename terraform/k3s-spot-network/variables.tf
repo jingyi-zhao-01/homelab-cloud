@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "cluster_name" {
   description = "Logical name for the target k3s cluster"
   type        = string
-  default     = "homelab-k3s"
+  default     = "openhands-k3s"
 }
 
 variable "network_name" {

@@ -1,5 +1,5 @@
 aws_region    = "us-east-1"
-cluster_name  = "homelab-k3s"
+cluster_name  = "openhands-k3s"
 node_group_name = "spot-worker"
 
 # Optional when you also provision terraform/k3s-spot-network into the same state bucket.
