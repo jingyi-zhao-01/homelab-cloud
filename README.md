@@ -12,6 +12,12 @@ I use AI to generate a lot of code on misc ideas, and then these problem surface
 
 This platform is the result: a shared place where services can converge, agent can write code via github apps, can focus on code, logic, and implementation details, and the infra (which is currently manually in a central way) provisioning plus GitOps work is handled by a centralized platform layer.
 
+## Platform Overview
+
+![homelab-cloud infrastructure overview](docs/infra-overview.svg)
+
+This diagram is intentionally platform-first: it shows how delivery, cluster runtime, cloud dependencies, and the shared control plane fit together, without diving into each microservice internals. The source lives in [docs/infra-overview.d2](docs/infra-overview.d2).
+
 ## Start Here
 
 | Page | What it covers |

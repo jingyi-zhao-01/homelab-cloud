@@ -1,0 +1,450 @@
+direction: down
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+    theme-id: 300
+    pad: 32
+    sketch: false
+  }
+}
+
+style: {
+  fill: "#0b1024"
+  stroke: "#1f2440"
+  stroke-width: 0
+}
+
+infra_overview: {
+  label: "homelab-cloud infrastructure overview"
+  style: {
+    fill: "#191d31"
+    stroke: "#c39bff"
+    stroke-width: 2
+    double-border: true
+    font-color: "#efe7ff"
+    fill-pattern: dots
+  }
+
+  user: {
+    label: "developer"
+    shape: person
+    width: 120
+    style: {
+      stroke: "#c39bff"
+      fill: "#7f839b"
+      stroke-width: 2
+    }
+  }
+
+  edge_and_delivery: {
+    label: "edge and delivery"
+    style: {
+      fill: "#23273d"
+      stroke: "#c39bff"
+      stroke-width: 2
+      font-color: "#efe7ff"
+      fill-pattern: dots
+    }
+
+    github: {
+      label: "github actions"
+      shape: hexagon
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+      }
+    }
+
+    ghcr: {
+      label: "ghcr"
+      shape: cylinder
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+      }
+    }
+
+    ingress: {
+      label: "public ingress"
+      shape: cloud
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+      }
+    }
+  }
+
+  platform_network: {
+    label: "platform network"
+    style: {
+      fill: "#4c5065"
+      opacity: 0.72
+      stroke: "#c39bff"
+      stroke-width: 2
+      double-border: true
+      font-color: "#efe7ff"
+      fill-pattern: dots
+    }
+
+    cluster_runtime: {
+      label: "cluster runtime"
+      style: {
+        fill: "#555a73"
+        opacity: 0.64
+        stroke: "#c39bff"
+        stroke-width: 2
+        font-color: "#efe7ff"
+      }
+
+      control_plane: {
+        label: "k3s control plane"
+        style: {
+          stroke: "#c39bff"
+          fill: "#2d3147"
+        }
+      }
+
+      workload_namespaces: {
+        label: "workload namespaces"
+        style: {
+          stroke: "#c39bff"
+          fill: "#2d3147"
+        }
+      }
+
+      secrets_operator: {
+        label: "external secrets"
+        shape: hexagon
+        style: {
+          stroke: "#c39bff"
+          fill: "#2d3147"
+        }
+      }
+
+      observability: {
+        label: "metrics logs debug"
+        shape: cylinder
+        style: {
+          stroke: "#c39bff"
+          fill: "#2d3147"
+        }
+      }
+    }
+
+    cloud_dependencies: {
+      label: "cloud dependencies"
+      style: {
+        fill: "#555a73"
+        opacity: 0.64
+        stroke: "#c39bff"
+        stroke-width: 2
+        font-color: "#efe7ff"
+      }
+
+      ssm: {
+        label: "aws ssm"
+        shape: cylinder
+        style: {
+          stroke: "#c39bff"
+          fill: "#2d3147"
+        }
+      }
+
+      neon: {
+        label: "neon postgres"
+        shape: cylinder
+        style: {
+          stroke: "#c39bff"
+          fill: "#2d3147"
+        }
+      }
+
+      tailscale: {
+        label: "tailscale access"
+        shape: cloud
+        style: {
+          stroke: "#c39bff"
+          fill: "#2d3147"
+        }
+      }
+
+      spot_worker: {
+        label: "aws spot worker and vpc"
+        style: {
+          stroke: "#c39bff"
+          fill: "#2d3147"
+        }
+      }
+    }
+  }
+
+  control_and_state: {
+    label: "platform control plane"
+    style: {
+      fill: "#23273d"
+      stroke: "#c39bff"
+      stroke-width: 2
+      font-color: "#efe7ff"
+      fill-pattern: dots
+    }
+
+    scripts: {
+      label: "local make scripts"
+      shape: document
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+      }
+    }
+
+    helm: {
+      label: "helm charts"
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+      }
+    }
+
+    terraform: {
+      label: "terraform"
+      shape: hexagon
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+      }
+    }
+
+    state: {
+      label: "s3 terraform state"
+      shape: cylinder
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+      }
+    }
+  }
+
+  repo_feedback: {
+    label: "repo feedback loop"
+    style: {
+      fill: "#23273d"
+      stroke: "#c39bff"
+      stroke-width: 2
+      font-color: "#efe7ff"
+      fill-pattern: dots
+    }
+
+    docs_and_logs: {
+      label: "docs workflows logs"
+      shape: document
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+        multiple: true
+      }
+    }
+  }
+
+  user -> edge_and_delivery.github: "push" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  user -> edge_and_delivery.ingress: "access" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+      stroke-dash: 3
+    }
+  }
+
+  edge_and_delivery.github -> edge_and_delivery.ghcr: "build publish" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  edge_and_delivery.github -> control_and_state.terraform: "infra workflow" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  edge_and_delivery.github -> control_and_state.helm: "deploy workflow" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  edge_and_delivery.github -> repo_feedback.docs_and_logs: "review logs" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+
+  control_and_state.scripts -> control_and_state.terraform: "plan apply" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  control_and_state.scripts -> control_and_state.helm: "deploy status" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  control_and_state.terraform -> control_and_state.state: "persist" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+
+  control_and_state.terraform -> platform_network.cloud_dependencies.ssm: "sync secrets" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  control_and_state.terraform -> platform_network.cloud_dependencies.neon: "provision db" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  control_and_state.terraform -> platform_network.cloud_dependencies.spot_worker: "provision worker" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  control_and_state.helm -> platform_network.cluster_runtime.control_plane: "release" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+
+  platform_network.cloud_dependencies.tailscale -> platform_network.cluster_runtime.control_plane: "private api path" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  platform_network.cloud_dependencies.spot_worker -> platform_network.cluster_runtime.control_plane: "join cluster" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+
+  edge_and_delivery.ghcr -> platform_network.cluster_runtime.workload_namespaces: "pull images" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  edge_and_delivery.ingress -> platform_network.cluster_runtime.workload_namespaces: "public entry" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+
+  platform_network.cluster_runtime.control_plane -> platform_network.cluster_runtime.secrets_operator: "controller" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  platform_network.cluster_runtime.control_plane -> platform_network.cluster_runtime.workload_namespaces: "schedule" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  platform_network.cluster_runtime.control_plane -> platform_network.cluster_runtime.observability: "signals" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+
+  platform_network.cloud_dependencies.ssm -> platform_network.cluster_runtime.secrets_operator: "read params" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  platform_network.cluster_runtime.secrets_operator -> platform_network.cluster_runtime.workload_namespaces: "inject config" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+  platform_network.cluster_runtime.workload_namespaces -> platform_network.cloud_dependencies.neon: "shared data" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+
+  platform_network.cluster_runtime.observability -> repo_feedback.docs_and_logs: "collect" {
+    style: {
+      stroke: "#c39bff"
+      font-color: "#b8b0ca"
+      stroke-width: 2
+      border-radius: 0
+    }
+  }
+}
