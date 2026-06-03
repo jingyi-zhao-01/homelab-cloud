@@ -224,6 +224,30 @@ jobs:
             echo "No existing grafana-k8s-monitoring release found; using default namespace ${MONITORING_NAMESPACE}"
           fi
 
+      - name: Recover stuck monitoring release
+        run: |
+          set -euo pipefail
+          current_status="$(helm status grafana-k8s-monitoring -n "$MONITORING_NAMESPACE" -o json 2>/dev/null | python3 -c 'import json,sys; data=json.load(sys.stdin); print(data.get("info", {}).get("status", ""))' || true)"
+          if [ -z "${current_status:-}" ]; then
+            echo "No existing grafana-k8s-monitoring release status found; nothing to recover."
+            exit 0
+          fi
+
+          case "$current_status" in
+            pending-*)
+              echo "grafana-k8s-monitoring is stuck in status ${current_status}; attempting rollback to last deployed revision."
+              rollback_revision="$(helm history grafana-k8s-monitoring -n "$MONITORING_NAMESPACE" -o json | python3 -c 'import json,sys; hist=json.load(sys.stdin); deployed=[r for r in hist if r.get("status")=="deployed"]; print(deployed[-1]["revision"] if deployed else "")')"
+              if [ -z "${rollback_revision:-}" ]; then
+                echo "No deployed revision found to roll back to."
+                exit 1
+              fi
+              helm rollback grafana-k8s-monitoring "$rollback_revision" -n "$MONITORING_NAMESPACE" --wait --timeout 10m
+              ;;
+            *)
+              echo "grafana-k8s-monitoring status is ${current_status}; no recovery needed."
+              ;;
+          esac
+
       - name: Reconcile grafana k8s monitoring
         run: |
           set -euo pipefail
