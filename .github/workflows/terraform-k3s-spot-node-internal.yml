@@ -1,0 +1,180 @@
+name: Terraform K3s Spot Node Internal
+
+on:
+  workflow_call:
+    inputs:
+      action:
+        required: false
+        default: apply
+        type: string
+      cluster_name:
+        required: false
+        default: homelab-k3s
+        type: string
+      node_group_name:
+        required: false
+        default: spot-worker
+        type: string
+      vpc_id:
+        required: false
+        type: string
+      subnet_ids:
+        required: false
+        type: string
+      instance_types:
+        required: false
+        default: t3.small,t3a.small
+        type: string
+      key_name:
+        required: false
+        type: string
+      allowed_ssh_cidrs:
+        required: false
+        type: string
+      k3s_server_url:
+        required: true
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      TF_STATE_BUCKET:
+        required: true
+      K3S_SERVER_TOKEN:
+        required: true
+
+concurrency:
+  group: k3s-spot-node
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      TF_VAR_k3s_token: ${{ secrets.K3S_SERVER_TOKEN }}
+      STACK_DIR: terraform/k3s-spot-node
+      ACTION: ${{ inputs.action || 'apply' }}
+      CLUSTER_NAME: ${{ inputs.cluster_name || vars.K3S_SPOT_CLUSTER_NAME || 'homelab-k3s' }}
+      NODE_GROUP_NAME: ${{ inputs.node_group_name || vars.K3S_SPOT_NODE_GROUP_NAME || 'spot-worker' }}
+      VPC_ID: ${{ inputs.vpc_id }}
+      SUBNET_IDS: ${{ inputs.subnet_ids }}
+      INSTANCE_TYPES: ${{ inputs.instance_types || vars.K3S_SPOT_INSTANCE_TYPES || 't3.small,t3a.small' }}
+      KEY_NAME: ${{ inputs.key_name }}
+      ALLOWED_SSH_CIDRS: ${{ inputs.allowed_ssh_cidrs || fromJson(toJson(vars)).K3S_SPOT_ALLOWED_SSH_CIDRS }}
+      K3S_SERVER_URL: ${{ inputs.k3s_server_url || vars.K3S_SERVER_URL }}
+      NETWORK_STATE_KEY: k3s/spot-network/terraform.tfstate
+
+    defaults:
+      run:
+        working-directory: terraform/k3s-spot-node
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Validate required settings
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "AWS credentials are missing"
+            exit 1
+          fi
+          if [ -z "$AWS_REGION" ]; then
+            echo "AWS_REGION variable is missing"
+            exit 1
+          fi
+          if [ -z "$TF_STATE_BUCKET" ]; then
+            echo "TF_STATE_BUCKET secret is missing"
+            exit 1
+          fi
+          if [ -z "$TF_VAR_k3s_token" ]; then
+            echo "K3S_SERVER_TOKEN secret is missing"
+            exit 1
+          fi
+          if [ -z "$K3S_SERVER_URL" ]; then
+            echo "K3S_SERVER_URL is missing"
+            exit 1
+          fi
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Write action-specific tfvars
+        run: |
+          list_to_hcl() {
+            local raw="$1"
+            jq -Rn --arg raw "$raw" '
+              ($raw | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0)))
+            '
+          }
+
+          if [ -n "$VPC_ID" ] || [ -n "$SUBNET_IDS" ]; then
+            echo "Using explicit workflow network inputs"
+          else
+            echo "Using remote network state from s3://${TF_STATE_BUCKET}/${NETWORK_STATE_KEY}"
+          fi
+
+          if [ -n "$KEY_NAME" ]; then
+            echo "Using explicit EC2 key pair: ${KEY_NAME}"
+          else
+            echo "No EC2 key pair configured; spot worker will launch without SSH key access"
+          fi
+
+          cat > github.auto.tfvars <<EOF
+          aws_region      = "${AWS_REGION}"
+          cluster_name    = "${CLUSTER_NAME}"
+          node_group_name = "${NODE_GROUP_NAME}"
+          network_state_bucket = "${TF_STATE_BUCKET}"
+          network_state_key    = "${NETWORK_STATE_KEY}"
+          instance_types  = $(list_to_hcl "$INSTANCE_TYPES")
+          k3s_server_url  = "${K3S_SERVER_URL}"
+          EOF
+
+          if [ -n "$VPC_ID" ]; then
+            printf 'vpc_id = "%s"\n' "$VPC_ID" >> github.auto.tfvars
+          fi
+
+          if [ -n "$SUBNET_IDS" ]; then
+            printf 'subnet_ids = %s\n' "$(list_to_hcl "$SUBNET_IDS")" >> github.auto.tfvars
+          fi
+
+          if [ -n "$KEY_NAME" ]; then
+            printf 'key_name = "%s"\n' "$KEY_NAME" >> github.auto.tfvars
+          fi
+
+          if [ -n "$ALLOWED_SSH_CIDRS" ]; then
+            printf 'allowed_ssh_cidrs = %s\n' "$(list_to_hcl "$ALLOWED_SSH_CIDRS")" >> github.auto.tfvars
+          fi
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=k3s/spot-node/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        if: ${{ env.ACTION == 'plan' || env.ACTION == 'apply' }}
+        run: terraform plan -input=false
+
+      - name: Terraform Apply
+        if: ${{ env.ACTION == 'apply' }}
+        run: terraform apply -auto-approve -input=false
+
+      - name: Terraform Destroy
+        if: ${{ env.ACTION == 'destroy' }}
+        run: terraform destroy -auto-approve -input=false
