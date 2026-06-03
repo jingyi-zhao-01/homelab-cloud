@@ -21,7 +21,7 @@ k3s_server_url = "https://76.13.108.14:6443"
 k3s_token      = "replace-me-with-the-current-k3s-token"
 
 node_labels = [
-  "node-role.kubernetes.io/worker=true",
+  "node-purpose=worker",
   "capacity-type=spot",
   "topology.kubernetes.io/region=us-east-1",
 ]

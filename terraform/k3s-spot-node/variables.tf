@@ -84,7 +84,7 @@ variable "k3s_token" {
 variable "node_labels" {
   description = "Extra labels passed to k3s agent as --node-label"
   type        = list(string)
-  default     = ["node-role.kubernetes.io/worker=true", "capacity-type=spot"]
+  default     = ["node-purpose=worker", "capacity-type=spot"]
 }
 
 variable "node_taints" {
