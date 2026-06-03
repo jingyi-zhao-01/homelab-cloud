@@ -213,6 +213,17 @@ jobs:
             exit 1
           fi
 
+      - name: Resolve monitoring namespace
+        run: |
+          set -euo pipefail
+          release_namespace="$(helm list -A | awk '$1 == "grafana-k8s-monitoring" {print $2; exit}')"
+          if [ -n "${release_namespace:-}" ]; then
+            echo "Using existing grafana-k8s-monitoring release namespace: ${release_namespace}"
+            echo "MONITORING_NAMESPACE=${release_namespace}" >> "$GITHUB_ENV"
+          else
+            echo "No existing grafana-k8s-monitoring release found; using default namespace ${MONITORING_NAMESPACE}"
+          fi
+
       - name: Reconcile grafana k8s monitoring
         run: |
           set -euo pipefail
