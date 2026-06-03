@@ -99,6 +99,14 @@ jobs:
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
 
+      - name: Remove retired Kubernetes secret from Terraform state
+        run: |
+          if terraform state list | grep -qx 'kubernetes_secret_v1.neon_credentials'; then
+            terraform state rm kubernetes_secret_v1.neon_credentials
+          else
+            echo "kubernetes_secret_v1.neon_credentials is not present in Terraform state"
+          fi
+
       # If the Neon project already exists but Terraform state was lost, import it
       # before apply so we do not create another flashsales project on every deploy.
       # When multiple projects share the same name, prefer the most recently created
