@@ -13,6 +13,10 @@ fi
 
 NAMESPACE="${NAMESPACE:-flashsales}"
 LOADTEST_SCRIPT="${LOADTEST_SCRIPT:-$SCRIPT_DIR/../k6/scenarios/loadtest.js}"
+WAIT_HTTP_RETRIES="${WAIT_HTTP_RETRIES:-40}"
+WAIT_HTTP_SLEEP_SEC="${WAIT_HTTP_SLEEP_SEC:-1}"
+CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-2}"
+CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-3}"
 
 if [[ ! -r "$KUBECONFIG_PATH" ]]; then
   echo "Kubeconfig not found or not readable: $KUBECONFIG_PATH" >&2
@@ -66,13 +70,17 @@ wait_http() {
   local url="$1"
   local name="$2"
   local i
-  for i in $(seq 1 40); do
-    if curl -fsS "$url/health" >/dev/null 2>&1 || curl -fsS "$url/docs" >/dev/null 2>&1; then
+  echo "Waiting for ${name} at ${url}"
+  for i in $(seq 1 "$WAIT_HTTP_RETRIES"); do
+    if curl --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" --max-time "$CURL_MAX_TIME_SEC" -fsS "$url/health" >/dev/null 2>&1 || \
+      curl --connect-timeout "$CURL_CONNECT_TIMEOUT_SEC" --max-time "$CURL_MAX_TIME_SEC" -fsS "$url/docs" >/dev/null 2>&1; then
+      echo "Service ready: ${name} at ${url}"
       return 0
     fi
-    sleep 1
+    echo "Still waiting for ${name} (${i}/${WAIT_HTTP_RETRIES}): ${url}"
+    sleep "$WAIT_HTTP_SLEEP_SEC"
   done
-  echo "Timed out waiting for $name on $url"
+  echo "Timed out waiting for ${name} on ${url} after ${WAIT_HTTP_RETRIES} attempts"
   exit 1
 }
 
