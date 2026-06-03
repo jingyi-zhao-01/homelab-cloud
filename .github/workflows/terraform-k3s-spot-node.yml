@@ -154,6 +154,9 @@ jobs:
             exit 1
           fi
 
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
       - name: Write action-specific tfvars
         run: |
           list_to_hcl() {
@@ -188,9 +191,6 @@ jobs:
             -backend-config="key=k3s/spot-node/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
-
-      - name: Terraform Format Check
-        run: terraform fmt -check
 
       - name: Terraform Validate
         run: terraform validate
