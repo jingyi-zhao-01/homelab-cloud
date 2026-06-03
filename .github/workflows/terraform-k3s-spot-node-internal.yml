@@ -40,6 +40,13 @@ on:
       k3s_server_url:
         required: true
         type: string
+      tailscale_enabled:
+        required: false
+        default: false
+        type: boolean
+      tailscale_advertise_tags:
+        required: false
+        type: string
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -49,6 +56,8 @@ on:
         required: true
       K3S_SERVER_TOKEN:
         required: true
+      TS_SPOT_AUTH_KEY:
+        required: false
 
 concurrency:
   group: k3s-spot-node
@@ -66,6 +75,7 @@ jobs:
       AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}
       TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
       TF_VAR_k3s_token: ${{ secrets.K3S_SERVER_TOKEN }}
+      TF_VAR_tailscale_auth_key: ${{ secrets.TS_SPOT_AUTH_KEY }}
       STACK_DIR: terraform/k3s-spot-node
       ACTION: ${{ inputs.action || 'apply' }}
       CLUSTER_NAME: ${{ inputs.cluster_name || vars.K3S_SPOT_CLUSTER_NAME || 'openhands-k3s' }}
@@ -77,7 +87,9 @@ jobs:
       ALLOWED_SSH_CIDRS: ${{ inputs.allowed_ssh_cidrs || fromJson(toJson(vars)).K3S_SPOT_ALLOWED_SSH_CIDRS }}
       TRUSTED_CLUSTER_CIDRS: ${{ inputs.trusted_cluster_cidrs || fromJson(toJson(vars)).K3S_SPOT_TRUSTED_CLUSTER_CIDRS }}
       EXTRA_K3S_AGENT_ARGS: ${{ inputs.extra_k3s_agent_args || fromJson(toJson(vars)).K3S_SPOT_EXTRA_AGENT_ARGS }}
-      K3S_SERVER_URL: ${{ inputs.k3s_server_url || vars.K3S_SERVER_URL }}
+      K3S_SERVER_URL: ${{ inputs.k3s_server_url || vars.K3S_SERVER_URL_TAILSCALE || vars.K3S_SERVER_URL }}
+      TAILSCALE_ENABLED: ${{ inputs.tailscale_enabled || fromJson(vars.K3S_SPOT_ENABLE_TAILSCALE || 'false') }}
+      TAILSCALE_ADVERTISE_TAGS: ${{ inputs.tailscale_advertise_tags || vars.K3S_SPOT_TAILSCALE_TAGS }}
       NETWORK_STATE_KEY: k3s/spot-network/terraform.tfstate
 
     defaults:
@@ -111,6 +123,10 @@ jobs:
           fi
           if [ -z "$K3S_SERVER_URL" ]; then
             echo "K3S_SERVER_URL is missing"
+            exit 1
+          fi
+          if [ "$TAILSCALE_ENABLED" = "true" ] && [ -z "${TF_VAR_tailscale_auth_key:-}" ]; then
+            echo "TS_SPOT_AUTH_KEY secret is required when TAILSCALE_ENABLED is true"
             exit 1
           fi
           if [ -z "$TRUSTED_CLUSTER_CIDRS" ]; then
@@ -149,6 +165,7 @@ jobs:
           network_state_key    = "${NETWORK_STATE_KEY}"
           instance_types  = $(list_to_hcl "$INSTANCE_TYPES")
           k3s_server_url  = "${K3S_SERVER_URL}"
+          tailscale_enabled = ${TAILSCALE_ENABLED}
           EOF
 
           if [ -n "$VPC_ID" ]; then
@@ -173,6 +190,10 @@ jobs:
 
           if [ -n "$EXTRA_K3S_AGENT_ARGS" ]; then
             printf 'extra_k3s_agent_args = "%s"\n' "$EXTRA_K3S_AGENT_ARGS" >> github.auto.tfvars
+          fi
+
+          if [ -n "$TAILSCALE_ADVERTISE_TAGS" ]; then
+            printf 'tailscale_advertise_tags = %s\n' "$(list_to_hcl "$TAILSCALE_ADVERTISE_TAGS")" >> github.auto.tfvars
           fi
 
       - name: Terraform Init

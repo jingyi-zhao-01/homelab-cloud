@@ -87,6 +87,31 @@ variable "k3s_token" {
   sensitive   = true
 }
 
+variable "tailscale_enabled" {
+  description = "Whether the spot worker should install Tailscale during bootstrap and prefer its Tailscale IP for k3s node registration"
+  type        = bool
+  default     = false
+}
+
+variable "tailscale_auth_key" {
+  description = "Optional pre-auth Tailscale auth key used by the spot worker to join the tailnet"
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "tailscale_advertise_tags" {
+  description = "Optional Tailscale ACL tags to advertise when the spot worker joins the tailnet"
+  type        = list(string)
+  default     = []
+}
+
+variable "tailscale_hostname" {
+  description = "Optional hostname override used when the spot worker joins Tailscale"
+  type        = string
+  default     = null
+}
+
 variable "node_labels" {
   description = "Extra labels passed to k3s agent as --node-label"
   type        = list(string)

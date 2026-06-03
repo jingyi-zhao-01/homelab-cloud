@@ -32,11 +32,47 @@ get_metadata() {
 IMDS_TOKEN="$(get_imds_token)"
 PRIVATE_IP="$(get_metadata "$IMDS_TOKEN" "local-ipv4")"
 PUBLIC_IP="$(get_metadata "$IMDS_TOKEN" "public-ipv4" || true)"
+NODE_IP="$PRIVATE_IP"
+NODE_EXTERNAL_IP="$PUBLIC_IP"
+
+if [ "${tailscale_enabled}" = "true" ]; then
+  export DEBIAN_FRONTEND=noninteractive
+
+  retry 12 bash -lc "curl -fsSL https://tailscale.com/install.sh | sh"
+  systemctl enable tailscaled
+  systemctl restart tailscaled
+
+  TAILSCALE_UP_ARGS=(
+    up
+    --auth-key=${tailscale_auth_key}
+    --accept-dns=false
+    --reset
+  )
+
+  if [ -n "${tailscale_hostname}" ]; then
+    TAILSCALE_UP_ARGS+=(--hostname=${tailscale_hostname})
+  fi
+
+  if [ -n "${tailscale_advertise_tags}" ]; then
+    TAILSCALE_UP_ARGS+=(--advertise-tags=${tailscale_advertise_tags})
+  fi
+
+  retry 12 tailscale "$${TAILSCALE_UP_ARGS[@]}"
+
+  TAILSCALE_IP="$(retry 12 bash -lc \"tailscale ip -4 | head -n1\")"
+  if [ -z "$TAILSCALE_IP" ]; then
+    echo "tailscale enabled but no IPv4 address was assigned"
+    exit 1
+  fi
+
+  NODE_IP="$TAILSCALE_IP"
+  NODE_EXTERNAL_IP="$TAILSCALE_IP"
+fi
 
 export K3S_URL='${k3s_server_url}'
 export K3S_TOKEN='${k3s_token}'
 
-INSTALL_K3S_EXEC="agent --node-ip $${PRIVATE_IP} --with-node-id"
+INSTALL_K3S_EXEC="agent --node-ip $${NODE_IP} --with-node-id"
 
 if [ -n "${node_labels}" ]; then
   IFS=',' read -r -a LABELS <<< '${node_labels}'
@@ -52,8 +88,8 @@ if [ -n "${node_taints}" ]; then
   done
 fi
 
-if [ -n "$PUBLIC_IP" ]; then
-  INSTALL_K3S_EXEC+=" --node-external-ip $${PUBLIC_IP}"
+if [ -n "$NODE_EXTERNAL_IP" ]; then
+  INSTALL_K3S_EXEC+=" --node-external-ip $${NODE_EXTERNAL_IP}"
 fi
 
 if [ -n "${extra_k3s_args}" ]; then

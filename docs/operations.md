@@ -84,6 +84,30 @@ After a successful spot-node `apply`, the top-level workflow can also reconcile 
 
 Use the `reconcile_grafana_monitoring` workflow input if you need to disable that post-apply reconcile for a specific run.
 
+## Spot Worker Tailscale Bootstrap
+
+The spot-worker workflow can bootstrap each new worker directly into your Tailscale network before k3s starts. This is the recommended path when the control-plane already lives on Tailscale and the worker would otherwise join across a mixed public/private network boundary.
+
+Recommended GitHub configuration:
+
+- Secret: `TS_SPOT_AUTH_KEY`
+  Use a pre-auth Tailscale auth key intended for the spot worker bootstrap. Prefer an ephemeral or reusable tagged key with the minimum tailnet permissions needed.
+- Variable: `K3S_SERVER_URL_TAILSCALE`
+  Set this to the control-plane Tailscale API endpoint, for example `https://100.92.165.80:6443`.
+- Variable: `K3S_SPOT_ENABLE_TAILSCALE`
+  Set this to `true` if you want the internal reusable workflow default to enable Tailscale bootstrap.
+- Variable: `K3S_SPOT_TAILSCALE_TAGS`
+  Optional comma-separated tags such as `tag:k3s,tag:spot`.
+
+When Tailscale bootstrap is enabled, the worker user-data does the following:
+
+- installs `tailscaled`
+- joins the tailnet with `TS_SPOT_AUTH_KEY`
+- reads the worker's Tailscale IPv4 address
+- uses that Tailscale address for `--node-ip` and `--node-external-ip`
+
+That usually gives more stable kubelet scraping, CoreDNS reachability, and Grafana Alloy connectivity than mixing the home control-plane public IP with the AWS worker private IP.
+
 ## Private Network Access For Public GitHub Actions
 
 If you want to keep using GitHub-hosted runners, the recommended path is to connect those runners to your private cluster network instead of exposing deploy reliability to the public `6443` endpoint.

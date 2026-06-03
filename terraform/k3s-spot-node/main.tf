@@ -87,12 +87,16 @@ locals {
   )
 
   user_data = templatefile("${path.module}/user-data.sh.tftpl", {
-    cluster_name   = var.cluster_name
-    k3s_server_url = var.k3s_server_url
-    k3s_token      = var.k3s_token
-    node_labels    = join(",", var.node_labels)
-    node_taints    = join(",", var.node_taints)
-    extra_k3s_args = var.extra_k3s_agent_args
+    cluster_name             = var.cluster_name
+    k3s_server_url           = var.k3s_server_url
+    k3s_token                = var.k3s_token
+    node_labels              = join(",", var.node_labels)
+    node_taints              = join(",", var.node_taints)
+    extra_k3s_args           = var.extra_k3s_agent_args
+    tailscale_enabled        = tostring(var.tailscale_enabled)
+    tailscale_auth_key       = coalesce(var.tailscale_auth_key, "")
+    tailscale_advertise_tags = join(",", var.tailscale_advertise_tags)
+    tailscale_hostname       = coalesce(var.tailscale_hostname, local.name_prefix)
   })
 }
 
@@ -100,6 +104,13 @@ check "network_inputs" {
   assert {
     condition     = local.effective_vpc_id != null && length(local.effective_subnet_ids) > 0
     error_message = "Provide vpc_id and subnet_ids, or provision the k3s spot network stack in the configured remote state bucket first."
+  }
+}
+
+check "tailscale_auth" {
+  assert {
+    condition     = !var.tailscale_enabled || (var.tailscale_auth_key != null && trimspace(var.tailscale_auth_key) != "")
+    error_message = "tailscale_auth_key must be provided when tailscale_enabled is true."
   }
 }
 
