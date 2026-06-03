@@ -159,15 +159,6 @@ resource "aws_launch_template" "spot_node" {
     arn = aws_iam_instance_profile.spot_node.arn
   }
 
-  instance_market_options {
-    market_type = "spot"
-
-    spot_options {
-      instance_interruption_behavior = "terminate"
-      spot_instance_type             = "one-time"
-    }
-  }
-
   metadata_options {
     http_endpoint               = "enabled"
     http_put_response_hop_limit = 2
