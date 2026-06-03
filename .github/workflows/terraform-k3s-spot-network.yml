@@ -1,37 +1,35 @@
-name: Terraform K3s Spot Network
+name: Terraform K3s Spot Network Internal
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       action:
-        description: Terraform action to run
-        required: true
+        required: false
         default: apply
-        type: choice
-        options:
-          - plan
-          - apply
-          - destroy
+        type: string
       cluster_name:
-        description: Logical cluster name
         required: false
         default: homelab-k3s
         type: string
       network_name:
-        description: Name suffix for the low-cost VPC stack
         required: false
         default: spot-network
         type: string
       vpc_cidr:
-        description: CIDR block for the VPC
         required: false
         default: 10.44.0.0/16
         type: string
       public_subnet_count:
-        description: Number of public subnets to create
         required: false
         default: "2"
         type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      TF_STATE_BUCKET:
+        required: true
 
 concurrency:
   group: k3s-spot-network

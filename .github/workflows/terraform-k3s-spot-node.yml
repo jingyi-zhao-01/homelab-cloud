@@ -1,53 +1,6 @@
-name: Terraform K3s Spot Node
+name: Terraform K3s Spot Node Internal
 
 on:
-  workflow_dispatch:
-    inputs:
-      action:
-        description: Terraform action to run
-        required: true
-        default: apply
-        type: choice
-        options:
-          - plan
-          - apply
-          - destroy
-      cluster_name:
-        description: Logical cluster name
-        required: false
-        default: homelab-k3s
-        type: string
-      node_group_name:
-        description: Name suffix for the spot worker group
-        required: false
-        default: spot-worker
-        type: string
-      vpc_id:
-        description: Target VPC ID
-        required: false
-        type: string
-      subnet_ids:
-        description: Comma-separated subnet IDs for the spot Auto Scaling Group
-        required: false
-        type: string
-      instance_types:
-        description: Comma-separated instance types, ordered by preference
-        required: false
-        default: t3.small,t3a.small
-        type: string
-      key_name:
-        description: Optional EC2 key pair name
-        required: false
-        type: string
-      allowed_ssh_cidrs:
-        description: Comma-separated SSH source CIDRs
-        required: false
-        type: string
-      k3s_server_url:
-        description: Existing k3s server URL, for example https://server:6443
-        required: false
-        type: string
-
   workflow_call:
     inputs:
       action:
@@ -114,7 +67,7 @@ jobs:
       VPC_ID: ${{ inputs.vpc_id }}
       SUBNET_IDS: ${{ inputs.subnet_ids }}
       INSTANCE_TYPES: ${{ inputs.instance_types || vars.K3S_SPOT_INSTANCE_TYPES || 't3.small,t3a.small' }}
-      KEY_NAME: ${{ inputs.key_name || fromJson(toJson(vars)).K3S_SPOT_KEY_NAME }}
+      KEY_NAME: ${{ inputs.key_name }}
       ALLOWED_SSH_CIDRS: ${{ inputs.allowed_ssh_cidrs || fromJson(toJson(vars)).K3S_SPOT_ALLOWED_SSH_CIDRS }}
       K3S_SERVER_URL: ${{ inputs.k3s_server_url || vars.K3S_SERVER_URL }}
       NETWORK_STATE_KEY: k3s/spot-network/terraform.tfstate
@@ -169,6 +122,12 @@ jobs:
             echo "Using explicit workflow network inputs"
           else
             echo "Using remote network state from s3://${TF_STATE_BUCKET}/${NETWORK_STATE_KEY}"
+          fi
+
+          if [ -n "$KEY_NAME" ]; then
+            echo "Using explicit EC2 key pair: ${KEY_NAME}"
+          else
+            echo "No EC2 key pair configured; spot worker will launch without SSH key access"
           fi
 
           cat > github.auto.tfvars <<EOF

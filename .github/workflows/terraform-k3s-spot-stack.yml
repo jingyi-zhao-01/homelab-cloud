@@ -1,0 +1,124 @@
+name: Terraform K3s Spot Node
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Terraform action to run
+        required: true
+        default: apply
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+      cluster_name:
+        description: Logical cluster name
+        required: false
+        default: homelab-k3s
+        type: string
+      network_name:
+        description: Name suffix for the low-cost VPC stack
+        required: false
+        default: spot-network
+        type: string
+      node_group_name:
+        description: Name suffix for the spot worker group
+        required: false
+        default: spot-worker
+        type: string
+      vpc_cidr:
+        description: CIDR block for the VPC
+        required: false
+        default: 10.44.0.0/16
+        type: string
+      public_subnet_count:
+        description: Number of public subnets to create
+        required: false
+        default: "2"
+        type: string
+      instance_types:
+        description: Comma-separated instance types, ordered by preference
+        required: false
+        default: t3.small,t3a.small
+        type: string
+      key_name:
+        description: Optional EC2 key pair name
+        required: false
+        type: string
+      allowed_ssh_cidrs:
+        description: Comma-separated SSH source CIDRs
+        required: false
+        type: string
+      k3s_server_url:
+        description: Existing k3s server URL, for example https://server:6443
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  network:
+    if: ${{ inputs.action != 'destroy' }}
+    uses: ./.github/workflows/terraform-k3s-spot-network.yml
+    with:
+      action: ${{ inputs.action }}
+      cluster_name: ${{ inputs.cluster_name }}
+      network_name: ${{ inputs.network_name }}
+      vpc_cidr: ${{ inputs.vpc_cidr }}
+      public_subnet_count: ${{ inputs.public_subnet_count }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+
+  node:
+    if: ${{ inputs.action != 'destroy' }}
+    needs: network
+    uses: ./.github/workflows/terraform-k3s-spot-node.yml
+    with:
+      action: ${{ inputs.action }}
+      cluster_name: ${{ inputs.cluster_name }}
+      node_group_name: ${{ inputs.node_group_name }}
+      instance_types: ${{ inputs.instance_types }}
+      key_name: ${{ inputs.key_name }}
+      allowed_ssh_cidrs: ${{ inputs.allowed_ssh_cidrs }}
+      k3s_server_url: ${{ inputs.k3s_server_url }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      K3S_SERVER_TOKEN: ${{ secrets.K3S_SERVER_TOKEN }}
+
+  destroy_node:
+    if: ${{ inputs.action == 'destroy' }}
+    uses: ./.github/workflows/terraform-k3s-spot-node.yml
+    with:
+      action: destroy
+      cluster_name: ${{ inputs.cluster_name }}
+      node_group_name: ${{ inputs.node_group_name }}
+      instance_types: ${{ inputs.instance_types }}
+      key_name: ${{ inputs.key_name }}
+      allowed_ssh_cidrs: ${{ inputs.allowed_ssh_cidrs }}
+      k3s_server_url: ${{ inputs.k3s_server_url }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      K3S_SERVER_TOKEN: ${{ secrets.K3S_SERVER_TOKEN }}
+
+  destroy_network:
+    if: ${{ inputs.action == 'destroy' }}
+    needs: destroy_node
+    uses: ./.github/workflows/terraform-k3s-spot-network.yml
+    with:
+      action: destroy
+      cluster_name: ${{ inputs.cluster_name }}
+      network_name: ${{ inputs.network_name }}
+      vpc_cidr: ${{ inputs.vpc_cidr }}
+      public_subnet_count: ${{ inputs.public_subnet_count }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
