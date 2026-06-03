@@ -13,6 +13,16 @@ output "security_group_id" {
   value       = aws_security_group.spot_node.id
 }
 
+output "effective_vpc_id" {
+  description = "VPC actually used by the spot worker stack"
+  value       = local.effective_vpc_id
+}
+
+output "effective_subnet_ids" {
+  description = "Subnets actually used by the spot worker Auto Scaling Group"
+  value       = local.effective_subnet_ids
+}
+
 output "instance_profile_name" {
   description = "IAM instance profile attached to the spot worker"
   value       = aws_iam_instance_profile.spot_node.name

@@ -6,8 +6,17 @@ This repository uses Terraform as the control plane for the shared platform piec
 
 - An ephemeral Neon database is provisioned for the flashsales performance test workflow.
 - The k3s workloads rely on Terraform-provisioned AWS SSM parameters to store and distribute secrets.
+- A dedicated low-cost VPC with public subnets can be provisioned for the AWS spot-backed k3s worker without adding a NAT gateway.
 - A dedicated AWS Auto Scaling Group can keep one k3s worker alive on Spot capacity and automatically replace it after reclamation.
 - The Terraform workflows use an S3 backend for state, with the bucket supplied at init time.
+
+## Spot Network Flow
+
+The `terraform/k3s-spot-network` stack provisions a minimal VPC, an internet gateway, a public route table, and public subnets across multiple availability zones.
+
+It is intentionally the cheapest usable network shape for this repo: no NAT gateway, no private subnets, and no always-on managed network appliances.
+
+That keeps the network layer itself in the near-zero-cost bucket, but EC2 public IPv4 charges and normal data transfer charges still apply.
 
 ## Neon Flow
 
@@ -23,7 +32,7 @@ That shape gives you exactly one EC2 worker under normal conditions, and if AWS 
 
 The instance bootstraps itself as a `k3s agent` and joins the existing server using the supplied server URL and token.
 
-The stack expects you to provide existing network inputs such as `vpc_id`, `subnet_ids`, `k3s_server_url`, and `k3s_token`. See [terraform/k3s-spot-node/terraform.tfvars.example](../terraform/k3s-spot-node/terraform.tfvars.example) for the local input shape.
+The stack can either consume explicit `vpc_id` and `subnet_ids`, or it can automatically reuse the remote state from `terraform/k3s-spot-network` in the same S3 bucket. See [terraform/k3s-spot-node/terraform.tfvars.example](../terraform/k3s-spot-node/terraform.tfvars.example) for the local input shape.
 
 ## State and Backends
 

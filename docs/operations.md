@@ -14,6 +14,7 @@ This page collects the operational commands and workflow details that used to be
 | `flashsales-perf-concurrency-suite.yml` | Manual or reusable via `flashsales-deploy-post.yml` | Concurrency suite |
 | `flashsales-loadtest-manual.yml` | Manual `workflow_dispatch` | Performance testing |
 | `terraform-provision.yml` | Manual | Neon and SSM infrastructure provisioning |
+| `terraform-k3s-spot-network.yml` | Manual | Low-cost VPC and public subnets for the spot worker |
 | `terraform-k3s-spot-node.yml` | Manual | One self-healing AWS spot k3s worker |
 
 The deploy workflows are independent, so changes to one workload should not trigger the other.
@@ -78,6 +79,8 @@ Local state is not a supported operating mode. Use the GitHub workflows or pass 
 | `make e2e` | Run the flashsales smoke test |
 | `make neon-plan` | Preview Neon Terraform changes using remote S3 state |
 | `make neon-apply` | Provision Neon resources through Terraform using remote S3 state |
+| `make k3s-network-plan` | Preview the low-cost VPC and public subnet stack for the spot worker |
+| `make k3s-network-apply` | Create or reconcile the low-cost VPC and public subnet stack |
 | `make k3s-spot-plan` | Preview the AWS spot-backed k3s worker Terraform changes |
 | `make k3s-spot-apply` | Create or reconcile one self-healing AWS spot-backed k3s worker using remote S3 state |
 

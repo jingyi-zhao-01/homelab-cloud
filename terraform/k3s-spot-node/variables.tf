@@ -19,11 +19,25 @@ variable "node_group_name" {
 variable "vpc_id" {
   description = "VPC where the spot instance and security group are created"
   type        = string
+  default     = null
 }
 
 variable "subnet_ids" {
   description = "Subnets where the Auto Scaling Group is allowed to place the spot instance"
   type        = list(string)
+  default     = []
+}
+
+variable "network_state_bucket" {
+  description = "Optional S3 bucket that stores the low-cost spot network remote state"
+  type        = string
+  default     = null
+}
+
+variable "network_state_key" {
+  description = "S3 key used by the low-cost spot network remote state"
+  type        = string
+  default     = "k3s/spot-network/terraform.tfstate"
 }
 
 variable "key_name" {

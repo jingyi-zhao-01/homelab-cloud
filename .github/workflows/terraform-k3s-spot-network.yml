@@ -1,0 +1,118 @@
+name: Terraform K3s Spot Network
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Terraform action to run
+        required: true
+        default: apply
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+      cluster_name:
+        description: Logical cluster name
+        required: false
+        default: homelab-k3s
+        type: string
+      network_name:
+        description: Name suffix for the low-cost VPC stack
+        required: false
+        default: spot-network
+        type: string
+      vpc_cidr:
+        description: CIDR block for the VPC
+        required: false
+        default: 10.44.0.0/16
+        type: string
+      public_subnet_count:
+        description: Number of public subnets to create
+        required: false
+        default: "2"
+        type: string
+
+concurrency:
+  group: k3s-spot-network
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      STACK_DIR: terraform/k3s-spot-network
+      ACTION: ${{ inputs.action || 'apply' }}
+      CLUSTER_NAME: ${{ inputs.cluster_name || vars.K3S_SPOT_CLUSTER_NAME || 'homelab-k3s' }}
+      NETWORK_NAME: ${{ inputs.network_name || fromJson(toJson(vars)).K3S_SPOT_NETWORK_NAME || 'spot-network' }}
+      VPC_CIDR: ${{ inputs.vpc_cidr || fromJson(toJson(vars)).K3S_SPOT_VPC_CIDR || '10.44.0.0/16' }}
+      PUBLIC_SUBNET_COUNT: ${{ inputs.public_subnet_count || fromJson(toJson(vars)).K3S_SPOT_PUBLIC_SUBNET_COUNT || '2' }}
+
+    defaults:
+      run:
+        working-directory: terraform/k3s-spot-network
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Validate required settings
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "AWS credentials are missing"
+            exit 1
+          fi
+          if [ -z "$AWS_REGION" ]; then
+            echo "AWS_REGION variable is missing"
+            exit 1
+          fi
+          if [ -z "$TF_STATE_BUCKET" ]; then
+            echo "TF_STATE_BUCKET secret is missing"
+            exit 1
+          fi
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Write action-specific tfvars
+        run: |
+          cat > github.auto.tfvars <<EOF
+          aws_region          = "${AWS_REGION}"
+          cluster_name        = "${CLUSTER_NAME}"
+          network_name        = "${NETWORK_NAME}"
+          vpc_cidr            = "${VPC_CIDR}"
+          public_subnet_count = ${PUBLIC_SUBNET_COUNT}
+          EOF
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=k3s/spot-network/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        if: ${{ env.ACTION == 'plan' || env.ACTION == 'apply' }}
+        run: terraform plan -input=false
+
+      - name: Terraform Apply
+        if: ${{ env.ACTION == 'apply' }}
+        run: terraform apply -auto-approve -input=false
+
+      - name: Terraform Destroy
+        if: ${{ env.ACTION == 'destroy' }}
+        run: terraform destroy -auto-approve -input=false

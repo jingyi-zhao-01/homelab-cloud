@@ -63,10 +63,10 @@ on:
         default: spot-worker
         type: string
       vpc_id:
-        required: true
+        required: false
         type: string
       subnet_ids:
-        required: true
+        required: false
         type: string
       instance_types:
         required: false
@@ -117,6 +117,7 @@ jobs:
       KEY_NAME: ${{ inputs.key_name || fromJson(toJson(vars)).K3S_SPOT_KEY_NAME }}
       ALLOWED_SSH_CIDRS: ${{ inputs.allowed_ssh_cidrs || fromJson(toJson(vars)).K3S_SPOT_ALLOWED_SSH_CIDRS }}
       K3S_SERVER_URL: ${{ inputs.k3s_server_url || vars.K3S_SERVER_URL }}
+      NETWORK_STATE_KEY: k3s/spot-network/terraform.tfstate
 
     defaults:
       run:
@@ -147,8 +148,8 @@ jobs:
             echo "K3S_SERVER_TOKEN secret is missing"
             exit 1
           fi
-          if [ -z "$VPC_ID" ] || [ -z "$SUBNET_IDS" ] || [ -z "$K3S_SERVER_URL" ]; then
-            echo "Required inputs are missing"
+          if [ -z "$K3S_SERVER_URL" ]; then
+            echo "K3S_SERVER_URL is missing"
             exit 1
           fi
 
@@ -168,11 +169,19 @@ jobs:
           aws_region      = "${AWS_REGION}"
           cluster_name    = "${CLUSTER_NAME}"
           node_group_name = "${NODE_GROUP_NAME}"
-          vpc_id          = "${VPC_ID}"
-          subnet_ids      = $(list_to_hcl "$SUBNET_IDS")
+          network_state_bucket = "${TF_STATE_BUCKET}"
+          network_state_key    = "${NETWORK_STATE_KEY}"
           instance_types  = $(list_to_hcl "$INSTANCE_TYPES")
           k3s_server_url  = "${K3S_SERVER_URL}"
           EOF
+
+          if [ -n "$VPC_ID" ]; then
+            printf 'vpc_id = "%s"\n' "$VPC_ID" >> github.auto.tfvars
+          fi
+
+          if [ -n "$SUBNET_IDS" ]; then
+            printf 'subnet_ids = %s\n' "$(list_to_hcl "$SUBNET_IDS")" >> github.auto.tfvars
+          fi
 
           if [ -n "$KEY_NAME" ]; then
             printf 'key_name = "%s"\n' "$KEY_NAME" >> github.auto.tfvars

@@ -16,6 +16,19 @@ provider "aws" {
   region = var.aws_region
 }
 
+data "terraform_remote_state" "spot_network" {
+  count = local.use_remote_network ? 1 : 0
+
+  backend = "s3"
+
+  config = {
+    bucket  = var.network_state_bucket
+    key     = var.network_state_key
+    region  = var.aws_region
+    encrypt = true
+  }
+}
+
 data "aws_ssm_parameter" "ubuntu_ami" {
   name = var.ami_ssm_parameter
 }
@@ -46,6 +59,15 @@ data "aws_iam_policy_document" "asg_tag_access" {
 
 locals {
   name_prefix = "${var.cluster_name}-${var.node_group_name}"
+  use_remote_network = var.network_state_bucket != null && (var.vpc_id == null || length(var.subnet_ids) == 0)
+  effective_vpc_id = coalesce(
+    var.vpc_id,
+    try(data.terraform_remote_state.spot_network[0].outputs.vpc_id, null),
+  )
+  effective_subnet_ids = length(var.subnet_ids) > 0 ? var.subnet_ids : try(
+    data.terraform_remote_state.spot_network[0].outputs.public_subnet_ids,
+    [],
+  )
   common_tags = merge(
     {
       Name               = local.name_prefix
@@ -68,10 +90,17 @@ locals {
   })
 }
 
+check "network_inputs" {
+  assert {
+    condition     = local.effective_vpc_id != null && length(local.effective_subnet_ids) > 0
+    error_message = "Provide vpc_id and subnet_ids, or provision the k3s spot network stack in the configured remote state bucket first."
+  }
+}
+
 resource "aws_security_group" "spot_node" {
   name_prefix = "${local.name_prefix}-"
   description = "Security group for ${local.name_prefix} spot k3s node"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.effective_vpc_id
 
   dynamic "ingress" {
     for_each = var.allowed_ssh_cidrs
@@ -180,7 +209,7 @@ resource "aws_autoscaling_group" "spot_node" {
   max_size                  = 1
   health_check_type         = "EC2"
   health_check_grace_period = 300
-  vpc_zone_identifier       = var.subnet_ids
+  vpc_zone_identifier       = local.effective_subnet_ids
   default_cooldown          = 30
   force_delete              = false
   termination_policies      = ["OldestLaunchTemplate", "ClosestToNextInstanceHour"]

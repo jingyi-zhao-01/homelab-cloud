@@ -24,7 +24,7 @@ This platform is the result: a shared place where services can converge, agent c
 | [Flashsales deploy post](.github/workflows/flashsales-deploy-post.yml) | Post-deploy runtime consistency and performance lanes against the live k3s deployment |
 | [Strategy tester workload](docs/strategy-tester.md) | Scheduled ingestion app, cron jobs, and secret wiring |
 | [LeetCode intelligence workload](docs/leetcode-intelligence.md) | Continuous intelligence API service with Discord and LLM secret wiring |
-| [Infrastructure](docs/infrastructure.md) | Terraform, Neon provisioning, AWS SSM secrets, and state backend |
+| [Infrastructure](docs/infrastructure.md) | Terraform, Neon provisioning, AWS SSM secrets, spot-worker VPC, and state backend |
 | [Operations and tooling](docs/operations.md) | CI/CD, perf tests, local workflows, and developer setup |
 
 If you only need one place to orient yourself, start with [Repository overview](docs/overview.md).
@@ -46,7 +46,7 @@ make k3s-spot-plan
 ├── charts/                 # Helm charts for flashsales, strategy-tester, and leetcode-intelligence
 ├── flashsale/              # FastAPI service sources, local scripts, and perf harnesses for the flashsales workload
 ├── secrets/                # Local and shared secret material
-├── terraform/              # Neon, SSM, and k3s spot-node provisioning
+├── terraform/              # Neon, SSM, low-cost spot network, and k3s spot-node provisioning
 ├── docs/                   # Split documentation pages
 └── Makefile                # Local deployment and maintenance targets
 ```
