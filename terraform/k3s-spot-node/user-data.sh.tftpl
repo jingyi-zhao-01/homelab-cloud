@@ -16,8 +16,22 @@ retry() {
   done
 }
 
-PRIVATE_IP="$(curl -fsS http://169.254.169.254/latest/meta-data/local-ipv4)"
-PUBLIC_IP="$(curl -fsS http://169.254.169.254/latest/meta-data/public-ipv4 || true)"
+get_imds_token() {
+  curl -fsS -X PUT "http://169.254.169.254/latest/api/token" \
+    -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"
+}
+
+get_metadata() {
+  local token="$1"
+  local path="$2"
+
+  curl -fsS "http://169.254.169.254/latest/meta-data/$${path}" \
+    -H "X-aws-ec2-metadata-token: $${token}"
+}
+
+IMDS_TOKEN="$(get_imds_token)"
+PRIVATE_IP="$(get_metadata "$IMDS_TOKEN" "local-ipv4")"
+PUBLIC_IP="$(get_metadata "$IMDS_TOKEN" "public-ipv4" || true)"
 
 export K3S_URL='${k3s_server_url}'
 export K3S_TOKEN='${k3s_token}'
