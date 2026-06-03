@@ -24,8 +24,14 @@ k3s_server_url = "https://76.13.108.14:6443"
 k3s_token      = "replace-me-with-the-current-k3s-token"
 
 # When the k3s server and this worker do not share direct private networking,
-# also make sure the server side is configured for external-address flannel
-# routing per the k3s multicloud guidance.
+# prefer the Tailscale server URL and make sure both the server and the worker
+# run flannel on tailscale0. This stack now does that automatically for the
+# worker when tailscale_enabled = true.
+
+# tailscale_enabled = true
+# tailscale_auth_key = "tskey-auth-k3s-worker"
+# tailscale_advertise_tags = ["tag:k3s", "tag:spot"]
+# k3s_server_url = "https://100.92.165.80:6443"
 
 node_labels = [
   "node-purpose=worker",

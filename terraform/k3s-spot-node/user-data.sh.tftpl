@@ -74,6 +74,12 @@ export K3S_TOKEN='${k3s_token}'
 
 INSTALL_K3S_EXEC="agent --node-ip $${NODE_IP} --with-node-id"
 
+if [ "${tailscale_enabled}" = "true" ]; then
+  # Keep the overlay on tailscale0 as well; otherwise the node may register
+  # through Tailscale while flannel still chooses the AWS/private interface.
+  INSTALL_K3S_EXEC+=" --flannel-iface tailscale0"
+fi
+
 if [ -n "${node_labels}" ]; then
   IFS=',' read -r -a LABELS <<< '${node_labels}'
   for label in "$${LABELS[@]}"; do

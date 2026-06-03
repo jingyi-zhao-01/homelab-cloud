@@ -88,7 +88,7 @@ variable "k3s_token" {
 }
 
 variable "tailscale_enabled" {
-  description = "Whether the spot worker should install Tailscale during bootstrap and prefer its Tailscale IP for k3s node registration"
+  description = "Whether the spot worker should install Tailscale during bootstrap, register the node with its Tailscale IP, and force flannel to use tailscale0"
   type        = bool
   default     = false
 }

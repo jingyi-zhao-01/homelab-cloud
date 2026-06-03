@@ -105,8 +105,11 @@ When Tailscale bootstrap is enabled, the worker user-data does the following:
 - joins the tailnet with `TS_SPOT_AUTH_KEY`
 - reads the worker's Tailscale IPv4 address
 - uses that Tailscale address for `--node-ip` and `--node-external-ip`
+- forces flannel to bind to `tailscale0` so the pod overlay does not fall back to the AWS/private NIC
 
 That usually gives more stable kubelet scraping, CoreDNS reachability, and Grafana Alloy connectivity than mixing the home control-plane public IP with the AWS worker private IP.
+
+Important: the control-plane must match this and run k3s with `flannel-iface: tailscale0` too. If only the worker uses Tailscale while the server-side flannel backend still advertises a public or AWS-local IP, nodes may show `Ready` while cross-node pod traffic, CoreDNS lookups, and ingress paths still time out.
 
 ## Private Network Access For Public GitHub Actions
 
