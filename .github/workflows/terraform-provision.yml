@@ -47,7 +47,6 @@ concurrency:
   group: neon-provision
   cancel-in-progress: false   # never cancel infra runs mid-flight
 
-env:
 permissions:
   contents: read
 
