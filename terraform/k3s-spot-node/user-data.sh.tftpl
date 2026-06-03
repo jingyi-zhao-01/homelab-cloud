@@ -59,7 +59,7 @@ if [ "${tailscale_enabled}" = "true" ]; then
 
   retry 12 tailscale "$${TAILSCALE_UP_ARGS[@]}"
 
-  TAILSCALE_IP="$(retry 12 bash -lc \"tailscale ip -4 | head -n1\")"
+  TAILSCALE_IP="$(retry 12 sh -c 'tailscale ip -4 | head -n1')"
   if [ -z "$TAILSCALE_IP" ]; then
     echo "tailscale enabled but no IPv4 address was assigned"
     exit 1
