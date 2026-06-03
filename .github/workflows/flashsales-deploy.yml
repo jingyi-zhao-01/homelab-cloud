@@ -94,6 +94,7 @@ jobs:
         env:
           KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
         run: |
+          set -euo pipefail
           if [ -z "$KUBE_CONFIG_DATA" ]; then
             echo "KUBE_CONFIG_DATA secret is missing"
             exit 1
@@ -102,7 +103,26 @@ jobs:
           echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
           kubectl version --client
-          kubectl get nodes
+
+          API_SERVER="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
+          echo "Target API server: $API_SERVER"
+
+          for attempt in 1 2 3 4 5; do
+            echo "Checking Kubernetes API reachability (attempt ${attempt}/5)"
+            if kubectl --request-timeout=20s get nodes; then
+              echo "Kubernetes API is reachable"
+              break
+            fi
+
+            if [ "$attempt" -eq 5 ]; then
+              echo "Kubernetes API remained unreachable after 5 attempts"
+              echo "This usually indicates transient network reachability issues from GitHub Actions to the public k3s API endpoint."
+              exit 1
+            fi
+
+            echo "kubectl get nodes failed; retrying in 15 seconds"
+            sleep 15
+          done
 
       - name: Create GHCR image pull secret
         env:
