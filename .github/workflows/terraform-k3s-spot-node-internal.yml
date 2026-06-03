@@ -31,6 +31,12 @@ on:
       allowed_ssh_cidrs:
         required: false
         type: string
+      trusted_cluster_cidrs:
+        required: false
+        type: string
+      extra_k3s_agent_args:
+        required: false
+        type: string
       k3s_server_url:
         required: true
         type: string
@@ -69,6 +75,8 @@ jobs:
       INSTANCE_TYPES: ${{ inputs.instance_types || vars.K3S_SPOT_INSTANCE_TYPES || 't3.small,t3a.small' }}
       KEY_NAME: ${{ inputs.key_name }}
       ALLOWED_SSH_CIDRS: ${{ inputs.allowed_ssh_cidrs || fromJson(toJson(vars)).K3S_SPOT_ALLOWED_SSH_CIDRS }}
+      TRUSTED_CLUSTER_CIDRS: ${{ inputs.trusted_cluster_cidrs || fromJson(toJson(vars)).K3S_SPOT_TRUSTED_CLUSTER_CIDRS }}
+      EXTRA_K3S_AGENT_ARGS: ${{ inputs.extra_k3s_agent_args || fromJson(toJson(vars)).K3S_SPOT_EXTRA_AGENT_ARGS }}
       K3S_SERVER_URL: ${{ inputs.k3s_server_url || vars.K3S_SERVER_URL }}
       NETWORK_STATE_KEY: k3s/spot-network/terraform.tfstate
 
@@ -104,6 +112,9 @@ jobs:
           if [ -z "$K3S_SERVER_URL" ]; then
             echo "K3S_SERVER_URL is missing"
             exit 1
+          fi
+          if [ -z "$TRUSTED_CLUSTER_CIDRS" ]; then
+            echo "WARNING: TRUSTED_CLUSTER_CIDRS is empty. The worker may join the cluster but still fail cross-node networking, DNS-to-CoreDNS, and node-level scrapes."
           fi
 
       - name: Terraform Format Check
@@ -154,6 +165,14 @@ jobs:
 
           if [ -n "$ALLOWED_SSH_CIDRS" ]; then
             printf 'allowed_ssh_cidrs = %s\n' "$(list_to_hcl "$ALLOWED_SSH_CIDRS")" >> github.auto.tfvars
+          fi
+
+          if [ -n "$TRUSTED_CLUSTER_CIDRS" ]; then
+            printf 'trusted_cluster_cidrs = %s\n' "$(list_to_hcl "$TRUSTED_CLUSTER_CIDRS")" >> github.auto.tfvars
+          fi
+
+          if [ -n "$EXTRA_K3S_AGENT_ARGS" ]; then
+            printf 'extra_k3s_agent_args = "%s"\n' "$EXTRA_K3S_AGENT_ARGS" >> github.auto.tfvars
           fi
 
       - name: Terraform Init

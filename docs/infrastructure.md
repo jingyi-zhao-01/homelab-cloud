@@ -34,6 +34,22 @@ The instance bootstraps itself as a `k3s agent` and joins the existing server us
 
 The stack can either consume explicit `vpc_id` and `subnet_ids`, or it can automatically reuse the remote state from `terraform/k3s-spot-network` in the same S3 bucket. See [terraform/k3s-spot-node/terraform.tfvars.example](../terraform/k3s-spot-node/terraform.tfvars.example) for the local input shape.
 
+### Networking Caveat For Remote Workers
+
+If the k3s server and the AWS spot worker do not share the same directly reachable private network, the worker security group must explicitly trust the CIDRs that carry cluster traffic.
+
+Use `trusted_cluster_cidrs` for the control-plane public IP, VPN CIDR, or other trusted ingress ranges that need to reach the worker for overlay networking, node-to-node traffic, and host-level scrapes such as `node-exporter`.
+
+If you drive the worker stack from GitHub Actions, pass the same ranges through the `trusted_cluster_cidrs` input on `terraform-k3s-spot-node.yml` or the reusable `terraform-k3s-spot-node-internal.yml` workflow.
+
+Without that ingress, the worker may still appear `Ready`, but cross-node pod traffic and node observability can fail in subtle ways, for example:
+
+- worker pods timing out when they resolve `CoreDNS`
+- `node-exporter` on the worker being healthy locally but unreachable from the metrics collector
+- Grafana listing the node while CPU and memory usage remain `No data`
+
+For clusters that span multiple networks or public IPs, the k3s server side should also follow the official multicloud guidance for external node addresses and Flannel external-IP routing.
+
 ## State and Backends
 
 Terraform state is not kept locally as the source of truth. The workflow configures an S3 backend, and CI passes the bucket name through `TF_STATE_BUCKET`.

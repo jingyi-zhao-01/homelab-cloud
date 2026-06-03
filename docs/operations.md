@@ -67,6 +67,15 @@ The current k3s setup relies on Terraform-provisioned AWS SSM parameters for sec
 
 For the Neon and secrets workflow details, see [Infrastructure](infrastructure.md).
 
+For remote spot workers, do not stop at `k3s_server_url` and `k3s_token`. Make sure the worker Terraform inputs also include `trusted_cluster_cidrs` so the control-plane, VPN, or other trusted cluster paths can actually reach the node for cross-node networking and monitoring.
+
+The reusable workflow pair is:
+
+- `terraform-k3s-spot-network-internal.yml` for the VPC and public subnets
+- `terraform-k3s-spot-node-internal.yml` for the worker itself
+
+The manual entrypoint is `terraform-k3s-spot-node.yml`, and the most important remote-worker inputs are `trusted_cluster_cidrs` plus optional `extra_k3s_agent_args`.
+
 Local state is not a supported operating mode. Use the GitHub workflows or pass `TF_STATE_BUCKET` and `AWS_REGION` so local Make targets initialize the S3 backend explicitly.
 
 ## Useful Make Targets

@@ -88,8 +88,8 @@ jobs:
           echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
 
-      - name: Pause 5 minutes before smoke
-        run: sleep 300
+      - name: Pause 3 minutes before smoke
+        run: sleep 180
 
       - name: Run concurrency smoke (10 TPS)
         run: |

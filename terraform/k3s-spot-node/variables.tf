@@ -52,6 +52,12 @@ variable "allowed_ssh_cidrs" {
   default     = []
 }
 
+variable "trusted_cluster_cidrs" {
+  description = "CIDR blocks allowed to reach the spot worker for k3s node-to-node traffic, pod overlay traffic, and node-level scrapes such as node-exporter. Use the server/VPN/private ranges that must talk to this worker."
+  type        = list(string)
+  default     = []
+}
+
 variable "associate_public_ip_address" {
   description = "Whether the spot instance should receive a public IP on launch"
   type        = bool

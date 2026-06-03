@@ -109,6 +109,18 @@ resource "aws_security_group" "spot_node" {
   vpc_id      = local.effective_vpc_id
 
   dynamic "ingress" {
+    for_each = var.trusted_cluster_cidrs
+
+    content {
+      description = "Trusted k3s cluster traffic"
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = [ingress.value]
+    }
+  }
+
+  dynamic "ingress" {
     for_each = var.allowed_ssh_cidrs
 
     content {

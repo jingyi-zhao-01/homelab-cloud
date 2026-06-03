@@ -14,11 +14,18 @@ subnet_ids = [
 
 key_name = "my-admin-key"
 allowed_ssh_cidrs = ["203.0.113.10/32"]
+trusted_cluster_cidrs = [
+  "203.0.113.20/32", # control-plane public IP, VPN range, or other trusted cluster ingress source
+]
 
 instance_types = ["t3.small", "t3a.small"]
 
 k3s_server_url = "https://76.13.108.14:6443"
 k3s_token      = "replace-me-with-the-current-k3s-token"
+
+# When the k3s server and this worker do not share direct private networking,
+# also make sure the server side is configured for external-address flannel
+# routing per the k3s multicloud guidance.
 
 node_labels = [
   "node-purpose=worker",
