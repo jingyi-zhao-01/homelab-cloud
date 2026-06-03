@@ -36,8 +36,8 @@ Perf runs currently provision an ephemeral Neon database through Terraform befor
 For the current interpretation limits and correctness caveats of the flashsales perf harness, use [Flashsales harness engineering](../flashsale/docs/flashsales-harness-engineering.md) as the source of truth.
 
 ```bash
-make loadtest KUBECONFIG_PATH=secrets/.kube-config
-make loadtest-lite KUBECONFIG_PATH=secrets/.kube-config
+make concurrency-baseline KUBECONFIG_PATH=secrets/.kube-config
+make concurrency-smoke KUBECONFIG_PATH=secrets/.kube-config
 bash ./flashsale/perf/scripts/loadtest-k6.sh -e RAMP_UP=30s -e STEADY=180s -e TARGET_VUS=50
 ```
 

@@ -1,4 +1,4 @@
-.PHONY: loadtest loadtest-lite loadtest-lite-idempotency loadtest-high-safe concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot
+.PHONY: concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot
 
 # Shared wrapper and scenario entrypoints used by the perf targets below.
 LOADTEST_WRAPPER := bash ./flashsale/perf/scripts/loadtest-k6.sh
@@ -15,19 +15,6 @@ K6_P90_THRESHOLD_MS ?= 1200
 K6_P95_THRESHOLD_MS ?= 1500
 K6_P99_THRESHOLD_MS ?= 500
 MAX_5XX_RATE ?= 0
-
-# Legacy aliases kept for convenience; these map to the named concurrency profiles.
-loadtest:
->$(call run_loadtest,$(CONCURRENCY_SCENARIO),-e PROFILE=baseline)
-
-loadtest-lite:
->$(call run_loadtest,$(CONCURRENCY_SCENARIO),-e PROFILE=smoke -e K6_P50_THRESHOLD_MS=100 -e K6_P90_THRESHOLD_MS=200 -e K6_P99_THRESHOLD_MS=500 -e MAX_5XX_RATE=0)
-
-loadtest-lite-idempotency:
->$(call run_loadtest,$(IDEMPOTENCY_SCENARIO),-e K6_P50_THRESHOLD_MS=1000 -e K6_P90_THRESHOLD_MS=1500 -e K6_P95_THRESHOLD_MS=2000)
-
-loadtest-high-safe:
->$(call run_loadtest,$(CONCURRENCY_SCENARIO),-e PROFILE=stress100 -e K6_P50_THRESHOLD_MS=150 -e K6_P90_THRESHOLD_MS=500 -e K6_P99_THRESHOLD_MS=1200 -e MAX_5XX_RATE=0.02)
 
 # Profile-specific perf lanes used by CI and manual runs.
 concurrency-smoke:

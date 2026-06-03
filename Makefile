@@ -12,7 +12,7 @@ SSH_PORT ?= 22
 REMOTE_K3S_CMD ?= k3s ctr images import -
 SSH ?= ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
 
-.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-init neon-apply neon-destroy loadtest loadtest-lite loadtest-lite-idempotency loadtest-high-safe concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot
+.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-init neon-apply neon-destroy concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot
 
 TAIL ?= 200
 SINCE ?= 10m
@@ -36,10 +36,8 @@ help:
 >echo "  make import-images-remote  # Stream local images into remote k3s containerd via SSH"
 >echo "  make deploy-remote         # Deploy chart to remote cluster using .kube-config"
 >echo "  make fix-images-remote     # Build + import to remote + restart + status"
->echo "  make loadtest              # Run baseline concurrency test (50 TPS profile)"
->echo "  make loadtest-lite         # Run smoke concurrency test (10 TPS profile)"
->echo "  make loadtest-high-safe    # Run stress concurrency test (100 TPS profile)"
 >echo "  make concurrency-smoke     # 10 TPS, strict latency and zero 5xx"
+>echo "  make concurrency-idempotency-lite # Replay duplicate orders and verify dedupe"
 >echo "  make concurrency-baseline  # 50 TPS sustained baseline"
 >echo "  make concurrency-stress100 # 100 TPS stress stage"
 >echo "  make concurrency-stress200 # 200 TPS stress stage"
@@ -51,7 +49,7 @@ help:
 lint:
 >cd flashsale && uv run pre-commit run --all-files
 
-loadtest loadtest-lite loadtest-lite-idempotency loadtest-high-safe concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot:
+concurrency-smoke concurrency-idempotency-lite concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot:
 >$(MAKE) -C flashsale/perf $@
 
 check-local:

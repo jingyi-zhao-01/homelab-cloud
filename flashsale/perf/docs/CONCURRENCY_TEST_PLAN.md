@@ -70,11 +70,6 @@ From repo root:
 - `make concurrency-stress200`
 - `make concurrency-hotspot`
 
-Compatibility aliases used by CI:
-
-- `make loadtest-lite` -> smoke profile
-- `make loadtest-high-safe` -> stress100 profile
-
 ## Step-by-step Progression
 
 Run in this order:

@@ -35,7 +35,7 @@ If you only need one place to orient yourself, start with [Repository overview](
 make deploy KUBECONFIG_PATH=$HOME/.kube/config
 make status KUBECONFIG_PATH=$HOME/.kube/config
 make e2e KUBECONFIG_PATH=$HOME/.kube/config
-make loadtest KUBECONFIG_PATH=secrets/.kube-config
+make concurrency-baseline KUBECONFIG_PATH=secrets/.kube-config
 ```
 
 ## Repository Layout
