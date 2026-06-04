@@ -1,0 +1,88 @@
+{
+  "uid": "flashsale-terminalization-queue-health",
+  "title": "Flashsale Terminalization Queue Health",
+  "tags": ["flashsale", "queue", "terminalization", "health"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "constant",
+        "label": "Namespace",
+        "query": "${namespace}",
+        "current": { "text": "${namespace}", "value": "${namespace}" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Queue Backlog Over Time",
+      "description": "为什么重要：这是 async 设计是否真的扛住压力的核心图。怎么看：如果 backlog 只在峰值时短暂上升后回落，说明 queue 在吸收流量；如果一直单边上涨，说明 worker 跟不上生产速度。",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${neon_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "WITH deltas AS ( SELECT $__timeGroupAlias(occurred_at, '1m'), SUM(CASE WHEN event_type IN ('queued', 'retrying') THEN 1 WHEN event_type = 'processing' THEN -1 ELSE 0 END)::double precision AS delta FROM order_terminalization_task_events WHERE $__timeFilter(occurred_at) GROUP BY 1 ) SELECT time, SUM(delta) OVER (ORDER BY time) AS value FROM deltas ORDER BY time;"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Active Tasks Over Time",
+      "description": "为什么重要：看当前还没彻底完成的 terminalization 工作量。怎么看：它应该在压测期间波动，但结束后逐步回落；如果压测停了它还不掉，说明系统在积债。",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${neon_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "WITH deltas AS ( SELECT $__timeGroupAlias(occurred_at, '1m'), SUM(CASE WHEN event_type = 'queued' THEN 1 WHEN event_type = 'succeeded' THEN -1 ELSE 0 END)::double precision AS delta FROM order_terminalization_task_events WHERE $__timeFilter(occurred_at) GROUP BY 1 ) SELECT time, SUM(delta) OVER (ORDER BY time) AS value FROM deltas ORDER BY time;"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Enqueue Rate By Action",
+      "description": "为什么重要：用来看 `confirm` 和 `cancel` 哪一类任务在制造压力。怎么看：如果 `confirm` 线明显更高，说明主购买路径在堆积；如果 `cancel` 突然变高，说明失败补偿在放大流量。",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${neon_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(occurred_at, '1m'), COUNT(*)::double precision AS value, action AS metric FROM order_terminalization_task_events WHERE $__timeFilter(occurred_at) AND event_type = 'queued' GROUP BY 1, 3 ORDER BY 1;"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Worker Claim Rate By Action",
+      "description": "为什么重要：这是 worker 消费速度。怎么看：把它和 enqueue rate 对照看；如果 claim rate 长期低于 enqueue rate，backlog 一定会涨，说明 worker 数量、下游处理能力或 DB 竞争不足。",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${neon_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(occurred_at, '1m'), COUNT(*)::double precision AS value, action AS metric FROM order_terminalization_task_events WHERE $__timeFilter(occurred_at) AND event_type = 'processing' GROUP BY 1, 3 ORDER BY 1;"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    }
+  ]
+}

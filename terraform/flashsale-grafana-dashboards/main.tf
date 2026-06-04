@@ -22,33 +22,60 @@ resource "grafana_folder" "flashsale" {
 }
 
 locals {
-  flashsale_async_terminalization_dashboard = templatefile(
-    "${path.module}/dashboards/flashsale-async-terminalization.json.tftpl",
+  flashsale_http_throughput_dashboard = templatefile(
+    "${path.module}/dashboards/flashsale-http-throughput.json.tftpl",
     {
-      neon_datasource_uid    = var.neon_datasource_uid
-      loki_datasource_uid    = var.loki_datasource_uid
-      namespace              = var.flashsale_namespace
-      processing_sla_minutes = var.processing_sla_minutes
+      loki_datasource_uid = var.loki_datasource_uid
+      namespace           = var.flashsale_namespace
     }
   )
 
-  flashsale_http_endpoint_performance_dashboard = templatefile(
-    "${path.module}/dashboards/flashsale-http-endpoint-performance.json.tftpl",
+  flashsale_http_latency_dashboard = templatefile(
+    "${path.module}/dashboards/flashsale-http-latency.json.tftpl",
     {
+      loki_datasource_uid = var.loki_datasource_uid
+      namespace           = var.flashsale_namespace
+    }
+  )
+
+  flashsale_terminalization_queue_health_dashboard = templatefile(
+    "${path.module}/dashboards/flashsale-terminalization-queue-health.json.tftpl",
+    {
+      neon_datasource_uid = var.neon_datasource_uid
+      namespace           = var.flashsale_namespace
+    }
+  )
+
+  flashsale_terminalization_outcomes_dashboard = templatefile(
+    "${path.module}/dashboards/flashsale-terminalization-outcomes.json.tftpl",
+    {
+      neon_datasource_uid = var.neon_datasource_uid
       loki_datasource_uid = var.loki_datasource_uid
       namespace           = var.flashsale_namespace
     }
   )
 }
 
-resource "grafana_dashboard" "flashsale_async_terminalization" {
+resource "grafana_dashboard" "flashsale_http_throughput" {
   folder      = grafana_folder.flashsale.uid
   overwrite   = true
-  config_json = local.flashsale_async_terminalization_dashboard
+  config_json = local.flashsale_http_throughput_dashboard
 }
 
-resource "grafana_dashboard" "flashsale_http_endpoint_performance" {
+resource "grafana_dashboard" "flashsale_http_latency" {
   folder      = grafana_folder.flashsale.uid
   overwrite   = true
-  config_json = local.flashsale_http_endpoint_performance_dashboard
+  config_json = local.flashsale_http_latency_dashboard
+}
+
+resource "grafana_dashboard" "flashsale_terminalization_queue_health" {
+  folder      = grafana_folder.flashsale.uid
+  overwrite   = true
+  config_json = local.flashsale_terminalization_queue_health_dashboard
+}
+
+resource "grafana_dashboard" "flashsale_terminalization_outcomes" {
+  folder      = grafana_folder.flashsale.uid
+  overwrite   = true
+  config_json = local.flashsale_terminalization_outcomes_dashboard
 }

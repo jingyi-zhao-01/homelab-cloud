@@ -1,0 +1,102 @@
+{
+  "uid": "flashsale-http-throughput",
+  "title": "Flashsale HTTP Throughput",
+  "tags": ["flashsale", "http", "throughput"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "constant",
+        "label": "Namespace",
+        "query": "${namespace}",
+        "current": { "text": "${namespace}", "value": "${namespace}" }
+      },
+      {
+        "name": "service",
+        "type": "custom",
+        "label": "Service",
+        "query": "order-service,product-service,user-service",
+        "includeAll": true,
+        "multi": false,
+        "current": { "text": "All", "value": "$__all" },
+        "allValue": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Endpoint Throughput (RPS)",
+      "description": "为什么重要：这是最直接的入口压力图，先确认 perf test 的流量是否真的打进来了。怎么看：看曲线是否随压测爬升、是否突然掉平；如果只有少数 endpoint 有流量，说明热点路径很集中。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service, method, path) (rate({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" [5m]))",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Order Create Throughput",
+      "description": "为什么重要：`POST /orders` 是闪购主热点路径，吞吐抖动通常比错误更早暴露瓶颈。怎么看：看它是否跟整体压测同步增长；如果整体流量还在升而这条线先掉，说明订单入口已经饱和。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service, method, path) (rate({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=\"order-service\" | method=\"POST\" | path=\"/orders\" [5m]))",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Error Throughput (4xx/5xx)",
+      "description": "为什么重要：吞吐还在不代表系统健康，错误吞吐能区分是容量问题、业务冲突还是依赖失败。怎么看：4xx 上升通常是冲突/库存不足，5xx 上升更像服务、数据库或下游抖动。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service, method, path, status_code) (rate({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | status_code=~\"4..|5..\" [5m]))",
+          "legendFormat": "{{service}} {{method}} {{path}} {{status_code}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Top Endpoints By Volume",
+      "description": "为什么重要：用来快速确认当前最忙的热点 endpoint。怎么看：如果某一条线长期压住其他 endpoint，后续所有 latency、queue、DB 指标都优先围绕它分析。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (service, method, path) (rate({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" [5m])))",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    }
+  ]
+}

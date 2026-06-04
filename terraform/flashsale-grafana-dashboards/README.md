@@ -6,8 +6,10 @@ This Terraform module provisions Grafana dashboards for the flashsale workload.
 
 Current dashboard set:
 
-- `Flashsale Async Terminalization`
-- `Flashsale HTTP Endpoint Performance`
+- `Flashsale HTTP Throughput`
+- `Flashsale HTTP Latency`
+- `Flashsale Terminalization Queue Health`
+- `Flashsale Terminalization Outcomes`
 
 This dashboard exists to support [ADR 0002](../../flashsale/docs/adrs/0002-async-reservation-terminalization.md), which moves reservation `confirm/cancel` off the synchronous order path and requires queue-health style visibility.
 
@@ -51,25 +53,38 @@ flashsale_namespace   = "flashsales"
 processing_sla_minutes = 5
 ```
 
-## What The Dashboard Shows
+## What The Dashboards Show
 
-The current dashboard focuses on the async terminalization path introduced by ADR 0002:
+This module now provisions only four dashboards, and every panel is time-based (`timeseries`).
 
-- terminalization backlog
-- oldest queued age
-- retry count by action
-- stuck processing tasks
-- orders still waiting on reservation work
-- terminalization success / retry / error log trends
-- terminalization worker logs
+1. `Flashsale HTTP Throughput`
 
-The HTTP endpoint dashboard uses Loki request logs emitted by the FastAPI middleware and shows:
+- purpose: show whether perf traffic is actually entering the system and which endpoint is the hotspot
+- read it like this: first confirm `POST /orders` rises with the load test, then compare total throughput with error throughput to see whether the system is degrading or merely busy
 
-- throughput per service/method/path
-- p50 / p95 / p99 latency per service/method/path
-- top endpoints by request volume
-- top endpoints by p95 latency
-- 4xx / 5xx rate by endpoint
+2. `Flashsale HTTP Latency`
+
+- purpose: show baseline latency and tail-latency regression by endpoint
+- read it like this: start with `p50`, then `p95`, then `p99`; if only tail latency rises, the system is entering contention before full collapse
+
+3. `Flashsale Terminalization Queue Health`
+
+- purpose: show whether the async queue is absorbing pressure or accumulating debt
+- read it like this: compare enqueue rate against worker claim rate; if backlog climbs while claim rate stays below enqueue rate, the worker path is the bottleneck
+
+4. `Flashsale Terminalization Outcomes`
+
+- purpose: show whether queued work is eventually succeeding or just retrying forever
+- read it like this: compare retry trends, success trends, and worker error trends over the same time window; healthy systems may retry briefly but should converge toward success
+
+## Panel Annotation Style
+
+Every panel description is written as:
+
+- `为什么重要`
+- `怎么看`
+
+This is intentional. During perf runs, the dashboards are not just for display; they are meant to guide diagnosis quickly while pressure is happening in real time.
 
 ## Validation
 

@@ -1,0 +1,102 @@
+{
+  "uid": "flashsale-http-latency",
+  "title": "Flashsale HTTP Latency",
+  "tags": ["flashsale", "http", "latency"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "constant",
+        "label": "Namespace",
+        "query": "${namespace}",
+        "current": { "text": "${namespace}", "value": "${namespace}" }
+      },
+      {
+        "name": "service",
+        "type": "custom",
+        "label": "Service",
+        "query": "order-service,product-service,user-service",
+        "includeAll": true,
+        "multi": false,
+        "current": { "text": "All", "value": "$__all" },
+        "allValue": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "P50 Endpoint Latency (ms)",
+      "description": "为什么重要：P50 代表系统的日常基线，最适合看是不是所有请求都整体变慢。怎么看：如果 P50 都明显抬升，通常不是个别尖刺，而是主路径本身更重了。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.50, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path)",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "P95 Endpoint Latency (ms)",
+      "description": "为什么重要：P95 最适合看负载开始逼近瓶颈时的退化。怎么看：如果 P95 抬升但 P50 还平稳，说明大多数请求还好，但尾部开始排队或竞争锁。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path)",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "P99 Endpoint Latency (ms)",
+      "description": "为什么重要：P99 是 perf test 最容易先炸的地方，通常最早反映排队、锁争用、超时重试。怎么看：如果 P99 出现尖刺并逐步放大，后面大概率会跟 request timeout 或 queue backlog 上升一起出现。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.99, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path)",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Top Endpoints By P95",
+      "description": "为什么重要：当 endpoint 太多时，这张图帮你快速锁定最慢的热点路径。怎么看：先看榜首是谁，再对照同时间窗口里的吞吐、错误和 queue 图判断它是 CPU/DB 热点还是下游依赖热点。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path))",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    }
+  ]
+}
