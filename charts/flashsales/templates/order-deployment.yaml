@@ -74,7 +74,7 @@ spec:
             failureThreshold: {{ .Values.orderService.readinessProbe.failureThreshold }}
           livenessProbe:
             httpGet:
-              path: /health
+              path: /live
               port: {{ .Values.orderService.service.port }}
             initialDelaySeconds: {{ .Values.orderService.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.orderService.livenessProbe.periodSeconds }}

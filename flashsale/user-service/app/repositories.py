@@ -11,6 +11,8 @@ from .models import UserCreate, UserOut
 class UserRepository(Protocol):
     def init_db(self) -> None: ...
 
+    def is_healthy(self) -> bool: ...
+
     def reset_db(self) -> None: ...
 
     def create_user(self, payload: UserCreate) -> UserOut: ...
@@ -28,6 +30,9 @@ class InMemoryUserRepository:
 
     def init_db(self) -> None:
         return
+
+    def is_healthy(self) -> bool:
+        return True
 
     def reset_db(self) -> None:
         with self._lock:
@@ -62,6 +67,13 @@ class PostgresUserRepository:
                         email TEXT NOT NULL UNIQUE
                     )
                     """)
+
+    def is_healthy(self) -> bool:
+        with psycopg.connect(self._database_url, connect_timeout=2) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        return True
 
     def reset_db(self) -> None:
         with psycopg.connect(self._database_url, autocommit=True) as conn:

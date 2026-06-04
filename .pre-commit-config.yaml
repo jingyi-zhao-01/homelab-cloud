@@ -12,7 +12,7 @@ repos:
     hooks:
       - id: pylint-microservices
         name: Pylint - microservice module size
-        entry: uv run --project flashsale pylint
+        entry: uv run --project flashsale pylint --rcfile=flashsale/pyproject.toml
         language: system
         files: ^flashsale/(user-service|product-service|order-service)/(app|tests)/.*\.py$
         stages: [pre-commit]

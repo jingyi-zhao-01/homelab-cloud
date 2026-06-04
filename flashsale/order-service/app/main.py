@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, status
+from fastapi.responses import JSONResponse
 
 from .config import db_url, use_postgres
 from .models import (
@@ -42,10 +43,30 @@ def startup() -> None:
 @app.get(
     "/health",
     summary="Service health check",
-    description="Returns a lightweight health payload for order-service.",
+    description="Returns readiness for order-service, including database reachability.",
     tags=["system"],
 )
 def health() -> HealthResponse:
+    try:
+        healthy = repository.is_healthy()
+    except Exception:
+        logger.warning("event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True)
+        healthy = False
+    if not healthy:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=HealthResponse(status="database-unavailable", service=SERVICE_NAME).model_dump(),
+        )
+    return HealthResponse(status="ok", service=SERVICE_NAME)
+
+
+@app.get(
+    "/live",
+    summary="Service liveness check",
+    description="Returns basic process liveness for order-service without touching dependencies.",
+    tags=["system"],
+)
+def live() -> HealthResponse:
     return HealthResponse(status="ok", service=SERVICE_NAME)
 
 

@@ -10,3 +10,8 @@ class UserOut(BaseModel):
     id: int
     name: str
     email: EmailStr
+
+
+class HealthResponse(BaseModel):
+    status: str
+    service: str

@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, status
+from fastapi.responses import JSONResponse
 
 from .config import db_url, use_postgres
-from .models import UserCreate, UserOut
+from .models import HealthResponse, UserCreate, UserOut
 from .observability import configure_service_logger, create_request_logging_middleware
 from .repositories import InMemoryUserRepository, PostgresUserRepository
 from .service import UserService
@@ -33,8 +34,23 @@ def startup() -> None:
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": SERVICE_NAME}
+def health() -> HealthResponse:
+    try:
+        healthy = repository.is_healthy()
+    except Exception:
+        logger.warning("event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True)
+        healthy = False
+    if not healthy:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=HealthResponse(status="database-unavailable", service=SERVICE_NAME).model_dump(),
+        )
+    return HealthResponse(status="ok", service=SERVICE_NAME)
+
+
+@app.get("/live")
+def live() -> HealthResponse:
+    return HealthResponse(status="ok", service=SERVICE_NAME)
 
 
 @app.post(

@@ -1,5 +1,4 @@
 import json
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from itertools import count
@@ -10,18 +9,21 @@ import psycopg
 from psycopg.rows import dict_row
 
 from .models import OrderItemOut, OrderOut, OrderStatus, PaymentStatus
+from .order_storage import (
+    StoredOrder,
+    to_order,
+    to_stored_order,
+    transition_payment_status,
+    transition_status,
+)
 
 ROW_FACTORY = cast(Any, dict_row)
 
 
-@dataclass(frozen=True)
-class StoredOrder:
-    order: OrderOut
-    reservation_ids: tuple[int, ...]
-
-
 class OrderRepository(Protocol):
     def init_db(self) -> None: ...
+
+    def is_healthy(self) -> bool: ...
 
     def reset_db(self) -> None: ...
 
@@ -53,67 +55,6 @@ class OrderRepository(Protocol):
 
     def list_stale_orders(self, expires_before: datetime) -> list[StoredOrder]: ...
 
-
-def _to_order(row: Any) -> OrderOut:
-    items = [OrderItemOut.model_validate(item) for item in row["items_json"]]
-    created_at = row["created_at"]
-    if isinstance(created_at, datetime):
-        created_at = created_at.isoformat()
-
-    return OrderOut(
-        id=int(row["id"]),
-        user_id=int(row["user_id"]),
-        created_at=created_at,
-        total_amount=float(row["total_amount"]),
-        status=cast(OrderStatus, row["status"]),
-        payment_status=cast(PaymentStatus, row["payment_status"]),
-        idempotency_key=cast(str | None, row["idempotency_key"]),
-        items=items,
-    )
-
-
-def _to_stored_order(row: Any) -> StoredOrder:
-    return StoredOrder(
-        order=_to_order(row),
-        reservation_ids=tuple(int(value) for value in row["reservation_ids_json"]),
-    )
-
-
-ALLOWED_ORDER_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
-    "pending": {"confirmed", "failed", "cancelled", "expired"},
-    "confirmed": {"confirmed"},
-    "failed": {"failed"},
-    "cancelled": {"cancelled"},
-    "expired": {"expired"},
-}
-
-ALLOWED_PAYMENT_TRANSITIONS: dict[PaymentStatus, set[PaymentStatus]] = {
-    "pending": {"succeeded", "cancelled"},
-    "succeeded": {"succeeded"},
-    "cancelled": {"cancelled"},
-}
-
-
-def _transition_status(current: OrderStatus, target: OrderStatus) -> OrderStatus:
-    if target == current:
-        return current
-    if target not in ALLOWED_ORDER_TRANSITIONS[current]:
-        raise ValueError(f"invalid order status transition: {current} -> {target}")
-    return target
-
-
-def _transition_payment_status(
-    current: PaymentStatus, target: PaymentStatus
-) -> PaymentStatus:
-    if target == current:
-        return current
-    if target not in ALLOWED_PAYMENT_TRANSITIONS[current]:
-        raise ValueError(
-            f"invalid payment status transition: {current} -> {target}"
-        )
-    return target
-
-
 class InMemoryOrderRepository:
     def __init__(self) -> None:
         self._orders: dict[int, StoredOrder] = {}
@@ -123,6 +64,9 @@ class InMemoryOrderRepository:
 
     def init_db(self) -> None:
         return
+
+    def is_healthy(self) -> bool:
+        return True
 
     def reset_db(self) -> None:
         with self._lock:
@@ -174,10 +118,10 @@ class InMemoryOrderRepository:
             stored = self._orders.get(order_id)
             if not stored:
                 return None
-            next_status = _transition_status(stored.order.status, status)
+            next_status = transition_status(stored.order.status, status)
             next_payment_status = stored.order.payment_status
             if payment_status is not None:
-                next_payment_status = _transition_payment_status(
+                next_payment_status = transition_payment_status(
                     stored.order.payment_status, payment_status
                 )
             updated = stored.order.model_copy(
@@ -262,6 +206,13 @@ class PostgresOrderRepository:
                     WHERE idempotency_key IS NOT NULL
                     """)
 
+    def is_healthy(self) -> bool:
+        with psycopg.connect(self._database_url, connect_timeout=2) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        return True
+
     def reset_db(self) -> None:
         with psycopg.connect(self._database_url, autocommit=True) as conn:
             with conn.cursor() as cur:
@@ -317,7 +268,7 @@ class PostgresOrderRepository:
                 )
                 row = cur.fetchone()
                 if row:
-                    return _to_order(row)
+                    return to_order(row)
                 if idempotency_key:
                     existing = self.get_order_by_idempotency_key(idempotency_key)
                     if existing:
@@ -358,17 +309,17 @@ class PostgresOrderRepository:
                 current_payment_status = cast(
                     PaymentStatus, existing["payment_status"]
                 )
-                next_status = _transition_status(current_status, status)
+                next_status = transition_status(current_status, status)
                 next_payment_status = current_payment_status
                 if payment_status is not None:
-                    next_payment_status = _transition_payment_status(
+                    next_payment_status = transition_payment_status(
                         current_payment_status, payment_status
                     )
                 if (
                     next_status == current_status
                     and next_payment_status == current_payment_status
                 ):
-                    return _to_order(existing)
+                    return to_order(existing)
 
                 cur.execute(
                     """
@@ -391,7 +342,7 @@ class PostgresOrderRepository:
                 row = cur.fetchone()
                 if not row:
                     return None
-                return _to_order(row)
+                return to_order(row)
 
     def get_order(self, order_id: int) -> OrderOut | None:
         with psycopg.connect(self._database_url, row_factory=ROW_FACTORY) as conn:
@@ -416,7 +367,7 @@ class PostgresOrderRepository:
                 row = cur.fetchone()
                 if not row:
                     return None
-                return _to_order(row)
+                return to_order(row)
 
     def get_stored_order(self, order_id: int) -> StoredOrder | None:
         with psycopg.connect(self._database_url, row_factory=ROW_FACTORY) as conn:
@@ -441,7 +392,7 @@ class PostgresOrderRepository:
                 row = cur.fetchone()
                 if not row:
                     return None
-                return _to_stored_order(row)
+                return to_stored_order(row)
 
     def get_order_by_idempotency_key(self, idempotency_key: str) -> OrderOut | None:
         with psycopg.connect(self._database_url, row_factory=ROW_FACTORY) as conn:
@@ -466,7 +417,7 @@ class PostgresOrderRepository:
                 row = cur.fetchone()
                 if not row:
                     return None
-                return _to_order(row)
+                return to_order(row)
 
     def list_orders(self) -> list[OrderOut]:
         with psycopg.connect(self._database_url, row_factory=ROW_FACTORY) as conn:
@@ -486,7 +437,7 @@ class PostgresOrderRepository:
                     ORDER BY id DESC
                     """)
                 rows = cur.fetchall()
-                return [_to_order(row) for row in rows]
+                return [to_order(row) for row in rows]
 
     def list_stale_orders(self, expires_before: datetime) -> list[StoredOrder]:
         with psycopg.connect(self._database_url, row_factory=ROW_FACTORY) as conn:
@@ -510,4 +461,4 @@ class PostgresOrderRepository:
                     (expires_before,),
                 )
                 rows = cur.fetchall()
-                return [_to_stored_order(row) for row in rows]
+                return [to_stored_order(row) for row in rows]

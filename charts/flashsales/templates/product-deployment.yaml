@@ -70,7 +70,7 @@ spec:
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: /health
+              path: /live
               port: {{ .Values.productService.service.port }}
             initialDelaySeconds: 10
             periodSeconds: 10

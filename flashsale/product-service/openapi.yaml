@@ -8,8 +8,23 @@ paths:
       tags:
       - system
       summary: Service health check
-      description: Returns a lightweight health payload for product-service.
+      description: Returns readiness for product-service, including database reachability.
       operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /live:
+    get:
+      tags:
+      - system
+      summary: Service liveness check
+      description: Returns basic process liveness for product-service without touching
+        dependencies.
+      operationId: live_live_get
       responses:
         '200':
           description: Successful Response
