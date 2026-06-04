@@ -10,7 +10,7 @@ psycopg_rows_stub.dict_row = object()
 sys.modules.setdefault("psycopg", psycopg_stub)
 sys.modules.setdefault("psycopg.rows", psycopg_rows_stub)
 
-from app.repositories import PostgresOrderRepository
+from app.adapters.order_postgres_unit_of_work import OrderPostgresUnitOfWork
 
 
 class _FakeCursor:
@@ -44,10 +44,10 @@ class _FakeConnection:
 class OrderServiceMigrationCompatibilityTest(unittest.TestCase):
     def test_init_db_keeps_backward_compatible_order_columns(self) -> None:
         statements: list[str] = []
-        repository = PostgresOrderRepository("postgresql://example")
+        repository = OrderPostgresUnitOfWork("postgresql://example")
 
         with patch(
-            "app.repository_postgres.psycopg.connect",
+            "app.adapters.order_postgres_unit_of_work.psycopg.connect",
             return_value=_FakeConnection(statements),
         ):
             repository.init_db()

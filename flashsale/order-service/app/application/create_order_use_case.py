@@ -1,0 +1,170 @@
+from datetime import datetime, timedelta, timezone
+
+from fastapi import HTTPException
+
+from app.application.commands import CreateOrderCommand, PaymentWebhookCommand
+from app.application.results import ExpireOrdersResult
+from app.config import DATABASE_UNAVAILABLE_MESSAGE, ORDER_PENDING_TTL_SECONDS
+from app.domain.order import Order, OrderItem
+from app.ports.product_reservation_client import ProductReservationClient
+from app.ports.unit_of_work import UnitOfWork
+from app.ports.user_directory_client import UserDirectoryClient
+
+
+class CreateOrderUseCase:
+    def __init__(
+        self,
+        uow: UnitOfWork,
+        users: UserDirectoryClient,
+        products: ProductReservationClient,
+    ) -> None:
+        self._uow = uow
+        self._users = users
+        self._products = products
+
+    def create_order(self, command: CreateOrderCommand) -> Order:
+        if not command.items:
+            raise HTTPException(status_code=400, detail="order items cannot be empty")
+        if command.idempotency_key:
+            existing = self._uow.orders.get_by_idempotency_key(command.idempotency_key)
+            if existing:
+                return existing
+
+        self._users.ensure_user_exists(command.user_id)
+        order_items: list[OrderItem] = []
+        reservation_ids: list[int] = []
+        order_id: int | None = None
+        total_amount = 0.0
+
+        try:
+            for product_id, quantity in command.items:
+                unit_price, reserved_qty, reservation_id = self._products.reserve(
+                    product_id=product_id,
+                    quantity=quantity,
+                )
+                reservation_ids.append(reservation_id)
+                item = OrderItem(
+                    product_id=product_id,
+                    quantity=reserved_qty,
+                    unit_price=unit_price,
+                )
+                total_amount += item.line_total
+                order_items.append(item)
+            order = self._uow.orders.create(
+                user_id=command.user_id,
+                total_amount=total_amount,
+                items=order_items,
+                reservation_ids=reservation_ids,
+                idempotency_key=command.idempotency_key,
+            )
+            order_id = order.id
+            return self._require_finalized(order.id, reservation_ids, "succeeded")
+        except RuntimeError as exc:
+            self._products.release(reservation_ids)
+            raise HTTPException(status_code=503, detail="order persistence failed") from exc
+        except HTTPException:
+            if order_id is not None:
+                self._enqueue_cancellation(order_id, reservation_ids, "failed")
+            self._products.release(reservation_ids)
+            raise
+        except Exception as exc:
+            if order_id is not None:
+                self._enqueue_cancellation(order_id, reservation_ids, "failed")
+            self._products.release(reservation_ids)
+            raise HTTPException(
+                status_code=503,
+                detail=DATABASE_UNAVAILABLE_MESSAGE,
+            ) from exc
+
+    def process_payment_webhook(self, command: PaymentWebhookCommand) -> Order:
+        try:
+            order = self._uow.orders.get(command.order_id)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=DATABASE_UNAVAILABLE_MESSAGE,
+            ) from exc
+        if not order:
+            raise HTTPException(status_code=404, detail="order not found")
+        if order.status == "confirmed" and order.payment_status == "succeeded":
+            return order
+        if order.status in {"expired", "failed", "cancelled"}:
+            return order
+        try:
+            return self._require_finalized(
+                order.id,
+                list(order.reservation_ids),
+                "succeeded",
+            )
+        except HTTPException:
+            self._enqueue_cancellation(order.id, list(order.reservation_ids), "failed")
+            raise
+        except Exception as exc:
+            self._enqueue_cancellation(order.id, list(order.reservation_ids), "failed")
+            raise HTTPException(
+                status_code=503,
+                detail=DATABASE_UNAVAILABLE_MESSAGE,
+            ) from exc
+
+    def expire_orders(self) -> ExpireOrdersResult:
+        expires_before = datetime.now(timezone.utc) - timedelta(
+            seconds=ORDER_PENDING_TTL_SECONDS
+        )
+        stale_orders = self._uow.orders.list_stale(expires_before)
+        expired_count = 0
+        for order in stale_orders:
+            if order.reservation_ids:
+                updated = self._uow.finalize_order(
+                    order_id=order.id,
+                    status="expired",
+                    payment_status="cancelled",
+                    action="cancel",
+                    reservation_ids=list(order.reservation_ids),
+                )
+            else:
+                updated = self._uow.orders.update_state(
+                    order.id,
+                    status="expired",
+                    payment_status="cancelled",
+                )
+            if updated:
+                expired_count += 1
+        return ExpireOrdersResult(expired_count=expired_count)
+
+    def _require_finalized(
+        self,
+        order_id: int,
+        reservation_ids: list[int],
+        payment_status: str,
+    ) -> Order:
+        order = self._uow.finalize_order(
+            order_id=order_id,
+            status="confirmed",
+            payment_status=payment_status,
+            action="confirm",
+            reservation_ids=reservation_ids,
+        )
+        if not order:
+            raise HTTPException(status_code=404, detail="order not found")
+        return order
+
+    def _enqueue_cancellation(
+        self,
+        order_id: int,
+        reservation_ids: list[int],
+        status: str,
+    ) -> None:
+        if not reservation_ids:
+            self._uow.orders.update_state(
+                order_id,
+                status=status,
+                payment_status="cancelled",
+            )
+            return
+        self._uow.finalize_order(
+            order_id=order_id,
+            status=status,
+            payment_status="cancelled",
+            action="cancel",
+            reservation_ids=reservation_ids,
+        )

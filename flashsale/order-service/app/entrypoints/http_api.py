@@ -1,0 +1,189 @@
+import anyio
+import httpx
+from fastapi import FastAPI, Response, status
+from fastapi.responses import JSONResponse
+
+from app.adapters.order_mapping import to_api_order
+from app.adapters.order_memory_unit_of_work import OrderMemoryUnitOfWork
+from app.adapters.order_postgres_unit_of_work import OrderPostgresUnitOfWork
+from app.adapters.product_reservation_http_client import ProductReservationHttpClient
+from app.adapters.user_http_client import UserHttpClient
+from app.application.commands import CreateOrderCommand, PaymentWebhookCommand
+from app.application.order_runtime import OrderRuntime
+from app.config import db_url, use_postgres
+from app.entrypoints.worker_loop import TerminalizationWorkerLoop
+from app.models import (
+    ErrorResponse,
+    ExpireOrdersResult,
+    HealthResponse,
+    OrderCreateRequest,
+    OrderOut,
+    PaymentWebhookRequest,
+    ProcessTerminalizationTasksResult,
+)
+from app.observability import configure_service_logger, create_request_logging_middleware
+
+SERVICE_NAME = "order-service"
+
+
+def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimiter]:
+    logger = configure_service_logger(SERVICE_NAME)
+    app = FastAPI(title=SERVICE_NAME, version="0.1.0")
+    app.middleware("http")(create_request_logging_middleware(logger, SERVICE_NAME))
+
+    uow = OrderPostgresUnitOfWork(db_url()) if use_postgres() else OrderMemoryUnitOfWork()
+    runtime = OrderRuntime(
+        uow=uow,
+        users=UserHttpClient(lambda: httpx.Client()),
+        products=ProductReservationHttpClient(lambda: httpx.Client()),
+    )
+    worker = TerminalizationWorkerLoop(runtime.process_tasks.process)
+    probe_limiter = anyio.CapacityLimiter(8)
+    repository = uow
+
+    @app.on_event("startup")
+    def startup() -> None:
+        try:
+            uow.init_db()
+            worker.start()
+        except Exception:
+            pass
+
+    @app.on_event("shutdown")
+    def shutdown() -> None:
+        worker.stop()
+
+    async def _repository_is_healthy() -> bool:
+        try:
+            return await anyio.to_thread.run_sync(repository.is_healthy, limiter=probe_limiter)
+        except Exception:
+            logger.warning("event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True)
+            return False
+
+    @app.get(
+        "/health",
+        summary="Service health check",
+        description="Returns readiness for order-service, including database reachability.",
+        tags=["system"],
+    )
+    async def health() -> HealthResponse:
+        if not await _repository_is_healthy():
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content=HealthResponse(
+                    status="database-unavailable",
+                    service=SERVICE_NAME,
+                ).model_dump(),
+            )
+        return HealthResponse(status="ok", service=SERVICE_NAME)
+
+    @app.get(
+        "/live",
+        summary="Service liveness check",
+        description="Returns basic process liveness for order-service without touching dependencies.",
+        tags=["system"],
+    )
+    async def live() -> HealthResponse:
+        return HealthResponse(status="ok", service=SERVICE_NAME)
+
+    @app.post(
+        "/orders",
+        status_code=201,
+        summary="Create order",
+        description="Validates the user, reserves product stock, and persists a new order.",
+        tags=["orders"],
+        responses={
+            400: {"model": ErrorResponse, "description": "Order items cannot be empty"},
+            404: {"model": ErrorResponse, "description": "User or product not found"},
+            409: {"model": ErrorResponse, "description": "Insufficient product stock"},
+            502: {"model": ErrorResponse, "description": "Dependent service unavailable"},
+            503: {"model": ErrorResponse, "description": "Database unavailable"},
+        },
+    )
+    def create_order(payload: OrderCreateRequest) -> OrderOut:
+        order = runtime.create_orders.create_order(
+            CreateOrderCommand(
+                user_id=payload.user_id,
+                items=tuple((item.product_id, item.quantity) for item in payload.items),
+                idempotency_key=payload.idempotency_key,
+            )
+        )
+        return to_api_order(order)
+
+    @app.get(
+        "/orders/{order_id}",
+        summary="Get order",
+        description="Fetches a single order by identifier.",
+        tags=["orders"],
+        responses={
+            404: {"model": ErrorResponse, "description": "Order not found"},
+            503: {"model": ErrorResponse, "description": "Database unavailable"},
+        },
+    )
+    def get_order(order_id: int) -> OrderOut:
+        return to_api_order(runtime.queries.get_order(order_id))
+
+    @app.get(
+        "/orders",
+        summary="List orders",
+        description="Returns all persisted orders visible to the service storage backend.",
+        tags=["orders"],
+        responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
+    )
+    def list_orders() -> list[OrderOut]:
+        return [to_api_order(order) for order in runtime.queries.list_orders()]
+
+    @app.post(
+        "/payments/webhook",
+        summary="Process payment webhook",
+        description="Applies a successful payment event to the referenced order.",
+        tags=["payments"],
+        responses={
+            404: {"model": ErrorResponse, "description": "Order not found"},
+            503: {"model": ErrorResponse, "description": "Database unavailable"},
+        },
+    )
+    def payment_webhook(payload: PaymentWebhookRequest) -> OrderOut:
+        order = runtime.create_orders.process_payment_webhook(
+            PaymentWebhookCommand(
+                order_id=payload.order_id,
+                event_id=payload.event_id,
+            )
+        )
+        return to_api_order(order)
+
+    @app.post(
+        "/admin/reset",
+        status_code=204,
+        summary="Reset order storage",
+        description="Clears order-service backing storage for local and integration test workflows.",
+        tags=["admin"],
+        responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
+    )
+    def admin_reset() -> Response:
+        uow.reset()
+        return Response(status_code=204)
+
+    @app.post(
+        "/admin/expire-orders",
+        summary="Expire pending orders",
+        description="Marks elapsed pending orders as expired and releases their reservations.",
+        tags=["admin"],
+        responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
+    )
+    def admin_expire_orders() -> ExpireOrdersResult:
+        result = runtime.create_orders.expire_orders()
+        return ExpireOrdersResult(expired_count=result.expired_count)
+
+    @app.post(
+        "/admin/process-terminalizations",
+        summary="Process terminalization tasks",
+        description="Runs one pass of the reservation confirm/cancel worker for diagnostics and tests.",
+        tags=["admin"],
+        responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
+    )
+    def admin_process_terminalizations() -> ProcessTerminalizationTasksResult:
+        result = runtime.process_tasks.process()
+        return ProcessTerminalizationTasksResult(**result.__dict__)
+
+    return app, repository, runtime, probe_limiter
