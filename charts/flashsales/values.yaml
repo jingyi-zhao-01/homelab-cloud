@@ -130,7 +130,7 @@ productService:
     dbHost: ""
     dbPort: ""
     dbName: ""
-    inventoryLockMode: optimistic
+    inventoryLockMode: pessimistic
     optimisticRetryLimit: "5"
 
 orderService:
@@ -178,7 +178,7 @@ orderService:
     dbName: ""
     redisUrl: redis://:redis-pass@flashsales-redis:6379/0
     rabbitmqUrl: amqp://flashsales:mq-pass@flashsales-rabbitmq:5672/
-    inventoryLockMode: optimistic
+    inventoryLockMode: pessimistic
     optimisticRetryLimit: "5"
 
 # Example to force all three services onto non-control worker nodes:
