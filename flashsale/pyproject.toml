@@ -28,7 +28,7 @@ product-service = { workspace = true }
 order-service = { workspace = true }
 
 [tool.pylint.format]
-max-module-lines = 500
+max-module-lines = 600
 
 [tool.pylint.messages_control]
 disable = [

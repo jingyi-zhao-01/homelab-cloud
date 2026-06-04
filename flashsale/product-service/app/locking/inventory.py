@@ -5,11 +5,21 @@ import psycopg
 from psycopg.rows import dict_row
 from opentelemetry.trace import SpanKind
 
+try:
+    from psycopg_pool import PoolClosed, PoolTimeout, TooManyRequests
+except ImportError:  # pragma: no cover - exercised only when pool dep is absent
+    PoolClosed = PoolTimeout = TooManyRequests = None
+
 from app.config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, DB_POOL_TIMEOUT_SECONDS
 from app.db_pool import DatabasePool
 from app.observability import start_span
 
 lock_logger = logging.getLogger("product-service.locking")
+POOL_ERRORS = tuple(
+    exc
+    for exc in (PoolTimeout, PoolClosed, TooManyRequests)
+    if isinstance(exc, type)
+)
 
 
 class InventoryReserveEngine:
@@ -182,12 +192,21 @@ class InventoryReserveEngine:
 
                     conn.commit()
                     return updated
-        except psycopg.Error:
-            lock_logger.exception(
-                "event=inventory_db_error lock_mode=pessimistic product_id=%s quantity=%s",
-                product_id,
-                quantity,
-            )
+        except Exception as exc:
+            if POOL_ERRORS and isinstance(exc, POOL_ERRORS):
+                lock_logger.exception(
+                    "event=inventory_pool_error lock_mode=pessimistic product_id=%s quantity=%s",
+                    product_id,
+                    quantity,
+                )
+                raise
+            if isinstance(exc, psycopg.Error):
+                lock_logger.exception(
+                    "event=inventory_db_error lock_mode=pessimistic product_id=%s quantity=%s",
+                    product_id,
+                    quantity,
+                )
+                raise
             raise
         finally:
             tx_elapsed_ms = (time.perf_counter() - tx_start) * 1000
@@ -278,12 +297,21 @@ class InventoryReserveEngine:
                 self._retry_limit,
             )
             raise RuntimeError("optimistic reserve retry limit exceeded")
-        except psycopg.Error:
-            lock_logger.exception(
-                "event=inventory_db_error lock_mode=optimistic product_id=%s quantity=%s",
-                product_id,
-                quantity,
-            )
+        except Exception as exc:
+            if POOL_ERRORS and isinstance(exc, POOL_ERRORS):
+                lock_logger.exception(
+                    "event=inventory_pool_error lock_mode=optimistic product_id=%s quantity=%s",
+                    product_id,
+                    quantity,
+                )
+                raise
+            if isinstance(exc, psycopg.Error):
+                lock_logger.exception(
+                    "event=inventory_db_error lock_mode=optimistic product_id=%s quantity=%s",
+                    product_id,
+                    quantity,
+                )
+                raise
             raise
         finally:
             elapsed_ms = (time.perf_counter() - reserve_start) * 1000
@@ -374,12 +402,21 @@ class InventoryReserveEngine:
                     )
                     conn.commit()
                     return reservation
-        except psycopg.Error:
-            lock_logger.exception(
-                "event=inventory_db_error lock_mode=pessimistic product_id=%s quantity=%s",
-                product_id,
-                quantity,
-            )
+        except Exception as exc:
+            if POOL_ERRORS and isinstance(exc, POOL_ERRORS):
+                lock_logger.exception(
+                    "event=inventory_pool_error lock_mode=pessimistic product_id=%s quantity=%s",
+                    product_id,
+                    quantity,
+                )
+                raise
+            if isinstance(exc, psycopg.Error):
+                lock_logger.exception(
+                    "event=inventory_db_error lock_mode=pessimistic product_id=%s quantity=%s",
+                    product_id,
+                    quantity,
+                )
+                raise
             raise
         finally:
             tx_elapsed_ms = (time.perf_counter() - tx_start) * 1000
@@ -482,12 +519,21 @@ class InventoryReserveEngine:
                 self._retry_limit,
             )
             raise RuntimeError("optimistic reserve retry limit exceeded")
-        except psycopg.Error:
-            lock_logger.exception(
-                "event=inventory_db_error lock_mode=optimistic product_id=%s quantity=%s",
-                product_id,
-                quantity,
-            )
+        except Exception as exc:
+            if POOL_ERRORS and isinstance(exc, POOL_ERRORS):
+                lock_logger.exception(
+                    "event=inventory_pool_error lock_mode=optimistic product_id=%s quantity=%s",
+                    product_id,
+                    quantity,
+                )
+                raise
+            if isinstance(exc, psycopg.Error):
+                lock_logger.exception(
+                    "event=inventory_db_error lock_mode=optimistic product_id=%s quantity=%s",
+                    product_id,
+                    quantity,
+                )
+                raise
             raise
         finally:
             elapsed_ms = (time.perf_counter() - reserve_start) * 1000
