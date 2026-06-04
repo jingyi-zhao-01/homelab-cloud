@@ -1,14 +1,215 @@
 import unittest
 from datetime import datetime, timedelta, timezone
+from dataclasses import replace
+from itertools import count
 
 from fastapi import HTTPException
 
-from app.adapters.order_memory_unit_of_work import OrderMemoryUnitOfWork
 from app.application.commands import CreateOrderCommand, PaymentWebhookCommand
 from app.application.create_order_use_case import CreateOrderUseCase
 from app.application.process_terminalization_task_use_case import (
     ProcessTerminalizationTaskUseCase,
 )
+from app.domain.order import Order, OrderItem
+from app.domain.reservation_terminalization_task import (
+    ReservationTerminalizationTask,
+    ReservationTerminalizationTaskEvent,
+)
+from app.domain.state_machines import claim_task, set_task_status, transition_order
+
+
+class FakeOrderRepository:
+    def __init__(self) -> None:
+        self._orders: dict[int, Order] = {}
+        self._idempotency_keys: dict[str, int] = {}
+        self._counter = count(1)
+
+    def create(
+        self,
+        user_id: int,
+        total_amount: float,
+        items: list[OrderItem],
+        reservation_ids: list[int],
+        idempotency_key: str | None = None,
+        status: str = "pending",
+        payment_status: str = "pending",
+    ) -> Order:
+        if idempotency_key and idempotency_key in self._idempotency_keys:
+            return self._orders[self._idempotency_keys[idempotency_key]]
+        order_id = next(self._counter)
+        order = Order(
+            id=order_id,
+            user_id=user_id,
+            created_at=datetime.now(timezone.utc),
+            total_amount=round(total_amount, 2),
+            status=status,
+            payment_status=payment_status,
+            idempotency_key=idempotency_key,
+            items=tuple(items),
+            reservation_ids=tuple(reservation_ids),
+        )
+        self._orders[order_id] = order
+        if idempotency_key:
+            self._idempotency_keys[idempotency_key] = order_id
+        return order
+
+    def update_state(
+        self,
+        order_id: int,
+        status: str,
+        payment_status: str | None = None,
+    ) -> Order | None:
+        order = self._orders.get(order_id)
+        if not order:
+            return None
+        updated = transition_order(order, status, payment_status)
+        self._orders[order_id] = updated
+        return updated
+
+    def get(self, order_id: int) -> Order | None:
+        return self._orders.get(order_id)
+
+    def get_by_idempotency_key(self, idempotency_key: str) -> Order | None:
+        order_id = self._idempotency_keys.get(idempotency_key)
+        return self._orders.get(order_id) if order_id is not None else None
+
+    def list_all(self) -> list[Order]:
+        return list(self._orders.values())
+
+    def list_stale(self, expires_before: datetime) -> list[Order]:
+        return [
+            order
+            for order in self._orders.values()
+            if order.status == "pending" and order.created_at <= expires_before
+        ]
+
+    def replace_order(self, order: Order) -> None:
+        self._orders[order.id] = order
+
+    def override_created_at(self, order_id: int, created_at: datetime) -> None:
+        self._orders[order_id] = replace(
+            self._orders[order_id],
+            created_at=created_at,
+        )
+
+
+class FakeTerminalizationTaskRepository:
+    def __init__(self) -> None:
+        self._tasks: dict[int, ReservationTerminalizationTask] = {}
+        self._events: list[ReservationTerminalizationTaskEvent] = []
+        self._counter = count(1)
+
+    def enqueue(
+        self,
+        order_id: int,
+        reservation_ids: list[int],
+        action: str,
+        now: datetime,
+    ) -> None:
+        for reservation_id in reservation_ids:
+            task_id = next(self._counter)
+            self._tasks[task_id] = ReservationTerminalizationTask(
+                task_id=task_id,
+                order_id=order_id,
+                reservation_id=reservation_id,
+                action=action,
+                status="queued",
+                attempt_count=0,
+                available_at=now,
+                created_at=now,
+                last_error=None,
+            )
+
+    def claim_ready(
+        self,
+        limit: int,
+        available_before: datetime,
+    ) -> list[ReservationTerminalizationTask]:
+        claimed: list[ReservationTerminalizationTask] = []
+        for task_id in sorted(self._tasks):
+            task = self._tasks[task_id]
+            if len(claimed) >= limit:
+                break
+            if task.status not in {"queued", "retrying"}:
+                continue
+            if task.available_at > available_before:
+                continue
+            updated = claim_task(task)
+            self._tasks[task_id] = updated
+            claimed.append(updated)
+        return claimed
+
+    def mark_succeeded(self, task_id: int) -> None:
+        self._tasks[task_id] = set_task_status(self._tasks[task_id], "succeeded", None)
+
+    def mark_retrying(
+        self,
+        task_id: int,
+        available_at: datetime,
+        last_error: str,
+    ) -> None:
+        task = set_task_status(self._tasks[task_id], "retrying", last_error)
+        self._tasks[task_id] = replace(task, available_at=available_at)
+
+    def record_event(
+        self,
+        task_id: int,
+        order_id: int,
+        reservation_id: int,
+        action: str,
+        event_type: str,
+        attempt_count: int,
+        last_error: str | None = None,
+    ) -> None:
+        self._events.append(
+            ReservationTerminalizationTaskEvent(
+                task_id=task_id,
+                order_id=order_id,
+                reservation_id=reservation_id,
+                action=action,
+                event_type=event_type,
+                attempt_count=attempt_count,
+                occurred_at=datetime.now(timezone.utc),
+                last_error=last_error,
+            )
+        )
+
+
+class FakeUnitOfWork:
+    def __init__(self) -> None:
+        self.orders = FakeOrderRepository()
+        self.tasks = FakeTerminalizationTaskRepository()
+
+    def init_db(self) -> None:
+        return
+
+    def is_healthy(self) -> bool:
+        return True
+
+    def reset(self) -> None:
+        self.orders = FakeOrderRepository()
+        self.tasks = FakeTerminalizationTaskRepository()
+
+    def finalize_order(
+        self,
+        order_id: int,
+        status: str,
+        payment_status: str,
+        action: str,
+        reservation_ids: list[int],
+    ) -> Order | None:
+        order = self.orders.get(order_id)
+        if not order:
+            return None
+        updated = transition_order(order, status, payment_status)
+        self.orders.replace_order(updated)
+        self.tasks.enqueue(
+            order_id=order_id,
+            reservation_ids=reservation_ids,
+            action=action,
+            now=datetime.now(timezone.utc),
+        )
+        return updated
 
 
 class FakeUserDirectoryClient:
@@ -62,7 +263,7 @@ class FakeProductReservationClient:
 
 class OrderRepositoryStateMachineTest(unittest.TestCase):
     def test_order_status_transitions_pending_to_confirmed(self) -> None:
-        uow = OrderMemoryUnitOfWork()
+        uow = FakeUnitOfWork()
         order = uow.orders.create(
             user_id=1,
             total_amount=9.99,
@@ -79,7 +280,7 @@ class OrderRepositoryStateMachineTest(unittest.TestCase):
         self.assertEqual(confirmed.payment_status, "pending")
 
     def test_order_status_rejects_invalid_transition(self) -> None:
-        uow = OrderMemoryUnitOfWork()
+        uow = FakeUnitOfWork()
         order = uow.orders.create(
             user_id=1,
             total_amount=9.99,
@@ -95,7 +296,7 @@ class OrderRepositoryStateMachineTest(unittest.TestCase):
 
 class OrderServiceLifecycleTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.uow = OrderMemoryUnitOfWork()
+        self.uow = FakeUnitOfWork()
         self.products = FakeProductReservationClient(stock=5, price=9.99)
         self.create_orders = CreateOrderUseCase(
             uow=self.uow,

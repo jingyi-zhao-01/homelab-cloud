@@ -4,13 +4,12 @@ from fastapi import FastAPI, Response, status
 from fastapi.responses import JSONResponse
 
 from app.adapters.order_mapping import to_api_order
-from app.adapters.order_memory_unit_of_work import OrderMemoryUnitOfWork
 from app.adapters.order_postgres_unit_of_work import OrderPostgresUnitOfWork
 from app.adapters.product_reservation_http_client import ProductReservationHttpClient
 from app.adapters.user_http_client import UserHttpClient
 from app.application.commands import CreateOrderCommand, PaymentWebhookCommand
 from app.application.order_runtime import OrderRuntime
-from app.config import db_url, use_postgres
+from app.config import db_url
 from app.entrypoints.worker_loop import TerminalizationWorkerLoop
 from app.models import (
     ErrorResponse,
@@ -34,9 +33,7 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
     app = FastAPI(title=SERVICE_NAME, version="0.1.0")
     app.middleware("http")(create_request_logging_middleware(logger, SERVICE_NAME))
 
-    uow = (
-        OrderPostgresUnitOfWork(db_url()) if use_postgres() else OrderMemoryUnitOfWork()
-    )
+    uow = OrderPostgresUnitOfWork(db_url())
     runtime = OrderRuntime(
         uow=uow,
         users=UserHttpClient(lambda: httpx.Client()),
