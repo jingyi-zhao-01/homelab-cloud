@@ -42,6 +42,21 @@ on:
         required: false
         default: t3.small,t3a.small
         type: string
+      desired_capacity:
+        description: Desired number of spot workers to maintain
+        required: false
+        default: "1"
+        type: string
+      min_size:
+        description: Minimum number of spot workers to maintain
+        required: false
+        default: "1"
+        type: string
+      max_size:
+        description: Maximum number of spot workers the ASG may launch
+        required: false
+        default: "1"
+        type: string
       key_name:
         description: Optional EC2 key pair name
         required: false
@@ -104,6 +119,9 @@ jobs:
       cluster_name: ${{ inputs.cluster_name }}
       node_group_name: ${{ inputs.node_group_name }}
       instance_types: ${{ inputs.instance_types }}
+      desired_capacity: ${{ inputs.desired_capacity }}
+      min_size: ${{ inputs.min_size }}
+      max_size: ${{ inputs.max_size }}
       key_name: ${{ inputs.key_name }}
       allowed_ssh_cidrs: ${{ inputs.allowed_ssh_cidrs }}
       trusted_cluster_cidrs: ${{ inputs.trusted_cluster_cidrs }}
@@ -134,6 +152,9 @@ jobs:
       TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
       TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
       TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+      DESIRED_CAPACITY: ${{ inputs.desired_capacity }}
+      MIN_SIZE: ${{ inputs.min_size }}
+      MAX_SIZE: ${{ inputs.max_size }}
 
     steps:
       - name: Install kubectl
@@ -156,6 +177,11 @@ jobs:
           if [ -z "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
             echo "K3S_SERVER_URL_TAILSCALE is not set; kubeconfig server will be used as-is."
             exit 0
+          fi
+
+          if [ -z "${DESIRED_CAPACITY:-}" ] || [ -z "${MIN_SIZE:-}" ] || [ -z "${MAX_SIZE:-}" ]; then
+            echo "Desired/min/max capacity inputs are missing"
+            exit 1
           fi
 
           API_HOST="${K3S_SERVER_URL_TAILSCALE#https://}"
@@ -199,56 +225,76 @@ jobs:
         run: |
           set -euo pipefail
           asg_name="${CLUSTER_NAME}-${NODE_GROUP_NAME}"
-          echo "Waiting for spot instance from ASG ${asg_name} to register as a Ready k3s node..."
+          desired_capacity="${DESIRED_CAPACITY}"
+          echo "Waiting for ${desired_capacity} spot instance(s) from ASG ${asg_name} to register as Ready k3s node(s)..."
 
-          instance_id=""
+          instance_ids=""
           for attempt in $(seq 1 30); do
-            instance_id="$(aws autoscaling describe-auto-scaling-groups \
+            instance_ids="$(aws autoscaling describe-auto-scaling-groups \
               --auto-scaling-group-names "$asg_name" \
               --region "$AWS_REGION" \
-              --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`].InstanceId | [0]' \
+              --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`].InstanceId' \
               --output text)"
-            if [ -n "${instance_id:-}" ] && [ "$instance_id" != "None" ]; then
+            instance_count="$(printf '%s\n' "$instance_ids" | awk 'NF{count++} END{print count+0}')"
+            if [ "$instance_count" -ge "$desired_capacity" ]; then
               break
             fi
-            echo "Attempt ${attempt}/30: ASG has no InService instance yet."
+            echo "Attempt ${attempt}/30: ASG has ${instance_count}/${desired_capacity} InService instance(s)."
             sleep 10
           done
 
-          if [ -z "${instance_id:-}" ] || [ "$instance_id" = "None" ]; then
-            echo "No InService EC2 instance found in ASG ${asg_name}."
+          instance_count="$(printf '%s\n' "$instance_ids" | awk 'NF{count++} END{print count+0}')"
+          if [ "$instance_count" -lt "$desired_capacity" ]; then
+            echo "ASG ${asg_name} never reached ${desired_capacity} InService instance(s)."
             exit 1
           fi
 
-          private_dns="$(aws ec2 describe-instances \
-            --instance-ids "$instance_id" \
-            --region "$AWS_REGION" \
-            --query 'Reservations[0].Instances[0].PrivateDnsName' \
-            --output text)"
-          node_prefix="${private_dns%%.*}"
+          read -r -a instance_id_array <<< "$instance_ids"
+          if [ "${#instance_id_array[@]}" -gt 0 ] && [ "${instance_id_array[0]}" = "None" ]; then
+            echo "No InService EC2 instances found in ASG ${asg_name}."
+            exit 1
+          fi
 
-          echo "Found EC2 instance ${instance_id} with private DNS prefix ${node_prefix}"
+          node_prefixes=""
+          for instance_id in "${instance_id_array[@]}"; do
+            private_dns="$(aws ec2 describe-instances \
+              --instance-ids "$instance_id" \
+              --region "$AWS_REGION" \
+              --query 'Reservations[0].Instances[0].PrivateDnsName' \
+              --output text)"
+            node_prefixes="${node_prefixes}${private_dns%%.*}"$'\n'
+          done
+
+          echo "Found InService instances:"
+          printf '%s\n' "${instance_id_array[@]}"
 
           for attempt in $(seq 1 36); do
-            matched_node="$(kubectl get nodes -o name | sed 's|^node/||' | grep "^${node_prefix}" | head -n1 || true)"
-            if [ -n "${matched_node:-}" ]; then
-              ready_status="$(kubectl get node "$matched_node" -o jsonpath='{range .status.conditions[?(@.type=="Ready")]}{.status}{end}')"
-              if [ "$ready_status" = "True" ]; then
-                echo "Ready node matched: ${matched_node}"
-                kubectl get nodes -o wide
-                exit 0
+            ready_matches=0
+            while IFS= read -r node_prefix; do
+              [ -z "$node_prefix" ] && continue
+              matched_node="$(kubectl get nodes -o name | sed 's|^node/||' | grep "^${node_prefix}" | head -n1 || true)"
+              if [ -n "${matched_node:-}" ]; then
+                ready_status="$(kubectl get node "$matched_node" -o jsonpath='{range .status.conditions[?(@.type=="Ready")]}{.status}{end}')"
+                if [ "$ready_status" = "True" ]; then
+                  ready_matches=$((ready_matches + 1))
+                  continue
+                fi
+                echo "Matched node ${matched_node}, but Ready=${ready_status:-unknown}"
               fi
-              echo "Matched node ${matched_node}, but Ready=${ready_status:-unknown}"
-            else
-              echo "No node with prefix ${node_prefix} found yet."
+            done <<< "$node_prefixes"
+
+            if [ "$ready_matches" -ge "$desired_capacity" ]; then
+              echo "Ready nodes matched: ${ready_matches}/${desired_capacity}"
+              kubectl get nodes -o wide
+              exit 0
             fi
 
-            echo "Attempt ${attempt}/36: worker has not become Ready yet."
+            echo "Attempt ${attempt}/36: only ${ready_matches}/${desired_capacity} worker node(s) are Ready yet."
             kubectl get nodes -o wide || true
             sleep 10
           done
 
-          echo "Spot instance ${instance_id} never became a Ready k3s node."
+          echo "Spot ASG ${asg_name} never produced ${desired_capacity} Ready k3s node(s)."
           kubectl get nodes -o wide || true
           exit 1
 

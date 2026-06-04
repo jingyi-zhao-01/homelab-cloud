@@ -19,6 +19,9 @@ trusted_cluster_cidrs = [
 ]
 
 instance_types = ["t3.small", "t3a.small"]
+desired_capacity = 1
+min_size         = 1
+max_size         = 1
 
 k3s_server_url = "https://76.13.108.14:6443"
 k3s_token      = "replace-me-with-the-current-k3s-token"

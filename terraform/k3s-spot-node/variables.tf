@@ -64,6 +64,39 @@ variable "associate_public_ip_address" {
   default     = true
 }
 
+variable "desired_capacity" {
+  description = "Desired number of spot workers maintained by the Auto Scaling Group"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.desired_capacity >= 1
+    error_message = "desired_capacity must be at least 1."
+  }
+}
+
+variable "min_size" {
+  description = "Minimum number of spot workers maintained by the Auto Scaling Group"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.min_size >= 1
+    error_message = "min_size must be at least 1."
+  }
+}
+
+variable "max_size" {
+  description = "Maximum number of spot workers the Auto Scaling Group may launch"
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.max_size >= 1
+    error_message = "max_size must be at least 1."
+  }
+}
+
 variable "instance_types" {
   description = "Ordered list of EC2 instance types the ASG may use for the spot worker"
   type        = list(string)
@@ -136,5 +169,12 @@ variable "tags" {
   default = {
     project    = "homelab-cloud"
     managed_by = "terraform"
+  }
+}
+
+check "autoscaling_bounds" {
+  assert {
+    condition     = var.min_size <= var.desired_capacity && var.desired_capacity <= var.max_size
+    error_message = "Require min_size <= desired_capacity <= max_size."
   }
 }

@@ -224,9 +224,9 @@ resource "aws_launch_template" "spot_node" {
 
 resource "aws_autoscaling_group" "spot_node" {
   name                      = local.name_prefix
-  desired_capacity          = 1
-  min_size                  = 1
-  max_size                  = 1
+  desired_capacity          = var.desired_capacity
+  min_size                  = var.min_size
+  max_size                  = var.max_size
   health_check_type         = "EC2"
   health_check_grace_period = 300
   vpc_zone_identifier       = local.effective_subnet_ids

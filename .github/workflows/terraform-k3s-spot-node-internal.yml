@@ -25,6 +25,18 @@ on:
         required: false
         default: t3.small,t3a.small
         type: string
+      desired_capacity:
+        required: false
+        default: "1"
+        type: string
+      min_size:
+        required: false
+        default: "1"
+        type: string
+      max_size:
+        required: false
+        default: "1"
+        type: string
       key_name:
         required: false
         type: string
@@ -83,6 +95,9 @@ jobs:
       VPC_ID: ${{ inputs.vpc_id }}
       SUBNET_IDS: ${{ inputs.subnet_ids }}
       INSTANCE_TYPES: ${{ inputs.instance_types || vars.K3S_SPOT_INSTANCE_TYPES || 't3.small,t3a.small' }}
+      DESIRED_CAPACITY: ${{ inputs.desired_capacity || vars.K3S_SPOT_DESIRED_CAPACITY || '1' }}
+      MIN_SIZE: ${{ inputs.min_size || vars.K3S_SPOT_MIN_SIZE || '1' }}
+      MAX_SIZE: ${{ inputs.max_size || vars.K3S_SPOT_MAX_SIZE || '1' }}
       KEY_NAME: ${{ inputs.key_name }}
       ALLOWED_SSH_CIDRS: ${{ inputs.allowed_ssh_cidrs || fromJson(toJson(vars)).K3S_SPOT_ALLOWED_SSH_CIDRS }}
       TRUSTED_CLUSTER_CIDRS: ${{ inputs.trusted_cluster_cidrs || fromJson(toJson(vars)).K3S_SPOT_TRUSTED_CLUSTER_CIDRS }}
@@ -164,6 +179,9 @@ jobs:
           network_state_bucket = "${TF_STATE_BUCKET}"
           network_state_key    = "${NETWORK_STATE_KEY}"
           instance_types  = $(list_to_hcl "$INSTANCE_TYPES")
+          desired_capacity = ${DESIRED_CAPACITY}
+          min_size         = ${MIN_SIZE}
+          max_size         = ${MAX_SIZE}
           k3s_server_url  = "${K3S_SERVER_URL}"
           tailscale_enabled = ${TAILSCALE_ENABLED}
           EOF

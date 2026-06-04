@@ -1,5 +1,5 @@
 output "autoscaling_group_name" {
-  description = "Name of the Auto Scaling Group maintaining the single spot worker"
+  description = "Name of the Auto Scaling Group maintaining the spot workers"
   value       = aws_autoscaling_group.spot_node.name
 }
 
