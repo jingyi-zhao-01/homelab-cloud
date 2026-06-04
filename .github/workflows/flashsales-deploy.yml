@@ -83,7 +83,7 @@ jobs:
     name: Predeploy Gates
     needs:
       - detect-service-changes
-    if: ${{ needs.detect-service-changes.outputs.service_code_changed == 'true' }}
+    if: ${{ needs['detect-service-changes'].outputs.service_code_changed == 'true' }}
     uses: ./.github/workflows/flashsales-deploy-pre.yml
     secrets: inherit
 
@@ -93,7 +93,7 @@ jobs:
     needs:
       - detect-service-changes
       - predeploy
-    if: ${{ always() && (needs.detect-service-changes.outputs.service_code_changed != 'true' || needs.predeploy.result == 'success') }}
+    if: ${{ always() && (needs['detect-service-changes'].outputs.service_code_changed != 'true' || needs.predeploy.result == 'success') }}
     strategy:
       fail-fast: false
       matrix:
@@ -113,7 +113,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ needs.detect-service-changes.outputs.service_code_changed }}" = "true" ]; then
+          if [ "${{ needs['detect-service-changes'].outputs.service_code_changed }}" = "true" ]; then
             echo "build_images=true" >> "$GITHUB_OUTPUT"
             echo "Flashsale service code changes detected; building images"
           else
@@ -149,7 +149,7 @@ jobs:
     needs:
       - detect-service-changes
       - build-and-push
-    if: ${{ needs.build-and-push.result == 'success' }}
+    if: ${{ needs['build-and-push'].result == 'success' }}
 
     steps:
       - name: Checkout
@@ -248,7 +248,7 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Verify GHCR pull credentials can read deployed images
-        if: ${{ needs.detect-service-changes.outputs.service_code_changed == 'true' }}
+        if: ${{ needs['detect-service-changes'].outputs.service_code_changed == 'true' }}
         env:
           GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
@@ -266,7 +266,7 @@ jobs:
 
       - name: Deploy Helm release
         env:
-          SERVICE_CODE_CHANGED: ${{ needs.detect-service-changes.outputs.service_code_changed }}
+          SERVICE_CODE_CHANGED: ${{ needs['detect-service-changes'].outputs.service_code_changed }}
         run: |
           set -euo pipefail
           helm_args=(
