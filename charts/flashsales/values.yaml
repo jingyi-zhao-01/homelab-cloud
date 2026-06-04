@@ -109,6 +109,10 @@ userService:
   service:
     type: ClusterIP
     port: 8001
+  nodeSelector:
+    node-purpose: worker
+  tolerations: []
+  affinity: {}
   env:
     dbHost: flashsales-postgres
     dbPort: "5432"
@@ -133,6 +137,10 @@ productService:
   service:
     type: ClusterIP
     port: 8002
+  nodeSelector:
+    node-purpose: worker
+  tolerations: []
+  affinity: {}
   env:
     dbHost: flashsales-postgres
     dbPort: "5432"
@@ -157,6 +165,10 @@ orderService:
   service:
     type: ClusterIP
     port: 8003
+  nodeSelector:
+    node-purpose: worker
+  tolerations: []
+  affinity: {}
   env:
     userServiceUrl: http://flashsales-user-service:8001
     productServiceUrl: http://flashsales-product-service:8002
@@ -166,6 +178,27 @@ orderService:
     dbName: flashsales
     redisUrl: redis://:redis-pass@flashsales-redis:6379/0
     rabbitmqUrl: amqp://flashsales:mq-pass@flashsales-rabbitmq:5672/
+
+# Example to force all three services onto non-control worker nodes:
+# userService:
+#   nodeSelector:
+#     node-purpose: worker
+# productService:
+#   nodeSelector:
+#     node-purpose: worker
+# orderService:
+#   nodeSelector:
+#     node-purpose: worker
+#
+# If you want to exclude control-plane nodes by role label instead of targeting
+# worker labels directly, use affinity like this under each service:
+#   affinity:
+#     nodeAffinity:
+#       requiredDuringSchedulingIgnoredDuringExecution:
+#         nodeSelectorTerms:
+#           - matchExpressions:
+#               - key: node-role.kubernetes.io/control-plane
+#                 operator: DoesNotExist
 
 ingress:
   enabled: true
