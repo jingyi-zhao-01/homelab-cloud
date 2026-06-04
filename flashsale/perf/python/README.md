@@ -54,44 +54,69 @@ The observability agent is an OpenHands SDK-based constant worker that:
 
 ### Environment Variables
 
-The agent requires the following environment variables:
+The agent requires these environment variables. **None have hardcoded defaults for critical values.**
 
-```bash
-# GitHub configuration
-GITHUB_TOKEN=your-github-token
-GITHUB_OWNER=jzhao62
-GITHUB_REPO=homelab-cloud
+#### Required (agent exits with a fatal log line if any are missing)
 
-# AWS SSM configuration
-AWS_REGION=us-west-1
-SSM_PATH_PREFIX=flashsales/prod
+| Variable | Example | Source |
+|---|---|---|
+| `GITHUB_OWNER` | `jzhao62` | GitHub Actions context / k8s env |
+| `GITHUB_REPO` | `homelab-cloud` | GitHub Actions context / k8s env |
+| `GITHUB_TOKEN` | `ghp_...` | GitHub Actions `secrets.GITHUB_TOKEN` / k8s Secret |
+| `AWS_REGION` | `us-west-1` | Repository var |
+| `GRAFANA_URL` | `https://grafana.example.com` | Repository var |
 
-# Grafana configuration
-GRAFANA_URL=https://your-grafana.example.com
-GRAFANA_TOKEN=your-grafana-token
+#### SSM paths (configurable – agent fetches secrets at runtime via boto3)
 
-# OpenHands/LLM configuration (optional)
-LLM_MODEL=gpt-4o
-LLM_API_KEY=your-llm-api-key
-LLM_BASE_URL=
+| Variable | Default | SSM parameter |
+|---|---|---|
+| `GRAFANA_TOKEN_SSM_PATH` | `/codex/grafana-service-account-token` | Grafana service-account token |
+| `LLM_API_KEY_SSM_PATH` | `/flashsales/prod/llm-api-key` | OpenRouter API key |
 
-# Agent configuration
-CHECK_INTERVAL=300  # Check every 5 minutes
-```
+#### LLM / OpenRouter (non-secret – stored as repository vars)
+
+| Variable | Example | Notes |
+|---|---|---|
+| `LLM_MODEL` | `openai/gpt-4o` | OpenRouter model slug |
+| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter base URL |
+
+#### Agent behaviour
+
+| Variable | Default | Notes |
+|---|---|---|
+| `WORKFLOW_NAME` | `flashsales-perf-concurrency-suite.yml` | Workflow to monitor |
+| `CHECK_INTERVAL` | `300` | Seconds between polls |
+| `LOOKBACK_HOURS` | `12` | Lookback window for failures |
+| `LOG_LEVEL` | `INFO` | Python log level |
+| `LOG_FORMAT` | `json` | `json` for structured, `text` for human-readable |
 
 ### AWS SSM Parameters
 
-The agent reads the Grafana token from AWS SSM at:
-```
-/{SSM_PATH_PREFIX}/grafana-service-account-token
-```
+Parameters that must be provisioned in AWS SSM before deploying the agent:
 
-To provision this parameter:
+| SSM path | Terraform variable | Managed by | Notes |
+|---|---|---|---|
+| `/codex/grafana-service-account-token` | `grafana_service_account_token` | `terraform/ssm` | Grafana service-account token (also available at `/${ssm_path_prefix}/grafana-service-account-token`) |
+| `/${ssm_path_prefix}/llm-api-key` | `llm_api_key` | `terraform/ssm` | OpenRouter API key (e.g. from https://openrouter.ai/keys) |
+| `/${ssm_path_prefix}/DATABASE_URL` | `database_url` | `terraform/ssm` | Neon connection string (existing) |
+| `/${ssm_path_prefix}/POSTGRES_USER` | `postgres_user` | `terraform/ssm` | Neon user (existing) |
+| `/${ssm_path_prefix}/POSTGRES_PASSWORD` | `postgres_password` | `terraform/ssm` | Neon password (existing) |
+| `/${ssm_path_prefix}/POSTGRES_DB` | `postgres_db` | `terraform/ssm` | Neon database (existing) |
 
+Parameters managed as **GitHub repository variables** (non-secret):
+`GRAFANA_URL`, `AWS_REGION`, `SSM_PATH_PREFIX`, `LLM_MODEL`, `LLM_BASE_URL`, `CHECK_INTERVAL`, `LOOKBACK_HOURS`, `LOG_LEVEL`, `LOG_FORMAT`, `CONTINUOUS_RUN_DURATION`
+
+Parameters managed as **GitHub environment secrets**:
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (SSM access), `GITHUB_TOKEN` (auto-injected)
+
+To provision:
 ```bash
 terraform -chdir=terraform/ssm apply \
-  -var grafana_service_account_token="your-grafana-token" \
-  -var ssm_path_prefix="flashsales/prod"
+  -var grafana_service_account_token="<token>" \
+  -var llm_api_key="<openrouter-key>" \
+  -var ssm_path_prefix="flashsales/prod" \
+  -var aws_region="us-west-1" \
+  # ... other required vars (postgres_user, postgres_password, etc.)
 ```
 
 ### Helm Chart
@@ -113,17 +138,23 @@ observabilityAgent:
       cpu: "500m"
       memory: "512Mi"
   aws:
-    region: us-west-1
+    region: "us-west-1"
   ssm:
-    pathPrefix: flashsales/prod
+    grafanaTokenPath: "/codex/grafana-service-account-token"
+    llmApiKeyPath: "/flashsales/prod/llm-api-key"
   grafana:
     url: "https://your-grafana.example.com"
   github:
-    owner: your-org
-    repo: your-repo
+    owner: "your-org"
+    repo: "your-repo"
+    githubToken: ""   # Set via --set or sealed secret; required for k8s mode
   llm:
-    model: "gpt-4o"
-  checkInterval: 300  # 5 minutes
+    model: "openai/gpt-4o"
+    baseUrl: "https://openrouter.ai/api/v1"
+  workflowName: "flashsales-perf-concurrency-suite.yml"
+  checkInterval: 300
+  logLevel: "INFO"
+  logFormat: "json"
 ```
 
 ## Usage
@@ -131,10 +162,16 @@ observabilityAgent:
 ### Run Manually
 
 ```bash
-export GITHUB_TOKEN="your-github-token"
-export GRAFANA_TOKEN="your-grafana-token"
-export GRAFANA_URL="https://your-grafana.example.com"
-export SSM_PATH_PREFIX="flashsales/prod"
+export GITHUB_OWNER="jzhao62"
+export GITHUB_REPO="homelab-cloud"
+export GITHUB_TOKEN="$(gh auth token)"     # or a PAT
+export AWS_REGION="us-west-1"
+export GRAFANA_URL="https://grafana.example.com"
+export LLM_MODEL="openai/gpt-4o"           # optional
+export LLM_BASE_URL="https://openrouter.ai/api/v1"  # optional
+export GRAFANA_TOKEN_SSM_PATH="/codex/grafana-service-account-token"
+export LLM_API_KEY_SSM_PATH="/flashsales/prod/llm-api-key"
+export LOG_FORMAT="text"                    # readable logs for local runs
 
 python flashsale/perf/python/observability_agent.py
 ```

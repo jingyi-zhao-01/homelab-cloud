@@ -33,28 +33,44 @@ spec:
             - /usr/local/bin/python3
             - /app/flashsale/perf/python/observability_agent.py
           env:
-            # GitHub configuration
+            # GitHub configuration (injected at deploy time)
             - name: GITHUB_OWNER
               value: {{ .Values.observabilityAgent.github.owner | quote }}
             - name: GITHUB_REPO
               value: {{ .Values.observabilityAgent.github.repo | quote }}
-            
-            # AWS SSM configuration
+
+            # AWS region
             - name: AWS_REGION
               value: {{ .Values.observabilityAgent.aws.region | quote }}
-            - name: SSM_PATH_PREFIX
-              value: {{ .Values.observabilityAgent.ssm.pathPrefix | quote }}
-            
-            # Grafana configuration
+
+            # SSM paths for secrets
+            - name: GRAFANA_TOKEN_SSM_PATH
+              value: {{ .Values.observabilityAgent.ssm.grafanaTokenPath | quote }}
+            - name: LLM_API_KEY_SSM_PATH
+              value: {{ .Values.observabilityAgent.ssm.llmApiKeyPath | quote }}
+
+            # Grafana
             - name: GRAFANA_URL
               value: {{ .Values.observabilityAgent.grafana.url | quote }}
-            
-            # OpenHands configuration
+
+            # LLM (non-secret)
             - name: LLM_MODEL
               value: {{ .Values.observabilityAgent.llm.model | quote }}
+            - name: LLM_BASE_URL
+              value: {{ .Values.observabilityAgent.llm.baseUrl | quote }}
+
+            # Agent behaviour
             - name: CHECK_INTERVAL
               value: "{{ .Values.observabilityAgent.checkInterval }}"
-            
+            - name: WORKFLOW_NAME
+              value: {{ .Values.observabilityAgent.workflowName | quote }}
+
+            # Logging
+            - name: LOG_LEVEL
+              value: {{ .Values.observabilityAgent.logLevel | quote }}
+            - name: LOG_FORMAT
+              value: {{ .Values.observabilityAgent.logFormat | quote }}
+
             # Environment override
             - name: PYTHONUNBUFFERED
               value: "1"

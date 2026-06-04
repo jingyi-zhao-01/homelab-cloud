@@ -46,6 +46,12 @@ variable "grafana_service_account_token" {
   sensitive   = true
 }
 
+variable "llm_api_key" {
+  description = "OpenRouter (or compatible) LLM API key for observability agent"
+  type        = string
+  sensitive   = true
+}
+
 variable "tags" {
   description = "Tags applied to all SSM parameters"
   type        = map(string)

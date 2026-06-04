@@ -1,237 +1,241 @@
 #!/usr/bin/env python3
 """
-Test script for the observability agent.
-This test verifies the agent's core functionality without requiring GitHub API access.
+Tests for the observability agent – self-contained, no external services needed.
+
+Usage:
+    cd flashsale/perf/python
+    python3 test_observability_agent.py
 """
 
+import json
 import os
 import sys
-import json
+from unittest.mock import MagicMock, patch
 
-# Mock the external dependencies
-def mock_boto3_get_parameter(**kwargs):
-    """Mock SSM get_parameter call."""
-    return {
-        "Parameter": {
-            "Value": "test-grafana-token-12345"
+# ---------------------------------------------------------------------------
+# Set required env vars BEFORE importing observability_agent.
+# The module calls _require_env at module scope.
+# ---------------------------------------------------------------------------
+os.environ.setdefault("GITHUB_OWNER", "test-org")
+os.environ.setdefault("GITHUB_REPO", "test-repo")
+os.environ.setdefault("GITHUB_TOKEN", "ghp_fake")
+os.environ.setdefault("AWS_REGION", "us-east-1")
+os.environ.setdefault("GRAFANA_URL", "https://grafana.example.com")
+
+# Import the module-under-test
+import observability_agent as oa
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+passed = 0
+failed = 0
+
+
+def check(name: str, condition: bool, detail: str = "") -> None:
+    global passed, failed
+    if condition:
+        print(f"  ✓ PASS  {name}")
+        passed += 1
+    else:
+        print(f"  ✗ FAIL  {name}" + (f"  ({detail})" if detail else ""))
+        failed += 1
+
+
+def section(title: str) -> None:
+    print(f"\n{'─' * 60}\n  {title}\n{'─' * 60}")
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+def test_imports() -> None:
+    section("Imports")
+    for mod in ("requests", "boto3", "json", "os", "sys", "logging"):
+        try:
+            __import__(mod)
+            check(f"import {mod}", True)
+        except ImportError:
+            check(f"import {mod}", False, "missing")
+
+
+def test_logging_setup() -> None:
+    section("Logging")
+    try:
+        import logging
+
+        check("logger exists", hasattr(oa, "logger"))
+        check("logger is Logger", isinstance(oa.logger, logging.Logger))
+        check("logger has handler", len(oa.logger.handlers) > 0)
+
+        # Verify JSON format produces valid JSON
+        fmt = oa._handler.formatter
+        log_record = logging.LogRecord("test", 20, "", 0, "hello", (), None)
+        output = fmt.format(log_record)
+        parsed = json.loads(output)
+        check("JSON log format parses", "ts" in parsed and "level" in parsed)
+        check("JSON has msg field", parsed.get("msg") == "hello")
+    except Exception as e:
+        check("logging setup", False, str(e))
+
+
+def test_config_validation() -> None:
+    section("Config validation – missing required vars")
+
+    check("_require_env is callable", callable(oa._require_env))
+    check("_optional_env is callable", callable(oa._optional_env))
+
+    # Test that _require_env exits on missing
+    with patch.object(sys, "exit") as mock_exit:
+        oa._require_env("MISSING_VAR")
+        check("_require_env exits on missing var", mock_exit.called)
+
+
+def test_ssm_fetch_mocked() -> None:
+    section("SSM parameter fetch (mocked)")
+
+    with patch("boto3.client") as mock_boto:
+        mock_client = MagicMock()
+        mock_client.get_parameter.return_value = {
+            "Parameter": {"Value": "secret-token-abc123"}
         }
+        mock_boto.return_value = mock_client
+
+        result = oa._fetch_ssm_parameter("/test/path")
+        check("fetches SSM parameter", result == "secret-token-abc123")
+
+
+def test_github_fetch_mocked() -> None:
+    section("GitHub workflow run fetch (mocked)")
+
+    mock_run = {
+        "id": 42,
+        "name": "loadtest",
+        "html_url": "https://github.com/t/r/42",
+        "status": "completed",
+        "conclusion": "failure",
     }
 
-def test_ssm_token_retrieval():
-    """Test that we can read the Grafana token from SSM."""
-    print("Testing SSM token retrieval...")
-    
-    # Mock boto3
-    import unittest.mock as mock
-    import sys
-    import os
-    
-    # Add the script's directory to the path
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    if script_dir not in sys.path:
-        sys.path.insert(0, script_dir)
-    
-    with mock.patch('boto3.client') as mock_client:
-        mock_instance = mock.Mock()
-        mock_instance.get_parameter = mock_boto3_get_parameter
-        mock_client.return_value = mock_instance
-        
-        # Test with mocked AWS
-        os.environ['AWS_REGION'] = 'us-west-1'
-        os.environ['SSM_PATH_PREFIX'] = 'flashsales/prod'
-        
-        import observability_agent
-        
-        token = get_grafana_token_from_ssm()
-        
-        if token:
-            print(f"✓ Successfully retrieved token (length: {len(token)})")
-            assert len(token) > 0
-            assert token == "test-grafana-token-12345"
-        else:
-            print("✗ Failed to retrieve token")
-            return False
-    
-    return True
+    with patch("requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"workflow_runs": [mock_run]}
+        mock_get.return_value = mock_resp
 
-def test_github_workflow_runs():
-    """Test GitHub workflow run fetching (mocked)."""
-    print("\nTesting GitHub workflow run fetching (mocked)...")
-    
-    import unittest.mock as mock
-    
-    # Create a mock response
-    mock_response = {
-        "workflow_runs": [
+        runs = oa.get_failed_workflow_runs()
+        check("fetches failed runs", len(runs) == 1)
+        check("correct run id", runs[0]["id"] == 42)
+
+
+def test_analysis_structure() -> None:
+    section("Failure analysis structure (mocked)")
+
+    run = {
+        "id": 99,
+        "name": "loadtest",
+        "html_url": "https://gh/t/r/99",
+        "status": "completed",
+        "conclusion": "failure",
+    }
+
+    # Mock jobs response
+    mock_jobs = MagicMock()
+    mock_jobs.status_code = 200
+    mock_jobs.json.return_value = {
+        "jobs": [
             {
-                "id": 12345678,
-                "name": "loadtest",
+                "id": 1,
+                "name": "k6 load test",
                 "status": "completed",
                 "conclusion": "failure",
-                "html_url": "https://github.com/test/test/runs/12345678",
+                "steps": [
+                    {
+                        "name": "Run k6",
+                        "status": "completed",
+                        "conclusion": "failure",
+                    }
+                ],
             }
         ]
     }
-    
-    with mock.patch('requests.get') as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = mock_response
-        
-        from flashsale.perf.python.observability_agent import get_github_workflow_runs
-        os.environ['GITHUB_TOKEN'] = 'test-token'
-        os.environ['GITHUB_OWNER'] = 'test'
-        os.environ['GITHUB_REPO'] = 'test-repo'
-        
-        runs = get_github_workflow_runs()
-        
-        if len(runs) > 0:
-            print(f"✓ Successfully fetched {len(runs)} failed workflow run(s)")
-            assert runs[0]['id'] == 12345678
-        else:
-            print("✗ No workflow runs fetched")
-            return False
-    
-    return True
 
-def test_failure_analysis():
-    """Test failure analysis logic."""
-    print("\nTesting failure analysis logic...")
-    
-    from flashsale.perf.python.observability_agent import analyze_failure
-    
-    run = {
-        "id": 12345678,
-        "name": "loadtest",
-        "status": "completed",
-        "conclusion": "failure",
-        "html_url": "https://github.com/test/test/runs/12345678",
+    with patch("requests.get") as mock_get:
+        mock_get.return_value = mock_jobs
+
+        analysis = oa.analyze_failure(run, grafana_token=None)
+
+        check("has run_id", analysis["run_id"] == 99)
+        check("has failures", len(analysis["failures"]) == 1)
+        check("failure job name", analysis["failures"][0]["job_name"] == "k6 load test")
+        check(
+            "recommendation",
+            len(analysis["recommendations"]) > 0,
+        )
+
+
+def test_pr_creation() -> None:
+    section("PR creation")
+
+    analysis = {
+        "run_id": 10,
+        "run_name": "smoke",
+        "run_url": "https://gh/t/r/10",
+        "code_issues": ["Consistency test failure – check service logic"],
+        "external_issues": [],
+        "failures": [],
+        "recommendations": [],
     }
-    
-    # Test with mocked Grafana
-    import unittest.mock as mock
-    
-    with mock.patch('requests.get') as mock_get, \
-         mock.patch('requests.post') as mock_post:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {
-            "jobs": [
-                {
-                    "id": 999,
-                    "name": "smoke test",
-                    "status": "completed",
-                    "conclusion": "failure",
-                    "steps": [
-                        {
-                            "name": "Run k6 load test",
-                            "status": "completed",
-                            "conclusion": "failure",
-                        }
-                    ]
-                }
-            ]
-        }
-        
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {}
-        
-        analysis = analyze_failure(run, "https://grafana.example.com", "test-token")
-        
-        if analysis:
-            print(f"✓ Successfully analyzed failure")
-            print(f"  - Run ID: {analysis['run_id']}")
-            print(f"  - Failures: {len(analysis['failures'])}")
-            print(f"  - Recommendations: {len(analysis['recommendations'])}")
-            
-            assert analysis['run_id'] == 12345678
-            assert len(analysis['failures']) >= 0
-        else:
-            print("✗ Failed to analyze failure")
-            return False
-    
-    return True
 
-def test_grafana_query():
-    """Test Grafana metrics query."""
-    print("\nTesting Grafana metrics query (mocked)...")
-    
-    import requests
-    
-    with requests.Session() as session:
-        # We can't actually test this without a real Grafana instance
-        print("✓ Grafana query structure is correct")
-        print("  (Actual Grafana instance required for full test)")
-    
-    return True
+    pr = oa.create_pr(analysis)
+    check("creates PR for code issues", pr is not None)
+    check("has title", "fix:" in pr["title"])
+    check("has body", "Consistency" in pr["body"])
 
-def test_imports():
-    """Test that all imports work."""
-    print("\nTesting imports...")
-    
-    try:
-        import requests
-        print("✓ requests imported")
-    except ImportError:
-        print("✗ requests import failed")
-        return False
-    
-    try:
-        import boto3
-        print("✓ boto3 imported")
-    except ImportError:
-        print("✗ boto3 import failed (optional for local testing)")
-    
-    try:
-        # Try to import OpenHands
-        from openhands.sdk import Agent, LLM
-        print("✓ OpenHands SDK imported")
-        return True
-    except ImportError:
-        print("ℹ OpenHands SDK not available (will use basic implementation)")
-        return True
+    # No code issues = no PR
+    pr2 = oa.create_pr({"code_issues": []})
+    check("no PR when no code issues", pr2 is None)
 
-def main():
-    """Run all tests."""
-    print("=" * 80)
-    print("Observability Agent Tests")
-    print("=" * 80)
-    
-    results = []
-    
-    # Test 1: Imports
-    results.append(("Imports", test_imports()))
-    
-    # Test 2: SSM token retrieval
-    results.append(("SSM Token Retrieval", test_ssm_token_retrieval()))
-    
-    # Test 3: GitHub workflow runs
-    results.append(("GitHub Workflow Runs", test_github_workflow_runs()))
-    
-    # Test 4: Failure analysis
-    results.append(("Failure Analysis", test_failure_analysis()))
-    
-    # Test 5: Grafana query
-    results.append(("Grafana Query", test_grafana_query()))
-    
-    # Summary
-    print("\n" + "=" * 80)
-    print("Test Summary")
-    print("=" * 80)
-    
-    passed = sum(1 for _, result in results if result)
-    total = len(results)
-    
-    for name, result in results:
-        status = "✓ PASS" if result else "✗ FAIL"
-        print(f"{status}: {name}")
-    
-    print(f"\nTotal: {passed}/{total} tests passed")
-    
-    if passed == total:
-        print("\n✓ All tests passed!")
-        return 0
-    else:
-        print(f"\n✗ {total - passed} test(s) failed")
+
+def test_grafana_query_interface() -> None:
+    section("Grafana query interface")
+
+    check("_grafana_query is callable", callable(oa._grafana_query))
+
+    # Quick mock to verify it doesn't crash when Grafana is unavailable
+    with patch("requests.post") as mock_post:
+        mock_post.side_effect = __import__("requests").ConnectionError("timeout")
+        result = oa._grafana_query("up", "fake-token")
+        check("returns error dict on Grafana failure", "error" in result)
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+def main() -> int:
+    print("=" * 60)
+    print("Observability Agent Test Suite")
+    print("=" * 60)
+
+    test_imports()
+    test_logging_setup()
+    test_config_validation()
+    test_ssm_fetch_mocked()
+    test_github_fetch_mocked()
+    test_analysis_structure()
+    test_pr_creation()
+    test_grafana_query_interface()
+
+    print(f"\n{'=' * 60}")
+    print(f"Results: {passed} passed, {failed} failed  ({passed + failed} total)")
+    print("=" * 60)
+
+    if failed:
+        print("\n✗ Some tests FAILED")
         return 1
+    print("\n✓ All tests PASSED")
+    return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

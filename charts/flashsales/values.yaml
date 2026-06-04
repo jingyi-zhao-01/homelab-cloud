@@ -242,17 +242,34 @@ observabilityAgent:
       cpu: "500m"
       memory: "512Mi"
   aws:
-    region: us-west-1
+    # AWS_REGION must be set in the deployment env.
+    region: ""
   ssm:
-    pathPrefix: flashsales/prod
+    # Full SSM path to the Grafana service-account token.
+    grafanaTokenPath: "/codex/grafana-service-account-token"
+    # Full SSM path to the OpenRouter (or compatible) LLM API key.
+    llmApiKeyPath: "/flashsales/prod/llm-api-key"
   grafana:
-    url: "https://grafana.example.com"
+    # GRAFANA_URL must be set in the deployment env.
+    url: ""
   github:
-    owner: jzhao62
-    repo: homelab-cloud
+    # These are injected from GitHub Actions context; leave empty for k8s mode.
+    owner: ""
+    repo: ""
+    # GitHub personal access token (required for k8s mode).
+    # When running as a GitHub Actions workflow this is injected automatically.
+    githubToken: ""
   llm:
-    model: "gpt-4o"
-  checkInterval: 300  # 5 minutes
+    # LLM_MODEL (e.g. openai/gpt-4o) and LLM_BASE_URL (e.g. https://openrouter.ai/api/v1).
+    model: ""
+    baseUrl: ""
+  # Name of the workflow to monitor.
+  workflowName: "flashsales-perf-concurrency-suite.yml"
+  # Seconds between each poll of the GitHub Actions API.
+  checkInterval: 300
+  # Logging (json or text).
+  logLevel: "INFO"
+  logFormat: "json"
   nodeSelector: {}
   tolerations: []
   affinity: {}

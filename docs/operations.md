@@ -210,169 +210,114 @@ Local state is not a supported operating mode. Use the GitHub workflows or pass 
 
 ## Observability Agent
 
-The observability agent is an OpenHands-based agent that monitors GitHub Actions workflows for perf test failures and provides automated analysis and remediation.
+The observability agent is an OpenHands SDK-based constant worker that monitors GitHub Actions for perf test failures. When a failure is detected it queries Grafana, analyses the root cause, opens a PR when the fix is in the codebase, and flags external issues separately.
 
-### Features
+### Quick start (GitHub Actions)
 
-- **Continuous Monitoring**: Runs as a constant worker on the control plane node
-- **Grafana Integration**: Uses Grafana MCP to query metrics when perf tests fail
-- **Automated Analysis**: Analyzes failures and determines root cause
-- **PR Creation**: Creates PRs to fix code issues (if within codebase)
-- **External Issue Detection**: Points out external integration issues
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Observability Agent (OpenHands SDK)                │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌───────────┐ │
-│  │ GitHub API   │  │  SSM Store   │  │  Grafana MCP │  │  LLM      │ │
-│  │ (monitors    │  │ (Grafana    │  │ (queries    │  │ (reasoning│ │
-│  │  failures)   │  │  token)      │  │  metrics)    │  │  /PR gen) │ │
-│  └──────────────┘  └──────────────┘  └──────────────┘  └───────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │  GitHub PRs     │
-                    └─────────────────┘
+```bash
+gh workflow run observability-agent.yml -f mode=single-run
+gh workflow run observability-agent.yml -f mode=continuous
 ```
 
 ### Configuration
 
-#### Required Variables
+The agent reads **all secrets from AWS SSM** at runtime via boto3; no secrets are hardcoded or stashed in repo variables.
 
-Add to your GitHub repository variables:
+#### Required GitHub repository variables
 
-- `SSM_PATH_PREFIX` - SSM parameter path prefix (default: `flashsales/prod`)
-- `GRAFANA_URL` - Grafana instance URL
-- `LLM_MODEL` - LLM model for agent reasoning (default: `gpt-4o`)
-- `LLM_BASE_URL` - Optional LLM base URL for custom endpoints
+| Variable | Purpose |
+|---|---|
+| `AWS_REGION` | e.g. `us-west-1` |
+| `GRAFANA_URL` | e.g. `https://grafana.example.com` |
 
-#### Required Secrets
+#### Required GitHub environment secrets (`observability-agent` environment)
 
-Add to your GitHub repository secrets:
+| Secret | Purpose |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | IAM user for SSM access |
+| `AWS_SECRET_ACCESS_KEY` | Corresponding secret key |
+| `GITHUB_TOKEN` | Auto-injected by GitHub Actions |
 
-- `GRAFANA_AUTH` - Grafana authentication token
-- `LLM_API_KEY` - LLM API key (e.g., OpenAI)
-- `GITHUB_TOKEN` - GitHub token with workflow and PR permissions
-- `AWS_ACCESS_KEY_ID` - AWS credentials for SSM access
-- `AWS_SECRET_ACCESS_KEY` - AWS secret key for SSM access
+#### Optional repository variables
 
-### Deployment
+| Variable | Default | Purpose |
+|---|---|---|
+| `LLM_MODEL` | – | OpenRouter model slug, e.g. `openai/gpt-4o` |
+| `LLM_BASE_URL` | – | e.g. `https://openrouter.ai/api/v1` |
+| `GRAFANA_TOKEN_SSM_PATH` | `/codex/grafana-service-account-token` | SSM path for Grafana token |
+| `LLM_API_KEY_SSM_PATH` | `/flashsales/prod/llm-api-key` | SSM path for OpenRouter API key |
+| `CHECK_INTERVAL` | `300` | Seconds between polls |
+| `LOOKBACK_HOURS` | `12` | How far back to look for failures |
+| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `LOG_FORMAT` | `json` | `json` (structured) or `text` (human) |
+| `CONTINUOUS_RUN_DURATION` | `7200` | Max seconds for continuous mode |
 
-#### Option 1: Using Terraform SSM
+### AWS SSM parameters
 
-1. Provision the Grafana token in SSM:
+All secrets must be provisioned in AWS SSM before the agent starts. The agent fetches them at start-up and on each poll cycle.
+
+| SSM path | Terraform variable | Notes |
+|---|---|---|
+| `/codex/grafana-service-account-token` | `grafana_service_account_token` | Grafana service-account token |
+| `/flashsales/prod/llm-api-key` | `llm_api_key` | OpenRouter API key |
+
+To provision via Terraform:
 
 ```bash
-# In your Terraform environment
 terraform -chdir=terraform/ssm apply \
-  -var grafana_service_account_token="your-grafana-token" \
-  -var ssm_path_prefix="flashsales/prod"
+  -var grafana_service_account_token="<token>" \
+  -var llm_api_key="<openrouter-key>" \
+  -var ssm_path_prefix="flashsales/prod" \
+  -var aws_region="us-west-1"
 ```
 
-2. Enable the observability agent in Helm values:
+### Helm deployment (k8s control-plane node)
 
 ```yaml
 # charts/flashsales/values.yaml
 observabilityAgent:
   enabled: true
-  github:
-    owner: your-org
-    repo: your-repo
+  aws:
+    region: "us-west-1"
+  ssm:
+    grafanaTokenPath: "/codex/grafana-service-account-token"
+    llmApiKeyPath: "/flashsales/prod/llm-api-key"
   grafana:
-    url: "https://your-grafana.example.com"
- checkInterval: 300  # 5 minutes
+    url: "https://grafana.example.com"
+  github:
+    owner: "jzhao62"
+    repo: "homelab-cloud"
+    githubToken: ""   # provide via --set or a sealed secret
+  llm:
+    model: "openai/gpt-4o"
+    baseUrl: "https://openrouter.ai/api/v1"
+  workflowName: "flashsales-perf-concurrency-suite.yml"
+  checkInterval: 300
+  logLevel: "INFO"
+  logFormat: "json"
 ```
 
-3. Deploy with Helm:
+### How it works
 
-```bash
-helm upgrade -n flashsales flashsales ./charts/flashsales \
-  -f ./charts/flashsales/values.yaml
-```
+1. **Poll**: Every `CHECK_INTERVAL` seconds the agent fetches failed workflow runs for `WORKFLOW_NAME`.
+2. **Analyse**: For each failed run it inspects job/step details and categorises them as *code*, *external*, or *perf*.
+3. **Query Grafana**: When a perf job (k6 / loadtest) failed the agent queries Grafana for latency and error-rate panels.
+4. **LLM reasoning**: If OpenHands SDK and an LLM are configured the agent sends the analysis to the LLM for deeper reasoning.
+5. **PR creation**: Code-level issues trigger a PR with the detected failure and suggested fix.
+6. **External flags**: External failures are logged as `ERROR` with the failing job name.
 
-#### Option 2: Using GitHub Actions Workflow
+### Logging
 
-The `observability-agent.yml` workflow can run in two modes:
+The agent writes structured JSON logs to stdout. Key fields: `ts` (ISO 8601), `level`, `logger`, `msg`, and optionally `exception`.
 
-**Single Run Mode** (Manual):
+Set `LOG_FORMAT=text` for human-readable logs (useful for local debugging).
 
-```bash
-gh workflow run observability-agent.yml -f mode=single-run
-```
-
-**Continuous Mode** (Run as a daemon):
-
-```bash
-gh workflow run observability-agent.yml -f mode=continuous
-```
-
-### How It Works
-
-1. **Monitoring**: The agent periodically checks GitHub Actions for failed workflow runs
-2. **Analysis**: When a perf test fails, it analyzes the failure:
-   - Queries Grafana for metrics (latency, error rates, throughput)
-   - Uses LLM to reason about the root cause
-   - Determines if issue is code-related or external
-3. **Remediation**:
-   - For code issues: Creates a PR with suggested fixes
-   - For external issues: Creates an issue with findings and recommendations
-
-### Test the Agent
-
-Run the agent manually:
-
-```bash
-# Set required environment variables
-export GITHUB_TOKEN="your-github-token"
-export GRAFANA_TOKEN="your-grafana-token"
-export GRAFANA_URL="https://your-grafana.example.com"
-export SSM_PATH_PREFIX="flashsales/prod"
-
-# Run in single-test mode
-python flashsale/perf/python/observability_agent.py
-```
-
-### GitHub Workflow Triggers
-
-The `observability-agent.yml` workflow can be triggered by:
-
-1. **Workflow Run**: Automatically when `flashsales-perf-concurrency-suite.yml` fails
-2. **Manual Dispatch**: Manually via GitHub UI or CLI
-
-### Integration with Existing Infrastructure
-
-The observability agent integrates with:
-
-- **AWS SSM**: For Secrets management (Grafana token)
-- **Grafana**: For Metrics analysis and monitoring
-- **GitHub Actions**: For CI/CD workflow monitoring
-- **OpenHands SDK**: For agent orchestration and tooling
-
-### External Dependencies
-
-The agent requires access to:
-
-- **AWS SSM API**: For reading secrets (SSM paths: `/{SSM_PATH_PREFIX}/*`)
-- **Grafana API**: For metrics queries (read access to dashboards)
-- **GitHub API**: For workflow and PR operations (public_repo scope)
-- **LLM API**: For agent reasoning (OpenAI or compatible endpoint)
-
-### Monitoring the Agent
-
-Check agent logs in your Kubernetes cluster:
+### Monitoring the agent
 
 ```bash
 kubectl logs -n flashsales \
-  -l app.kubernetes.io/component=observability-agent \
-  -f
-```
+  -l app.kubernetes.io/component=observability-agent -f
 
-Monitor GitHub workflow runs:
-
-```bash
 gh run list --limit 10 --workflow observability-agent.yml
 ```
 
