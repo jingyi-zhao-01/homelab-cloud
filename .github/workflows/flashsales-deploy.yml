@@ -31,8 +31,59 @@ permissions:
   packages: write
 
 jobs:
+  detect-service-changes:
+    name: Detect Flashsale Service Code Changes
+    runs-on: ubuntu-latest
+    outputs:
+      service_code_changed: ${{ steps.filter.outputs.service_code_changed }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Detect service changes
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "service_code_changed=true" >> "$GITHUB_OUTPUT"
+            echo "workflow_dispatch always runs the full flashsales pipeline"
+            exit 0
+          fi
+
+          base="${{ github.event.before }}"
+          head="${{ github.sha }}"
+
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            echo "service_code_changed=true" >> "$GITHUB_OUTPUT"
+            echo "No usable base SHA found; defaulting to the full pipeline"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$base" "$head" -- \
+            flashsale/order-service \
+            flashsale/user-service \
+            flashsale/product-service || true)"
+
+          if [ -n "$changed_files" ]; then
+            echo "service_code_changed=true" >> "$GITHUB_OUTPUT"
+            echo "Flashsale service code changes detected:"
+            printf '%s\n' "$changed_files"
+          else
+            echo "service_code_changed=false" >> "$GITHUB_OUTPUT"
+            echo "No Flashsale service code changes detected"
+          fi
+
   predeploy:
     name: Predeploy Gates
+    needs:
+      - detect-service-changes
+    if: ${{ needs.detect-service-changes.outputs.service_code_changed == 'true' }}
     uses: ./.github/workflows/flashsales-deploy-pre.yml
     secrets: inherit
 
@@ -40,7 +91,9 @@ jobs:
     name: Build and Push Images
     runs-on: ubuntu-latest
     needs:
+      - detect-service-changes
       - predeploy
+    if: ${{ needs.detect-service-changes.outputs.service_code_changed == 'true' && needs.predeploy.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
@@ -78,8 +131,9 @@ jobs:
     name: Deploy to k3s
     runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
     needs:
+      - detect-service-changes
       - build-and-push
-    if: ${{ needs.build-and-push.result == 'success' }}
+    if: ${{ needs.detect-service-changes.outputs.service_code_changed == 'true' && needs.build-and-push.result == 'success' }}
 
     steps:
       - name: Checkout
@@ -233,7 +287,16 @@ jobs:
   postdeploy:
     name: Postdeploy Runtime Gates
     needs:
+      - detect-service-changes
       - deploy
-    if: ${{ needs.deploy.result == 'success' }}
+    if: ${{ needs.detect-service-changes.outputs.service_code_changed == 'true' && needs.deploy.result == 'success' }}
+    uses: ./.github/workflows/flashsales-deploy-post.yml
+    secrets: inherit
+
+  perf-only:
+    name: Perf Test Without Redeploy
+    needs:
+      - detect-service-changes
+    if: ${{ needs.detect-service-changes.outputs.service_code_changed != 'true' }}
     uses: ./.github/workflows/flashsales-deploy-post.yml
     secrets: inherit
