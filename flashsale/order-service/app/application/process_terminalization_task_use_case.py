@@ -3,6 +3,7 @@ import logging
 import time
 
 from app.application.results import ProcessTerminalizationTasksResult
+from app.observability import start_span
 from app.ports.product_reservation_client import ProductReservationClient
 from app.ports.unit_of_work import UnitOfWork
 
@@ -20,10 +21,15 @@ class ProcessTerminalizationTaskUseCase:
 
     def process(self, limit: int = 32) -> ProcessTerminalizationTasksResult:
         poll_start = time.perf_counter()
-        tasks = self._uow.tasks.claim_ready(
-            limit=limit,
-            available_before=datetime.now(timezone.utc),
-        )
+        with start_span(
+            "order-service",
+            "process terminalization batch",
+            attributes={"flashsale.batch_limit": limit},
+        ):
+            tasks = self._uow.tasks.claim_ready(
+                limit=limit,
+                available_before=datetime.now(timezone.utc),
+            )
         if not tasks:
             terminalization_logger.info(
                 "event=order_service_worker_poll claimed_count=0 succeeded_count=0 retrying_count=0 total_poll_ms=%.2f result=empty",
@@ -34,9 +40,20 @@ class ProcessTerminalizationTaskUseCase:
         succeeded_count = 0
         retrying_count = 0
         for task in tasks:
-            started_at = time.perf_counter()
-            ok, error = self._products.terminalize(task.reservation_id, task.action)
-            elapsed_ms = (time.perf_counter() - started_at) * 1000
+            with start_span(
+                "order-service",
+                "terminalize reservation",
+                attributes={
+                    "flashsale.order_id": task.order_id,
+                    "flashsale.reservation_id": task.reservation_id,
+                    "flashsale.action": task.action,
+                },
+            ):
+                started_at = time.perf_counter()
+                ok, error = self._products.terminalize(
+                    task.reservation_id, task.action
+                )
+                elapsed_ms = (time.perf_counter() - started_at) * 1000
             terminalization_logger.info(
                 "event=order_service_terminalization_call order_id=%s reservation_id=%s action=%s elapsed_ms=%.2f confirm_cancel_ms=%.2f result=%s attempt_count=%s",
                 task.order_id,

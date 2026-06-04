@@ -36,6 +36,7 @@ jobs:
       TF_VAR_grafana_auth: ${{ secrets.GRAFANA_AUTH }}
       TF_VAR_neon_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_NEON_DATASOURCE_UID }}
       TF_VAR_loki_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID }}
+      TF_VAR_tempo_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_TEMPO_DATASOURCE_UID }}
       TF_VAR_flashsale_namespace: ${{ vars.FLASHSALE_NAMESPACE || 'flashsales' }}
       TF_VAR_processing_sla_minutes: ${{ vars.FLASHSALE_GRAFANA_PROCESSING_SLA_MINUTES || '5' }}
       TF_VAR_grafana_folder_title: ${{ vars.FLASHSALE_GRAFANA_FOLDER_TITLE || 'Flashsale' }}
@@ -81,6 +82,10 @@ jobs:
           fi
           if [ -z "${TF_VAR_loki_datasource_uid:-}" ]; then
             echo "FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID variable is missing"
+            exit 1
+          fi
+          if [ -z "${TF_VAR_tempo_datasource_uid:-}" ]; then
+            echo "FLASHSALE_GRAFANA_TEMPO_DATASOURCE_UID variable is missing"
             exit 1
           fi
 

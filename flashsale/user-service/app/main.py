@@ -4,11 +4,16 @@ from fastapi.responses import JSONResponse
 
 from .config import db_url, use_postgres
 from .models import HealthResponse, UserCreate, UserOut
-from .observability import configure_service_logger, create_request_logging_middleware
+from .observability import (
+    configure_service_logger,
+    create_request_logging_middleware,
+    initialize_tracing,
+)
 from .repositories import InMemoryUserRepository, PostgresUserRepository
 from .service import UserService
 
 SERVICE_NAME = "user-service"
+initialize_tracing(SERVICE_NAME)
 logger = configure_service_logger(SERVICE_NAME)
 
 app = FastAPI(title=SERVICE_NAME, version="0.1.0")

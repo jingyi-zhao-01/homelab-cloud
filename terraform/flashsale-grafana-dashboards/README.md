@@ -10,6 +10,7 @@ Current dashboard set:
 - `Flashsale Product Service`
 - `Flashsale Terminalization Queue Health`
 - `Flashsale Terminalization Outcomes`
+- `Flashsale Distributed Traces`
 
 This dashboard exists to support [ADR 0002](../../flashsale/docs/adrs/0002-async-reservation-terminalization.md), which moves reservation `confirm/cancel` off the synchronous order path and requires queue-health style visibility.
 
@@ -30,12 +31,17 @@ The log panels use:
 
 - `loki_datasource_uid`
 
+The traces dashboard uses:
+
+- `tempo_datasource_uid`
+
 ## Required Inputs
 
 - `grafana_url`
 - `grafana_auth`
 - `neon_datasource_uid`
 - `loki_datasource_uid`
+- `tempo_datasource_uid`
 
 Optional but commonly used:
 
@@ -49,13 +55,18 @@ grafana_url           = "https://grafana.example.com"
 grafana_auth          = "YOUR_GRAFANA_API_TOKEN"
 neon_datasource_uid   = "flashsale-neon"
 loki_datasource_uid   = "loki"
+tempo_datasource_uid  = "tempo"
 flashsale_namespace   = "flashsales"
 processing_sla_minutes = 5
 ```
 
 ## What The Dashboards Show
 
-This module now provisions only four dashboards, and every panel is time-based (`timeseries`).
+This module now provisions five dashboards.
+
+The first four are operational time-series dashboards.
+
+The fifth is a trace investigation dashboard that is still time-range driven through Tempo TraceQL search, then pivots into a selected trace view.
 
 1. `Flashsale Order Service`
 
@@ -76,6 +87,11 @@ This module now provisions only four dashboards, and every panel is time-based (
 
 - purpose: show whether queued work is eventually succeeding or just retrying forever
 - read it like this: compare retry trends, success trends, and worker error trends over the same time window; healthy systems may retry briefly but should converge toward success
+
+5. `Flashsale Distributed Traces`
+
+- purpose: stitch `/orders -> user-service -> product-service -> queue worker` into one distributed trace view
+- read it like this: use the dashboard time range to find slow traces in the search tables, then click one result and inspect the span tree to see whether the dominant cost sits in `user-service lookup`, `product-service reserve`, `order db create`, queue claim, or async terminalization
 
 ## Panel Annotation Style
 
@@ -121,6 +137,7 @@ Variables:
 - `GRAFANA_URL`
 - `FLASHSALE_GRAFANA_NEON_DATASOURCE_UID`
 - `FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID`
+- `FLASHSALE_GRAFANA_TEMPO_DATASOURCE_UID`
 
 Optional variables:
 

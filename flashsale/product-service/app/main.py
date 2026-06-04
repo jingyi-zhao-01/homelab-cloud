@@ -12,11 +12,16 @@ from .models import (
     ReservationOut,
     ReserveRequest,
 )
-from .observability import configure_service_logger, create_request_logging_middleware
+from .observability import (
+    configure_service_logger,
+    create_request_logging_middleware,
+    initialize_tracing,
+)
 from .repositories import InMemoryProductRepository, PostgresProductRepository
 from .service import ProductService
 
 SERVICE_NAME = "product-service"
+initialize_tracing(SERVICE_NAME)
 logger = configure_service_logger(SERVICE_NAME)
 
 app = FastAPI(title=SERVICE_NAME, version="0.1.0")

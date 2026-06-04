@@ -2,6 +2,11 @@ namespaceOverride: ""
 
 imagePullSecrets: []
 
+observability:
+  tracing:
+    otlpHttpEndpoint: ""
+    otlpHeaders: ""
+
 postgres:
   enabled: true
   image:

@@ -10,6 +10,8 @@ data:
   DB_HOST: {{ .Values.userService.env.dbHost | quote }}
   DB_PORT: {{ .Values.userService.env.dbPort | quote }}
   DB_NAME: {{ .Values.userService.env.dbName | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.observability.tracing.otlpHttpEndpoint | default "" | quote }}
+  OTEL_EXPORTER_OTLP_HEADERS: {{ .Values.observability.tracing.otlpHeaders | default "" | quote }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -25,6 +27,8 @@ data:
   DB_NAME: {{ .Values.productService.env.dbName | quote }}
   INVENTORY_LOCK_MODE: {{ .Values.productService.env.inventoryLockMode | default "optimistic" | quote }}
   OPTIMISTIC_RETRY_LIMIT: {{ .Values.productService.env.optimisticRetryLimit | default "5" | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.observability.tracing.otlpHttpEndpoint | default "" | quote }}
+  OTEL_EXPORTER_OTLP_HEADERS: {{ .Values.observability.tracing.otlpHeaders | default "" | quote }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -46,3 +50,5 @@ data:
   RABBITMQ_URL: {{ .Values.orderService.env.rabbitmqUrl | quote }}
   INVENTORY_LOCK_MODE: {{ .Values.orderService.env.inventoryLockMode | default "optimistic" | quote }}
   OPTIMISTIC_RETRY_LIMIT: {{ .Values.orderService.env.optimisticRetryLimit | default "5" | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.observability.tracing.otlpHttpEndpoint | default "" | quote }}
+  OTEL_EXPORTER_OTLP_HEADERS: {{ .Values.observability.tracing.otlpHeaders | default "" | quote }}

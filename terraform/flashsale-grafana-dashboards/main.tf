@@ -54,6 +54,14 @@ locals {
       namespace           = var.flashsale_namespace
     }
   )
+
+  flashsale_distributed_traces_dashboard = templatefile(
+    "${path.module}/dashboards/flashsale-distributed-traces.json.tftpl",
+    {
+      tempo_datasource_uid = var.tempo_datasource_uid
+      namespace            = var.flashsale_namespace
+    }
+  )
 }
 
 resource "grafana_dashboard" "flashsale_order_service" {
@@ -78,4 +86,10 @@ resource "grafana_dashboard" "flashsale_terminalization_outcomes" {
   folder      = grafana_folder.flashsale.uid
   overwrite   = true
   config_json = local.flashsale_terminalization_outcomes_dashboard
+}
+
+resource "grafana_dashboard" "flashsale_distributed_traces" {
+  folder      = grafana_folder.flashsale.uid
+  overwrite   = true
+  config_json = local.flashsale_distributed_traces_dashboard
 }

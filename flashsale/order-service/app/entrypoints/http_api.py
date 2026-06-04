@@ -24,12 +24,14 @@ from app.models import (
 from app.observability import (
     configure_service_logger,
     create_request_logging_middleware,
+    initialize_tracing,
 )
 
 SERVICE_NAME = "order-service"
 
 
 def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimiter]:
+    initialize_tracing(SERVICE_NAME)
     logger = configure_service_logger(SERVICE_NAME)
     app = FastAPI(title=SERVICE_NAME, version="0.1.0")
     app.middleware("http")(create_request_logging_middleware(logger, SERVICE_NAME))

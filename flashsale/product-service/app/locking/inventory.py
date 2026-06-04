@@ -3,6 +3,9 @@ import time
 
 import psycopg
 from psycopg.rows import dict_row
+from opentelemetry.trace import SpanKind
+
+from app.observability import start_span
 
 lock_logger = logging.getLogger("product-service.locking")
 
@@ -21,31 +24,57 @@ class InventoryReserveEngine:
         self._slow_ms_threshold = slow_ms_threshold
 
     def reserve(self, product_id: int, quantity: int) -> dict[str, object] | None:
-        if self._lock_mode == "optimistic":
-            return self._reserve_optimistic(product_id, quantity)
-        if self._lock_mode == "pessimistic":
-            return self._reserve_pessimistic(product_id, quantity)
-        lock_logger.error("event=invalid_lock_mode product_id=%s quantity=%s lock_mode=%s", product_id, quantity, self._lock_mode)
-        raise ValueError(f"Invalid lock mode: {self._lock_mode}")
+        with start_span(
+            "product-service",
+            "inventory reserve",
+            kind=SpanKind.INTERNAL,
+            attributes={
+                "flashsale.product_id": product_id,
+                "flashsale.quantity": quantity,
+                "flashsale.lock_mode": self._lock_mode,
+            },
+        ):
+            if self._lock_mode == "optimistic":
+                return self._reserve_optimistic(product_id, quantity)
+            if self._lock_mode == "pessimistic":
+                return self._reserve_pessimistic(product_id, quantity)
+            lock_logger.error(
+                "event=invalid_lock_mode product_id=%s quantity=%s lock_mode=%s",
+                product_id,
+                quantity,
+                self._lock_mode,
+            )
+            raise ValueError(f"Invalid lock mode: {self._lock_mode}")
 
     def reserve_with_reservation(
         self, product_id: int, quantity: int, reservation_ttl_seconds: int
     ) -> dict[str, object] | None:
-        if self._lock_mode == "optimistic":
-            return self._reserve_optimistic_with_reservation(
-                product_id, quantity, reservation_ttl_seconds
+        with start_span(
+            "product-service",
+            "inventory reserve with reservation",
+            kind=SpanKind.INTERNAL,
+            attributes={
+                "flashsale.product_id": product_id,
+                "flashsale.quantity": quantity,
+                "flashsale.lock_mode": self._lock_mode,
+                "flashsale.reservation_ttl_seconds": reservation_ttl_seconds,
+            },
+        ):
+            if self._lock_mode == "optimistic":
+                return self._reserve_optimistic_with_reservation(
+                    product_id, quantity, reservation_ttl_seconds
+                )
+            if self._lock_mode == "pessimistic":
+                return self._reserve_pessimistic_with_reservation(
+                    product_id, quantity, reservation_ttl_seconds
+                )
+            lock_logger.error(
+                "event=invalid_lock_mode product_id=%s quantity=%s lock_mode=%s",
+                product_id,
+                quantity,
+                self._lock_mode,
             )
-        if self._lock_mode == "pessimistic":
-            return self._reserve_pessimistic_with_reservation(
-                product_id, quantity, reservation_ttl_seconds
-            )
-        lock_logger.error(
-            "event=invalid_lock_mode product_id=%s quantity=%s lock_mode=%s",
-            product_id,
-            quantity,
-            self._lock_mode,
-        )
-        raise ValueError(f"Invalid lock mode: {self._lock_mode}")
+            raise ValueError(f"Invalid lock mode: {self._lock_mode}")
 
     def _insert_reservation(
         self,

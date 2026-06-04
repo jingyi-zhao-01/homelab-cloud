@@ -1,0 +1,136 @@
+{
+  "uid": "flashsale-distributed-traces",
+  "title": "Flashsale Distributed Traces",
+  "tags": ["flashsale", "tempo", "traces", "distributed"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "traceId",
+        "type": "textbox",
+        "label": "Trace ID",
+        "query": "",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "order-service-slow-order-traces",
+      "description": "为什么重要：这是定位 `/orders` timeout 最快的入口。怎么看：先把时间范围对到压测窗口，再点持续时间高的 trace，确认时间主要耗在 user lookup、reserve、order db 还是 enqueue。",
+      "datasource": { "type": "tempo", "uid": "${tempo_datasource_uid}" },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceqlSearch",
+          "limit": 50,
+          "tableType": "traces",
+          "query": "{ resource.service.name = \"order-service\" && name = \"POST /orders\" }"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "title": "Open trace in dashboard",
+              "url": "/d/flashsale-distributed-traces/flashsale-distributed-traces?var-traceId=$${__data.fields.traceID}"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "footer": { "show": false }
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "product-service-reserve-traces",
+      "description": "为什么重要：如果 order trace 里 reserve 看起来可疑，这张图能单独把库存热点 trace 拉出来。怎么看：关注持续时间高的 reserve trace，再看里面是否卡在 inventory reserve / reservation confirm-cancel。",
+      "datasource": { "type": "tempo", "uid": "${tempo_datasource_uid}" },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceqlSearch",
+          "limit": 50,
+          "tableType": "traces",
+          "query": "{ resource.service.name = \"product-service\" && (name = \"POST /products/{product_id}/reserve\" || name = \"reserve product\" || name = \"inventory reserve with reservation\") }"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "title": "Open trace in dashboard",
+              "url": "/d/flashsale-distributed-traces/flashsale-distributed-traces?var-traceId=$${__data.fields.traceID}"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "footer": { "show": false }
+      }
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "order-service-terminalization-worker-traces",
+      "description": "为什么重要：这张图帮助区分问题是不是已经从同步 `/orders` 转移到了异步 confirm/cancel worker。怎么看：如果 worker trace 变长、重试增多，而 `/orders` 已经恢复，说明瓶颈在异步终态处理。",
+      "datasource": { "type": "tempo", "uid": "${tempo_datasource_uid}" },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 10 },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceqlSearch",
+          "limit": 50,
+          "tableType": "traces",
+          "query": "{ resource.service.name = \"order-service\" && (name = \"process terminalization batch\" || name = \"terminalize reservation\") }"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "title": "Open trace in dashboard",
+              "url": "/d/flashsale-distributed-traces/flashsale-distributed-traces?var-traceId=$${__data.fields.traceID}"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "footer": { "show": false }
+      }
+    },
+    {
+      "id": 4,
+      "type": "traces",
+      "title": "selected-distributed-trace",
+      "description": "为什么重要：表格只告诉你哪条 trace 慢，真正定位卡点还是要在这里看 span 树。怎么看：点上面任一结果，把 `traceId` 带进来，然后看总时间最长的 span 是否落在 `user-service lookup`、`product-service reserve`、`order db create`、`inventory reserve with reservation` 或 worker span 上。",
+      "datasource": { "type": "tempo", "uid": "${tempo_datasource_uid}" },
+      "gridPos": { "h": 16, "w": 12, "x": 12, "y": 10 },
+      "targets": [
+        {
+          "refId": "A",
+          "queryType": "traceql",
+          "query": "$${traceId}"
+        }
+      ],
+      "options": {}
+    }
+  ]
+}

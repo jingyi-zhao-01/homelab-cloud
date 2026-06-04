@@ -15,6 +15,7 @@ from app.adapters.order_postgres_rows import (
 from app.domain.order import Order, OrderItem
 from app.domain.state_machines import transition_order
 from app.domain.statuses import OrderStatus, PaymentStatus
+from app.observability import start_span
 
 ROW_FACTORY = cast(Any, dict_row)
 db_logger = logging.getLogger("order-service.db")
@@ -36,52 +37,59 @@ class OrderPostgresRepository:
     ) -> Order:
         start = time.perf_counter()
         result = "inserted"
-        with psycopg.connect(self._database_url, autocommit=True, row_factory=ROW_FACTORY) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO orders (
-                        user_id, total_amount, status, payment_status, idempotency_key,
-                        reservation_ids_json, items_json
+        with start_span(
+            "order-service",
+            "order db create",
+            attributes={"db.system": "postgresql"},
+        ):
+            with psycopg.connect(
+                self._database_url, autocommit=True, row_factory=ROW_FACTORY
+            ) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO orders (
+                            user_id, total_amount, status, payment_status, idempotency_key,
+                            reservation_ids_json, items_json
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+                        ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
+                        RETURNING id, user_id, created_at, total_amount, status,
+                                  payment_status, idempotency_key, reservation_ids_json, items_json
+                        """,
+                        (
+                            user_id,
+                            decimal_amount(total_amount),
+                            status,
+                            payment_status,
+                            idempotency_key,
+                            dump_reservation_ids(reservation_ids),
+                            dump_items(items),
+                        ),
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
-                    ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING
-                    RETURNING id, user_id, created_at, total_amount, status,
-                              payment_status, idempotency_key, reservation_ids_json, items_json
-                    """,
-                    (
-                        user_id,
-                        decimal_amount(total_amount),
-                        status,
-                        payment_status,
-                        idempotency_key,
-                        dump_reservation_ids(reservation_ids),
-                        dump_items(items),
-                    ),
-                )
-                row = cur.fetchone()
-                if row:
-                    order = to_order(row)
-                    db_logger.info(
-                        "event=order_service_order_db order_id=%s operation=create order_db_ms=%.2f result=%s",
-                        order.id,
-                        (time.perf_counter() - start) * 1000,
-                        result,
-                    )
-                    return order
-                if idempotency_key:
-                    existing = self.get_by_idempotency_key(idempotency_key)
-                    if existing:
-                        result = "idempotency_replay"
+                    row = cur.fetchone()
+                    if row:
+                        order = to_order(row)
                         db_logger.info(
                             "event=order_service_order_db order_id=%s operation=create order_db_ms=%.2f result=%s",
-                            existing.id,
+                            order.id,
                             (time.perf_counter() - start) * 1000,
                             result,
                         )
-                        return existing
-                result = "error"
-                raise RuntimeError("order persistence failed")
+                        return order
+                    if idempotency_key:
+                        existing = self.get_by_idempotency_key(idempotency_key)
+                        if existing:
+                            result = "idempotency_replay"
+                            db_logger.info(
+                                "event=order_service_order_db order_id=%s operation=create order_db_ms=%.2f result=%s",
+                                existing.id,
+                                (time.perf_counter() - start) * 1000,
+                                result,
+                            )
+                            return existing
+                    result = "error"
+                    raise RuntimeError("order persistence failed")
 
     def update_state(
         self,

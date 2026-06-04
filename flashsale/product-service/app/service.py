@@ -11,6 +11,7 @@ from .models import (
     ReservationOut,
     ReserveRequest,
 )
+from .observability import start_span
 from .repositories import ProductRepository
 
 class ProductService:
@@ -81,7 +82,18 @@ class ProductService:
         start = time.perf_counter()
         result = "unknown"
         try:
-            reservation = self._repository.reserve_product(product_id, payload.quantity)
+            with start_span(
+                "product-service",
+                "reserve product",
+                attributes={
+                    "flashsale.product_id": product_id,
+                    "flashsale.quantity": payload.quantity,
+                },
+            ):
+                reservation = self._repository.reserve_product(
+                    product_id,
+                    payload.quantity,
+                )
             if not reservation:
                 result = "missing"
                 self._logger.info(
@@ -135,7 +147,12 @@ class ProductService:
         start = time.perf_counter()
         result = "unknown"
         try:
-            reservation = self._repository.confirm_reservation(reservation_id)
+            with start_span(
+                "product-service",
+                "confirm reservation",
+                attributes={"flashsale.reservation_id": reservation_id},
+            ):
+                reservation = self._repository.confirm_reservation(reservation_id)
             if not reservation:
                 result = "missing"
                 self._logger.info(
@@ -178,7 +195,12 @@ class ProductService:
         start = time.perf_counter()
         result = "unknown"
         try:
-            reservation = self._repository.cancel_reservation(reservation_id)
+            with start_span(
+                "product-service",
+                "cancel reservation",
+                attributes={"flashsale.reservation_id": reservation_id},
+            ):
+                reservation = self._repository.cancel_reservation(reservation_id)
             if not reservation:
                 result = "missing"
                 self._logger.info(

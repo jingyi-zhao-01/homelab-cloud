@@ -8,6 +8,7 @@ from app.application.commands import CreateOrderCommand, PaymentWebhookCommand
 from app.application.results import ExpireOrdersResult
 from app.config import DATABASE_UNAVAILABLE_MESSAGE, ORDER_PENDING_TTL_SECONDS
 from app.domain.order import Order, OrderItem
+from app.observability import start_span
 from app.ports.product_reservation_client import ProductReservationClient
 from app.ports.unit_of_work import UnitOfWork
 from app.ports.user_directory_client import UserDirectoryClient
@@ -44,21 +45,34 @@ class CreateOrderUseCase:
                 )
                 return existing
 
-        user_validate_start = time.perf_counter()
-        self._users.ensure_user_exists(command.user_id)
-        user_validate_ms = (time.perf_counter() - user_validate_start) * 1000
+        with start_span(
+            "order-service",
+            "validate user",
+            attributes={"flashsale.user_id": command.user_id},
+        ):
+            user_validate_start = time.perf_counter()
+            self._users.ensure_user_exists(command.user_id)
+            user_validate_ms = (time.perf_counter() - user_validate_start) * 1000
         order_items: list[OrderItem] = []
         reservation_ids: list[int] = []
         total_amount = 0.0
 
         try:
             for product_id, quantity in command.items:
-                reserve_start = time.perf_counter()
-                unit_price, reserved_qty, reservation_id = self._products.reserve(
-                    product_id=product_id,
-                    quantity=quantity,
-                )
-                reserve_ms += (time.perf_counter() - reserve_start) * 1000
+                with start_span(
+                    "order-service",
+                    "reserve inventory",
+                    attributes={
+                        "flashsale.product_id": product_id,
+                        "flashsale.quantity": quantity,
+                    },
+                ):
+                    reserve_start = time.perf_counter()
+                    unit_price, reserved_qty, reservation_id = self._products.reserve(
+                        product_id=product_id,
+                        quantity=quantity,
+                    )
+                    reserve_ms += (time.perf_counter() - reserve_start) * 1000
                 reservation_ids.append(reservation_id)
                 item = OrderItem(
                     product_id=product_id,
@@ -67,15 +81,27 @@ class CreateOrderUseCase:
                 )
                 total_amount += item.line_total
                 order_items.append(item)
-            order = self._uow.orders.create(
-                user_id=command.user_id,
-                total_amount=total_amount,
-                items=order_items,
-                reservation_ids=reservation_ids,
-                idempotency_key=command.idempotency_key,
-            )
+            with start_span(
+                "order-service",
+                "persist order",
+                attributes={"flashsale.reservation_count": len(reservation_ids)},
+            ):
+                order = self._uow.orders.create(
+                    user_id=command.user_id,
+                    total_amount=total_amount,
+                    items=order_items,
+                    reservation_ids=reservation_ids,
+                    idempotency_key=command.idempotency_key,
+                )
             order_id = order.id
-            finalized = self._require_finalized(order.id, reservation_ids, "succeeded")
+            with start_span(
+                "order-service",
+                "enqueue terminalization",
+                attributes={"flashsale.order_id": order.id},
+            ):
+                finalized = self._require_finalized(
+                    order.id, reservation_ids, "succeeded"
+                )
             result = "success"
             return finalized
         except RuntimeError as exc:

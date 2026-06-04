@@ -7,6 +7,7 @@ from psycopg.rows import dict_row
 from app.adapters.order_postgres_rows import to_task
 from app.domain.reservation_terminalization_task import ReservationTerminalizationTask
 from app.domain.statuses import TerminalizationAction, TerminalizationEventType
+from app.observability import start_span
 
 ROW_FACTORY = cast(Any, dict_row)
 
@@ -50,41 +51,46 @@ class TerminalizationTaskPostgresRepository:
         limit: int,
         available_before: datetime,
     ) -> list[ReservationTerminalizationTask]:
-        with psycopg.connect(self._database_url, row_factory=ROW_FACTORY) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    WITH ready AS (
-                        SELECT task_id
-                        FROM order_terminalization_tasks
-                        WHERE status IN ('queued', 'retrying') AND available_at <= %s
-                        ORDER BY task_id ASC
-                        FOR UPDATE SKIP LOCKED
-                        LIMIT %s
+        with start_span(
+            "order-service",
+            "queue claim ready tasks",
+            attributes={"db.system": "postgresql", "flashsale.batch_limit": limit},
+        ):
+            with psycopg.connect(self._database_url, row_factory=ROW_FACTORY) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        WITH ready AS (
+                            SELECT task_id
+                            FROM order_terminalization_tasks
+                            WHERE status IN ('queued', 'retrying') AND available_at <= %s
+                            ORDER BY task_id ASC
+                            FOR UPDATE SKIP LOCKED
+                            LIMIT %s
+                        )
+                        UPDATE order_terminalization_tasks tasks
+                        SET status = 'processing', attempt_count = attempt_count + 1
+                        FROM ready
+                        WHERE tasks.task_id = ready.task_id
+                        RETURNING tasks.task_id, tasks.order_id, tasks.reservation_id,
+                                  tasks.action, tasks.status, tasks.attempt_count,
+                                  tasks.available_at, tasks.last_error, tasks.created_at
+                        """,
+                        (available_before, limit),
                     )
-                    UPDATE order_terminalization_tasks tasks
-                    SET status = 'processing', attempt_count = attempt_count + 1
-                    FROM ready
-                    WHERE tasks.task_id = ready.task_id
-                    RETURNING tasks.task_id, tasks.order_id, tasks.reservation_id,
-                              tasks.action, tasks.status, tasks.attempt_count,
-                              tasks.available_at, tasks.last_error, tasks.created_at
-                    """,
-                    (available_before, limit),
-                )
-                rows = [to_task(row) for row in cur.fetchall()]
-                conn.commit()
-                for task in rows:
-                    self.record_event(
-                        task_id=task.task_id,
-                        order_id=task.order_id,
-                        reservation_id=task.reservation_id,
-                        action=task.action,
-                        event_type="processing",
-                        attempt_count=task.attempt_count,
-                        last_error=task.last_error,
-                    )
-                return rows
+                    rows = [to_task(row) for row in cur.fetchall()]
+                    conn.commit()
+                    for task in rows:
+                        self.record_event(
+                            task_id=task.task_id,
+                            order_id=task.order_id,
+                            reservation_id=task.reservation_id,
+                            action=task.action,
+                            event_type="processing",
+                            attempt_count=task.attempt_count,
+                            last_error=task.last_error,
+                        )
+                    return rows
 
     def mark_succeeded(self, task_id: int) -> None:
         self._mark(task_id, "succeeded", None, None)

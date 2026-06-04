@@ -37,6 +37,11 @@ variable "loki_datasource_uid" {
   type        = string
 }
 
+variable "tempo_datasource_uid" {
+  description = "Grafana datasource UID for the Tempo traces datasource."
+  type        = string
+}
+
 variable "processing_sla_minutes" {
   description = "Minutes after which a processing task is treated as stuck."
   type        = number
