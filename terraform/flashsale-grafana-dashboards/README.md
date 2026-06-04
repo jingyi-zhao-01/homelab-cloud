@@ -70,3 +70,37 @@ The module is expected to pass:
 terraform init -backend=false
 terraform validate
 ```
+
+## GitHub Actions Automation
+
+This module is automatically applied by:
+
+- [terraform-flashsale-grafana-dashboards.yml](../../.github/workflows/terraform-flashsale-grafana-dashboards.yml)
+
+Automation behavior:
+
+- push to `main` with changes under `terraform/flashsale-grafana-dashboards/**` triggers an automatic `terraform apply`
+- manual `workflow_dispatch` supports `plan`, `apply`, and `destroy`
+
+Required GitHub configuration:
+
+Secrets:
+
+- `GRAFANA_AUTH`
+- `TF_STATE_BUCKET`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+Variables:
+
+- `AWS_REGION`
+- `GRAFANA_URL`
+- `FLASHSALE_GRAFANA_NEON_DATASOURCE_UID`
+- `FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID`
+
+Optional variables:
+
+- `FLASHSALE_NAMESPACE`
+- `FLASHSALE_GRAFANA_PROCESSING_SLA_MINUTES`
+- `FLASHSALE_GRAFANA_FOLDER_TITLE`
+- `FLASHSALE_GRAFANA_FOLDER_UID`

@@ -1,0 +1,107 @@
+name: Terraform Flashsale Grafana Dashboards
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Terraform action to run"
+        required: true
+        default: apply
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform/flashsale-grafana-dashboards/**"
+      - ".github/workflows/terraform-flashsale-grafana-dashboards.yml"
+
+concurrency:
+  group: flashsale-grafana-dashboards
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: Terraform ${{ github.event_name == 'push' && 'apply' || inputs.action }}
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_grafana_url: ${{ vars.GRAFANA_URL }}
+      TF_VAR_grafana_auth: ${{ secrets.GRAFANA_AUTH }}
+      TF_VAR_neon_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_NEON_DATASOURCE_UID }}
+      TF_VAR_loki_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID }}
+      TF_VAR_flashsale_namespace: ${{ vars.FLASHSALE_NAMESPACE || 'flashsales' }}
+      TF_VAR_processing_sla_minutes: ${{ vars.FLASHSALE_GRAFANA_PROCESSING_SLA_MINUTES || '5' }}
+      TF_VAR_grafana_folder_title: ${{ vars.FLASHSALE_GRAFANA_FOLDER_TITLE || 'Flashsale' }}
+      TF_VAR_grafana_folder_uid: ${{ vars.FLASHSALE_GRAFANA_FOLDER_UID || 'flashsale-folder' }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}
+      TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+    defaults:
+      run:
+        working-directory: terraform/flashsale-grafana-dashboards
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Validate required configuration
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TF_STATE_BUCKET:-}" ]; then
+            echo "TF_STATE_BUCKET secret is missing"
+            exit 1
+          fi
+          if [ -z "${AWS_REGION:-}" ]; then
+            echo "AWS_REGION variable is missing"
+            exit 1
+          fi
+          if [ -z "${TF_VAR_grafana_url:-}" ]; then
+            echo "GRAFANA_URL variable is missing"
+            exit 1
+          fi
+          if [ -z "${TF_VAR_grafana_auth:-}" ]; then
+            echo "GRAFANA_AUTH secret is missing"
+            exit 1
+          fi
+          if [ -z "${TF_VAR_neon_datasource_uid:-}" ]; then
+            echo "FLASHSALE_GRAFANA_NEON_DATASOURCE_UID variable is missing"
+            exit 1
+          fi
+          if [ -z "${TF_VAR_loki_datasource_uid:-}" ]; then
+            echo "FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID variable is missing"
+            exit 1
+          fi
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=flashsales/grafana-dashboards/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -input=false
+
+      - name: Terraform Apply
+        if: ${{ github.event_name == 'push' || inputs.action == 'apply' }}
+        run: terraform apply -auto-approve -input=false
+
+      - name: Terraform Destroy
+        if: ${{ github.event_name != 'push' && inputs.action == 'destroy' }}
+        run: terraform destroy -auto-approve -input=false

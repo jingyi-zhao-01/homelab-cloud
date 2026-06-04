@@ -71,11 +71,24 @@ For Grafana provisioning related to the flashsale async reservation path, use:
 
 - [terraform/flashsale-grafana-dashboards](../terraform/flashsale-grafana-dashboards/README.md)
 
+Automatic provisioning entrypoint:
+
+- `.github/workflows/terraform-flashsale-grafana-dashboards.yml`
+
 Important datasource note:
 
 - the flashsale Grafana dashboard module expects a Grafana `PostgreSQL` datasource backed by Neon
 - this is represented in Terraform as `neon_datasource_uid`
 - Loki remains a separate datasource via `loki_datasource_uid`
+
+Required GitHub configuration for auto-apply:
+
+- Secret: `GRAFANA_AUTH`
+- Variable: `GRAFANA_URL`
+- Variable: `FLASHSALE_GRAFANA_NEON_DATASOURCE_UID`
+- Variable: `FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID`
+
+The workflow auto-applies on pushes to `main` when files under `terraform/flashsale-grafana-dashboards/**` change.
 
 For remote spot workers, do not stop at `k3s_server_url` and `k3s_token`. Make sure the worker Terraform inputs also include `trusted_cluster_cidrs` so the control-plane, VPN, or other trusted cluster paths can actually reach the node for cross-node networking and monitoring.
 
