@@ -246,3 +246,27 @@ A good PR should include:
 
 Do not claim performance improvement unless supported by a test run or metric.
 Do not claim correctness improvement unless the consistency harness or equivalent validation was run.
+
+
+
+## Change discipline
+
+Before editing:
+- Run `git status --short`.
+- If working tree is not clean, stop and ask before modifying.
+
+During work:
+- Prefer minimal diffs.
+- Do not create broad refactors while fixing a specific bug.
+- Do not modify unrelated files.
+
+Failure handling:
+- If the same test/build fails twice after two different fixes, stop.
+- Do not keep adding fallback code.
+- Explain the suspected root cause and propose a rollback.
+- Revert only the files changed in this session unless explicitly told otherwise.
+
+Git safety:
+- Before large edits, create a checkpoint commit or stash.
+- Never run `git reset --hard` unless explicitly instructed.
+- Never revert files that were dirty before the session started.

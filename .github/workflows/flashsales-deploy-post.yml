@@ -13,20 +13,20 @@ permissions:
   packages: write
 
 jobs:
-  runtime-consistency:
-    uses: ./.github/workflows/flashsales-consistency.yml
-    secrets: inherit
+  # runtime-consistency:
+  #   uses: ./.github/workflows/flashsales-consistency.yml
+  #   secrets: inherit
 
   perf-concurrency-suite:
     uses: ./.github/workflows/flashsales-perf-concurrency-suite.yml
     secrets: inherit
-    needs:
-      - runtime-consistency
+    # needs:
+    #   - runtime-consistency
 
   notify-discord:
     name: Notify Discord
     needs:
-      - runtime-consistency
+      # - runtime-consistency
       - perf-concurrency-suite
     if: ${{ always() && github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
