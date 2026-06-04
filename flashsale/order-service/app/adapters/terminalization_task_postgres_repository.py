@@ -64,7 +64,7 @@ class TerminalizationTaskPostgresRepository:
                             SELECT task_id
                             FROM order_terminalization_tasks
                             WHERE status IN ('queued', 'retrying') AND available_at <= %s
-                            ORDER BY task_id ASC
+                            ORDER BY available_at ASC, task_id ASC
                             FOR UPDATE SKIP LOCKED
                             LIMIT %s
                         )

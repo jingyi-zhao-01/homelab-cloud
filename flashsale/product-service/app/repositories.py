@@ -337,6 +337,7 @@ class PostgresProductRepository(ProductRepository):
                     SELECT reservation_id, product_id, quantity
                     FROM reservations
                     WHERE status = 'reserved' AND expires_at <= NOW()
+                    ORDER BY expires_at ASC, reservation_id ASC
                     FOR UPDATE
                     """
                 )

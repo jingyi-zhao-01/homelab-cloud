@@ -127,7 +127,7 @@ class OrderPostgresRepository:
 
     def list_stale(self, expires_before: datetime) -> list[Order]:
         return self._fetch_many(
-            "WHERE status = 'pending' AND created_at <= %s ORDER BY id ASC",
+            "WHERE status = 'pending' AND created_at <= %s ORDER BY created_at ASC, id ASC",
             (expires_before,),
         )
 
