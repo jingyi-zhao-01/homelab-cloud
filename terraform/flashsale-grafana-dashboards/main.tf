@@ -22,16 +22,16 @@ resource "grafana_folder" "flashsale" {
 }
 
 locals {
-  flashsale_http_throughput_dashboard = templatefile(
-    "${path.module}/dashboards/flashsale-http-throughput.json.tftpl",
+  flashsale_order_service_dashboard = templatefile(
+    "${path.module}/dashboards/flashsale-order-service.json.tftpl",
     {
       loki_datasource_uid = var.loki_datasource_uid
       namespace           = var.flashsale_namespace
     }
   )
 
-  flashsale_http_latency_dashboard = templatefile(
-    "${path.module}/dashboards/flashsale-http-latency.json.tftpl",
+  flashsale_product_service_dashboard = templatefile(
+    "${path.module}/dashboards/flashsale-product-service.json.tftpl",
     {
       loki_datasource_uid = var.loki_datasource_uid
       namespace           = var.flashsale_namespace
@@ -56,16 +56,16 @@ locals {
   )
 }
 
-resource "grafana_dashboard" "flashsale_http_throughput" {
+resource "grafana_dashboard" "flashsale_order_service" {
   folder      = grafana_folder.flashsale.uid
   overwrite   = true
-  config_json = local.flashsale_http_throughput_dashboard
+  config_json = local.flashsale_order_service_dashboard
 }
 
-resource "grafana_dashboard" "flashsale_http_latency" {
+resource "grafana_dashboard" "flashsale_product_service" {
   folder      = grafana_folder.flashsale.uid
   overwrite   = true
-  config_json = local.flashsale_http_latency_dashboard
+  config_json = local.flashsale_product_service_dashboard
 }
 
 resource "grafana_dashboard" "flashsale_terminalization_queue_health" {

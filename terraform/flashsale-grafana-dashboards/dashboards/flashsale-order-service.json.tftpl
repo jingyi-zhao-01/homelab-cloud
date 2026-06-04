@@ -1,0 +1,160 @@
+{
+  "uid": "flashsale-order-service",
+  "title": "Flashsale Order Service",
+  "tags": ["flashsale", "order-service", "http", "latency"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "constant",
+        "label": "Namespace",
+        "query": "${namespace}",
+        "current": { "text": "${namespace}", "value": "${namespace}" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "order-service-endpoint-throughput-rps",
+      "description": "为什么重要：先确认流量真的打到了 order-service，而不是在 client 或 ingress 前就掉了。怎么看：压测开始后，这里的曲线应该先起来，`POST /orders` 应该是最主要热点。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (method, path, status_code) (rate({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=\"order-service\" [5m]))",
+          "legendFormat": "order-service {{method}} {{path}} {{status_code}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "order-service-post-orders-http-p95-ms",
+      "description": "为什么重要：这是用户实际感知到的 `/orders` 入口延迟。怎么看：如果这条线抬升，但后面的阶段日志没有同步抬升，问题可能在入口排队、线程占用或框架层。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=\"order-service\" | method=\"POST\" | path=\"/orders\" | unwrap duration_ms [5m])",
+          "legendFormat": "order-service POST /orders",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "order-service-total-order-p95-ms",
+      "description": "为什么重要：这是你定位 timeout 最先该看的业务总耗时。怎么看：如果这条线跟 HTTP p95 一起涨，说明瓶颈真的在下单链路内部，而不是纯入口开销。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=order_service_create_order_timing\" | logfmt | __error__=\"\" | unwrap total_order_ms [5m])",
+          "legendFormat": "order-service total_order_ms",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "order-service-user-validate-p95-ms",
+      "description": "为什么重要：确认 user lookup 会不会先拖慢整条链路。怎么看：如果它几乎为零但总耗时很高，就可以快速把注意力转去 reserve 或 DB。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=order_service_create_order_timing\" | logfmt | __error__=\"\" | unwrap user_validate_ms [5m])",
+          "legendFormat": "order-service user_validate_ms",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "order-service-reserve-p95-ms",
+      "description": "为什么重要：这是 order-service 视角下调用 product reserve 的阶段耗时。怎么看：如果这条线高，而 product-service lock wait 也高，说明热点就落在 reserve/库存锁上。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 18 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=order_service_create_order_timing\" | logfmt | __error__=\"\" | unwrap reserve_ms [5m])",
+          "legendFormat": "order-service reserve_ms",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "order-service-order-db-p95-ms",
+      "description": "为什么重要：用来确认订单落库是不是开始拖慢主路径。怎么看：如果 reserve 不高但这条线高，问题更像 order DB、索引或事务竞争。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 18 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=order_service_order_db\" | logfmt | __error__=\"\" | unwrap order_db_ms [5m])",
+          "legendFormat": "order-service order_db_ms",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "order-service-enqueue-task-p95-ms",
+      "description": "为什么重要：这张图确认 Postgres queue 入队本身会不会卡住 `/orders`。怎么看：如果它很低，说明异步化设计有效；如果它开始抬升，队列表/索引本身可能成了新的瓶颈。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 27 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=order_service_enqueue_task\" | logfmt | __error__=\"\" | unwrap enqueue_task_ms [5m])",
+          "legendFormat": "order-service enqueue_task_ms",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "order-service-http-error-throughput",
+      "description": "为什么重要：吞吐还在不代表没出问题，错误曲线能区分系统是在变慢还是已经开始失败。怎么看：如果 5xx 跟 total_order_ms 同时抬升，说明 timeout 已经越过了仅仅慢的问题。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 27 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (method, path, status_code) (rate({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=\"order-service\" | status_code=~\"4..|5..\" [5m]))",
+          "legendFormat": "order-service {{method}} {{path}} {{status_code}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    }
+  ]
+}

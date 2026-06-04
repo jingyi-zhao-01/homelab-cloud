@@ -1,3 +1,5 @@
+import logging
+import time
 from typing import Any, cast
 
 import psycopg
@@ -15,6 +17,7 @@ from app.domain.state_machines import transition_order
 from app.domain.statuses import OrderStatus, PaymentStatus, TerminalizationAction
 
 ROW_FACTORY = cast(Any, dict_row)
+db_logger = logging.getLogger("order-service.db")
 
 
 class OrderPostgresUnitOfWork:
@@ -49,8 +52,12 @@ class OrderPostgresUnitOfWork:
         action: TerminalizationAction,
         reservation_ids: list[int],
     ) -> Order | None:
+        order_update_ms = 0.0
+        enqueue_task_ms = 0.0
+        total_start = time.perf_counter()
         with psycopg.connect(self._database_url, row_factory=ROW_FACTORY) as conn:
             with conn.cursor() as cur:
+                update_start = time.perf_counter()
                 cur.execute(
                     """
                     SELECT id, user_id, created_at, total_amount, status,
@@ -76,6 +83,8 @@ class OrderPostgresUnitOfWork:
                     (updated.status, updated.payment_status, order_id),
                 )
                 row = cur.fetchone()
+                order_update_ms = (time.perf_counter() - update_start) * 1000
+                enqueue_start = time.perf_counter()
                 for reservation_id in reservation_ids:
                     cur.execute(
                         """
@@ -95,5 +104,16 @@ class OrderPostgresUnitOfWork:
                         """,
                         (task["task_id"], order_id, reservation_id, action),
                     )
+                enqueue_task_ms = (time.perf_counter() - enqueue_start) * 1000
                 conn.commit()
+                db_logger.info(
+                    "event=order_service_enqueue_task order_id=%s action=%s reservation_count=%s "
+                    "order_db_ms=%.2f enqueue_task_ms=%.2f total_finalize_ms=%.2f result=success",
+                    order_id,
+                    action,
+                    len(reservation_ids),
+                    order_update_ms,
+                    enqueue_task_ms,
+                    (time.perf_counter() - total_start) * 1000,
+                )
                 return to_order(row)

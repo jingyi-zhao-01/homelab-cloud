@@ -72,16 +72,15 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "order-service-terminalization-worker-errors",
-      "description": "为什么重要：这张图专门看 worker 里的异常，而不是普通业务重试。怎么看：如果 error 和 call p95 同时上升，说明问题更像网络/依赖失败；如果只有 p95 高，说明更像慢阻塞而不是直接报错。",
-      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "title": "queue-terminalization-error-events",
+      "description": "为什么重要：这张图专门看 terminalization 过程里真正记录下来的错误事件，而不是普通成功完成。怎么看：如果 retry 和 error 一起涨，说明 worker 确实在持续碰到失败，而不是仅仅处理变慢。",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${neon_datasource_uid}" },
       "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (action) (count_over_time({namespace=\"$namespace\"} |= \"event=terminalization_task_error\" | logfmt | __error__=\"\" [5m]))",
-          "queryType": "range",
-          "legendFormat": "order-service {{action}}"
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(occurred_at, '1m'), COUNT(*)::double precision AS value, action AS metric FROM order_terminalization_task_events WHERE $__timeFilter(occurred_at) AND event_type = 'error' GROUP BY 1, 3 ORDER BY 1;"
         }
       ],
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } }

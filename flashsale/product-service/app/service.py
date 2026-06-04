@@ -13,7 +13,6 @@ from .models import (
 )
 from .repositories import ProductRepository
 
-
 class ProductService:
     def __init__(
         self, repository: ProductRepository, logger: logging.Logger, storage: str
@@ -53,7 +52,6 @@ class ProductService:
             raise HTTPException(
                 status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
             ) from exc
-
     def get_product(self, product_id: int) -> ProductOut:
         try:
             product = self._repository.get_product(product_id)
@@ -134,15 +132,19 @@ class ProductService:
             )
 
     def confirm_reservation(self, reservation_id: int) -> ReservationOut:
+        start = time.perf_counter()
+        result = "unknown"
         try:
             reservation = self._repository.confirm_reservation(reservation_id)
             if not reservation:
+                result = "missing"
                 self._logger.info(
                     "event=reservation_not_found reservation_id=%s storage=%s",
                     reservation_id,
                     self._storage,
                 )
                 raise HTTPException(status_code=404, detail="reservation not found")
+            result = reservation.status
             self._logger.info(
                 "event=reservation_confirmed reservation_id=%s storage=%s",
                 reservation_id,
@@ -152,6 +154,7 @@ class ProductService:
         except HTTPException:
             raise
         except Exception as exc:
+            result = "error"
             self._logger.exception(
                 "event=reservation_confirm_error storage=%s reservation_id=%s",
                 self._storage,
@@ -160,17 +163,31 @@ class ProductService:
             raise HTTPException(
                 status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
             ) from exc
+        finally:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            self._logger.info(
+                "event=product_service_confirm_cancel_finished action=confirm reservation_id=%s elapsed_ms=%.2f confirm_cancel_ms=%.2f result=%s storage=%s",
+                reservation_id,
+                elapsed_ms,
+                elapsed_ms,
+                result,
+                self._storage,
+            )
 
     def cancel_reservation(self, reservation_id: int) -> ReservationOut:
+        start = time.perf_counter()
+        result = "unknown"
         try:
             reservation = self._repository.cancel_reservation(reservation_id)
             if not reservation:
+                result = "missing"
                 self._logger.info(
                     "event=reservation_not_found reservation_id=%s storage=%s",
                     reservation_id,
                     self._storage,
                 )
                 raise HTTPException(status_code=404, detail="reservation not found")
+            result = reservation.status
             self._logger.info(
                 "event=reservation_cancelled reservation_id=%s storage=%s",
                 reservation_id,
@@ -180,6 +197,7 @@ class ProductService:
         except HTTPException:
             raise
         except Exception as exc:
+            result = "error"
             self._logger.exception(
                 "event=reservation_cancel_error storage=%s reservation_id=%s",
                 self._storage,
@@ -188,6 +206,16 @@ class ProductService:
             raise HTTPException(
                 status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
             ) from exc
+        finally:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            self._logger.info(
+                "event=product_service_confirm_cancel_finished action=cancel reservation_id=%s elapsed_ms=%.2f confirm_cancel_ms=%.2f result=%s storage=%s",
+                reservation_id,
+                elapsed_ms,
+                elapsed_ms,
+                result,
+                self._storage,
+            )
 
     def expire_reservations(self) -> ExpireReservationsResult:
         try:

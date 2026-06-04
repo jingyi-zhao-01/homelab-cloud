@@ -6,8 +6,8 @@ This Terraform module provisions Grafana dashboards for the flashsale workload.
 
 Current dashboard set:
 
-- `Flashsale HTTP Throughput`
-- `Flashsale HTTP Latency`
+- `Flashsale Order Service`
+- `Flashsale Product Service`
 - `Flashsale Terminalization Queue Health`
 - `Flashsale Terminalization Outcomes`
 
@@ -57,15 +57,15 @@ processing_sla_minutes = 5
 
 This module now provisions only four dashboards, and every panel is time-based (`timeseries`).
 
-1. `Flashsale HTTP Throughput`
+1. `Flashsale Order Service`
 
-- purpose: show whether perf traffic is actually entering the system and which endpoint is the hotspot
-- read it like this: first confirm `POST /orders` rises with the load test, then compare total throughput with error throughput to see whether the system is degrading or merely busy
+- purpose: keep everything about the synchronous order path in one place
+- read it like this: start from `POST /orders` HTTP p95, then walk down `total_order_ms`, `reserve_ms`, `order_db_ms`, and `enqueue_task_ms` to see exactly which phase is stretching
 
-2. `Flashsale HTTP Latency`
+2. `Flashsale Product Service`
 
-- purpose: show baseline latency and tail-latency regression by endpoint
-- read it like this: start with `p50`, then `p95`, then `p99`; if only tail latency rises, the system is entering contention before full collapse
+- purpose: keep reserve, lock wait, short transaction timing, and confirm/cancel timing together
+- read it like this: compare reserve p95 with lock wait p95 and reserve transaction p95; if confirm/cancel rises with queue backlog, the async worker's downstream dependency is slowing
 
 3. `Flashsale Terminalization Queue Health`
 

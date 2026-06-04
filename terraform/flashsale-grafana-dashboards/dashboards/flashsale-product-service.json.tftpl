@@ -1,0 +1,126 @@
+{
+  "uid": "flashsale-product-service",
+  "title": "Flashsale Product Service",
+  "tags": ["flashsale", "product-service", "http", "inventory"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "constant",
+        "label": "Namespace",
+        "query": "${namespace}",
+        "current": { "text": "${namespace}", "value": "${namespace}" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "product-service-endpoint-throughput-rps",
+      "description": "为什么重要：先确认 product-service 的入口流量形状，特别是 reserve / confirm / cancel 哪条最忙。怎么看：如果 reserve 是主要热点，而 confirm/cancel 相对平稳，说明入口压力主要还在同步下单阶段。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (method, path, status_code) (rate({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=\"product-service\" [5m]))",
+          "legendFormat": "product-service {{method}} {{path}} {{status_code}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "product-service-reserve-p95-latency-ms",
+      "description": "为什么重要：这是 reserve 整体耗时，是判断热点库存路径有没有变慢的首要指标。怎么看：如果它上升，再去对照 lock wait 和 transaction 时间，看是锁争用还是事务本身变重了。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=product_service_reserve_finished\" | logfmt | __error__=\"\" | unwrap elapsed_ms [5m])",
+          "legendFormat": "product-service reserve",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "product-service-reserve-transaction-p95-ms",
+      "description": "为什么重要：这张图只看短事务本身，帮助确认锁内代码有没有偷偷变重。怎么看：如果 reserve 总耗时高，但事务耗时低，问题更像事务外逻辑；如果两者一起高，热点就在 DB 事务附近。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=product_service_reserve_transaction\" | logfmt | __error__=\"\" | unwrap elapsed_ms [5m]) by (lock_mode)",
+          "legendFormat": "product-service {{lock_mode}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "product-service-lock-wait-p95-ms",
+      "description": "为什么重要：如果 timeout 是行锁等待引起的，这里会最早抬头。怎么看：它和 reserve 事务耗时一起涨，说明热点确实集中在 `FOR UPDATE` 这段。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=product_service_lock_wait\" | logfmt | __error__=\"\" | unwrap wait_ms [5m]) by (lock_mode)",
+          "legendFormat": "product-service {{lock_mode}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "product-service-confirm-cancel-p95-ms",
+      "description": "为什么重要：这是 product-service 实际执行 confirm/cancel 的耗时，能帮助判断 worker 下游是不是在这里卡住。怎么看：如果 queue backlog 上升时这条线也升，说明异步路径的瓶颈就在 reservation terminalization。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 18 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=product_service_confirm_cancel_finished\" | logfmt | __error__=\"\" | unwrap confirm_cancel_ms [5m]) by (action)",
+          "legendFormat": "product-service {{action}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "product-service-lock-wait-slow-events",
+      "description": "为什么重要：这是 lock wait 进入异常区间的事件数。怎么看：持续脉冲比单点尖刺更值得警惕，它通常意味着热点争用已经系统化。",
+      "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 18 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (lock_mode) (count_over_time({namespace=\"$namespace\"} |= \"event=lock_wait_slow\" | logfmt | __error__=\"\" [5m]))",
+          "legendFormat": "product-service {{lock_mode}}",
+          "queryType": "range"
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    }
+  ]
+}

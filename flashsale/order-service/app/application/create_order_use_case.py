@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+import logging
+import time
 
 from fastapi import HTTPException
 
@@ -9,6 +11,8 @@ from app.domain.order import Order, OrderItem
 from app.ports.product_reservation_client import ProductReservationClient
 from app.ports.unit_of_work import UnitOfWork
 from app.ports.user_directory_client import UserDirectoryClient
+
+order_logger = logging.getLogger("order-service.orders")
 
 
 class CreateOrderUseCase:
@@ -23,25 +27,38 @@ class CreateOrderUseCase:
         self._products = products
 
     def create_order(self, command: CreateOrderCommand) -> Order:
+        total_start = time.perf_counter()
+        user_validate_ms = 0.0
+        reserve_ms = 0.0
+        order_id: int | None = None
+        result = "unknown"
         if not command.items:
             raise HTTPException(status_code=400, detail="order items cannot be empty")
         if command.idempotency_key:
             existing = self._uow.orders.get_by_idempotency_key(command.idempotency_key)
             if existing:
+                order_logger.info(
+                    "event=order_service_create_order_timing order_id=%s idempotency_hit=true "
+                    "user_validate_ms=0.00 reserve_ms=0.00 confirm_cancel_ms=0.00 total_order_ms=0.00 result=idempotency_replay",
+                    existing.id,
+                )
                 return existing
 
+        user_validate_start = time.perf_counter()
         self._users.ensure_user_exists(command.user_id)
+        user_validate_ms = (time.perf_counter() - user_validate_start) * 1000
         order_items: list[OrderItem] = []
         reservation_ids: list[int] = []
-        order_id: int | None = None
         total_amount = 0.0
 
         try:
             for product_id, quantity in command.items:
+                reserve_start = time.perf_counter()
                 unit_price, reserved_qty, reservation_id = self._products.reserve(
                     product_id=product_id,
                     quantity=quantity,
                 )
+                reserve_ms += (time.perf_counter() - reserve_start) * 1000
                 reservation_ids.append(reservation_id)
                 item = OrderItem(
                     product_id=product_id,
@@ -58,16 +75,21 @@ class CreateOrderUseCase:
                 idempotency_key=command.idempotency_key,
             )
             order_id = order.id
-            return self._require_finalized(order.id, reservation_ids, "succeeded")
+            finalized = self._require_finalized(order.id, reservation_ids, "succeeded")
+            result = "success"
+            return finalized
         except RuntimeError as exc:
+            result = "order_persistence_failed"
             self._products.release(reservation_ids)
             raise HTTPException(status_code=503, detail="order persistence failed") from exc
         except HTTPException:
+            result = "http_error"
             if order_id is not None:
                 self._enqueue_cancellation(order_id, reservation_ids, "failed")
             self._products.release(reservation_ids)
             raise
         except Exception as exc:
+            result = "error"
             if order_id is not None:
                 self._enqueue_cancellation(order_id, reservation_ids, "failed")
             self._products.release(reservation_ids)
@@ -75,6 +97,17 @@ class CreateOrderUseCase:
                 status_code=503,
                 detail=DATABASE_UNAVAILABLE_MESSAGE,
             ) from exc
+        finally:
+            total_order_ms = (time.perf_counter() - total_start) * 1000
+            order_logger.info(
+                "event=order_service_create_order_timing order_id=%s idempotency_hit=false "
+                "user_validate_ms=%.2f reserve_ms=%.2f confirm_cancel_ms=0.00 total_order_ms=%.2f result=%s",
+                order_id,
+                user_validate_ms,
+                reserve_ms,
+                total_order_ms,
+                result,
+            )
 
     def process_payment_webhook(self, command: PaymentWebhookCommand) -> Order:
         try:

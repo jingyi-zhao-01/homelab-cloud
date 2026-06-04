@@ -37,6 +37,8 @@ class InventoryReserveEngine:
                 self._database_url, autocommit=False, row_factory=dict_row
             ) as conn:
                 with conn.cursor() as cur:
+                    cur.execute("SET LOCAL lock_timeout = '1s'")
+                    cur.execute("SET LOCAL statement_timeout = '3s'")
                     lock_start = time.perf_counter()
                     cur.execute(
                         """
@@ -50,7 +52,7 @@ class InventoryReserveEngine:
                     row = cur.fetchone()
                     lock_wait_ms = (time.perf_counter() - lock_start) * 1000
                     lock_logger.info(
-                        "event=product_service_lock_wait lock_mode=pessimistic product_id=%s quantity=%s wait_ms=%.2f threshold_ms=%.2f",
+                        "event=product_service_lock_wait lock_mode=pessimistic product_id=%s quantity=%s wait_ms=%.2f threshold_ms=%.2f lock_timeout_ms=1000 statement_timeout_ms=3000",
                         product_id,
                         quantity,
                         lock_wait_ms,
@@ -108,7 +110,7 @@ class InventoryReserveEngine:
         finally:
             tx_elapsed_ms = (time.perf_counter() - tx_start) * 1000
             lock_logger.info(
-                "event=product_service_reserve_transaction lock_mode=pessimistic product_id=%s quantity=%s elapsed_ms=%.2f threshold_ms=%.2f",
+                "event=product_service_reserve_transaction lock_mode=pessimistic product_id=%s quantity=%s elapsed_ms=%.2f threshold_ms=%.2f lock_timeout_ms=1000 statement_timeout_ms=3000",
                 product_id,
                 quantity,
                 tx_elapsed_ms,

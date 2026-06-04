@@ -1,4 +1,6 @@
 from datetime import datetime
+import logging
+import time
 from typing import Any, cast
 
 import psycopg
@@ -15,6 +17,7 @@ from app.domain.state_machines import transition_order
 from app.domain.statuses import OrderStatus, PaymentStatus
 
 ROW_FACTORY = cast(Any, dict_row)
+db_logger = logging.getLogger("order-service.db")
 
 
 class OrderPostgresRepository:
@@ -31,6 +34,8 @@ class OrderPostgresRepository:
         status: OrderStatus = "pending",
         payment_status: PaymentStatus = "pending",
     ) -> Order:
+        start = time.perf_counter()
+        result = "inserted"
         with psycopg.connect(self._database_url, autocommit=True, row_factory=ROW_FACTORY) as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -56,11 +61,26 @@ class OrderPostgresRepository:
                 )
                 row = cur.fetchone()
                 if row:
-                    return to_order(row)
+                    order = to_order(row)
+                    db_logger.info(
+                        "event=order_service_order_db order_id=%s operation=create order_db_ms=%.2f result=%s",
+                        order.id,
+                        (time.perf_counter() - start) * 1000,
+                        result,
+                    )
+                    return order
                 if idempotency_key:
                     existing = self.get_by_idempotency_key(idempotency_key)
                     if existing:
+                        result = "idempotency_replay"
+                        db_logger.info(
+                            "event=order_service_order_db order_id=%s operation=create order_db_ms=%.2f result=%s",
+                            existing.id,
+                            (time.perf_counter() - start) * 1000,
+                            result,
+                        )
                         return existing
+                result = "error"
                 raise RuntimeError("order persistence failed")
 
     def update_state(

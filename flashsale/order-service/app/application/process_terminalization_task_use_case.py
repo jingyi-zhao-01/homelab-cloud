@@ -19,11 +19,16 @@ class ProcessTerminalizationTaskUseCase:
         self._products = products
 
     def process(self, limit: int = 32) -> ProcessTerminalizationTasksResult:
+        poll_start = time.perf_counter()
         tasks = self._uow.tasks.claim_ready(
             limit=limit,
             available_before=datetime.now(timezone.utc),
         )
         if not tasks:
+            terminalization_logger.info(
+                "event=order_service_worker_poll claimed_count=0 succeeded_count=0 retrying_count=0 total_poll_ms=%.2f result=empty",
+                (time.perf_counter() - poll_start) * 1000,
+            )
             return ProcessTerminalizationTasksResult(0, 0, 0)
 
         succeeded_count = 0
@@ -33,10 +38,11 @@ class ProcessTerminalizationTaskUseCase:
             ok, error = self._products.terminalize(task.reservation_id, task.action)
             elapsed_ms = (time.perf_counter() - started_at) * 1000
             terminalization_logger.info(
-                "event=order_service_terminalization_call order_id=%s reservation_id=%s action=%s elapsed_ms=%.2f result=%s attempt_count=%s",
+                "event=order_service_terminalization_call order_id=%s reservation_id=%s action=%s elapsed_ms=%.2f confirm_cancel_ms=%.2f result=%s attempt_count=%s",
                 task.order_id,
                 task.reservation_id,
                 task.action,
+                elapsed_ms,
                 elapsed_ms,
                 "success" if ok else "retry",
                 task.attempt_count,
@@ -62,6 +68,13 @@ class ProcessTerminalizationTaskUseCase:
                 last_error=error or "terminalization_failed",
             )
 
+        terminalization_logger.info(
+            "event=order_service_worker_poll claimed_count=%s succeeded_count=%s retrying_count=%s total_poll_ms=%.2f result=processed",
+            len(tasks),
+            succeeded_count,
+            retrying_count,
+            (time.perf_counter() - poll_start) * 1000,
+        )
         return ProcessTerminalizationTasksResult(
             claimed_count=len(tasks),
             succeeded_count=succeeded_count,

@@ -3,14 +3,14 @@ output "flashsale_dashboard_folder_uid" {
   value       = grafana_folder.flashsale.uid
 }
 
-output "flashsale_http_throughput_dashboard_url" {
-  description = "Direct URL for the Flashsale HTTP Throughput dashboard."
-  value       = grafana_dashboard.flashsale_http_throughput.url
+output "flashsale_order_service_dashboard_url" {
+  description = "Direct URL for the Flashsale Order Service dashboard."
+  value       = grafana_dashboard.flashsale_order_service.url
 }
 
-output "flashsale_http_latency_dashboard_url" {
-  description = "Direct URL for the Flashsale HTTP Latency dashboard."
-  value       = grafana_dashboard.flashsale_http_latency.url
+output "flashsale_product_service_dashboard_url" {
+  description = "Direct URL for the Flashsale Product Service dashboard."
+  value       = grafana_dashboard.flashsale_product_service.url
 }
 
 output "flashsale_terminalization_queue_health_dashboard_url" {
