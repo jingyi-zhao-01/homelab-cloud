@@ -7,6 +7,7 @@ This Terraform module provisions Grafana dashboards for the flashsale workload.
 Current dashboard set:
 
 - `Flashsale Async Terminalization`
+- `Flashsale HTTP Endpoint Performance`
 
 This dashboard exists to support [ADR 0002](../../flashsale/docs/adrs/0002-async-reservation-terminalization.md), which moves reservation `confirm/cancel` off the synchronous order path and requires queue-health style visibility.
 
@@ -61,6 +62,14 @@ The current dashboard focuses on the async terminalization path introduced by AD
 - orders still waiting on reservation work
 - terminalization success / retry / error log trends
 - terminalization worker logs
+
+The HTTP endpoint dashboard uses Loki request logs emitted by the FastAPI middleware and shows:
+
+- throughput per service/method/path
+- p50 / p95 / p99 latency per service/method/path
+- top endpoints by request volume
+- top endpoints by p95 latency
+- 4xx / 5xx rate by endpoint
 
 ## Validation
 

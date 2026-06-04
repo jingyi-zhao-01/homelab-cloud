@@ -1,0 +1,227 @@
+{
+  "uid": "flashsale-http-endpoint-performance",
+  "title": "Flashsale HTTP Endpoint Performance",
+  "tags": ["flashsale", "http", "latency", "throughput"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "graphTooltip": 0,
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "constant",
+        "label": "Namespace",
+        "query": "${namespace}",
+        "current": {
+          "text": "${namespace}",
+          "value": "${namespace}"
+        }
+      },
+      {
+        "name": "service",
+        "type": "custom",
+        "label": "Service",
+        "query": "order-service,product-service,user-service",
+        "includeAll": true,
+        "multi": false,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": ".*"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Request Throughput By Endpoint",
+      "description": "Requests per second grouped by service, method, and path from structured request logs.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_datasource_uid}"
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service, method, path) (rate({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" [5m]))",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "P95 Latency By Endpoint (ms)",
+      "description": "95th percentile latency per endpoint, derived from duration_ms in request logs.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_datasource_uid}"
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path)",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "P50 Latency By Endpoint (ms)",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_datasource_uid}"
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.50, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path)",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "P99 Latency By Endpoint (ms)",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_datasource_uid}"
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.99, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path)",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "bargauge",
+      "title": "Top Endpoints By Request Volume (5m)",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_datasource_uid}"
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 18 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(15, sum by (service, method, path) (count_over_time({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" [5m])))",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "instant"
+        }
+      ],
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 6,
+      "type": "bargauge",
+      "title": "Top Endpoints By P95 Latency (5m)",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_datasource_uid}"
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 18 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(15, quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path))",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "instant"
+        }
+      ],
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "4xx/5xx Rate By Endpoint",
+      "description": "Response error throughput from request logs, grouped per endpoint.",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_datasource_uid}"
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 27 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (service, method, path) (rate({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | status_code=~\"4..|5..\" [5m]))",
+          "legendFormat": "{{service}} {{method}} {{path}}",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "logs",
+      "title": "Request Logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_datasource_uid}"
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 27 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\""
+        }
+      ]
+    }
+  ]
+}

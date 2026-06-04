@@ -31,10 +31,24 @@ locals {
       processing_sla_minutes = var.processing_sla_minutes
     }
   )
+
+  flashsale_http_endpoint_performance_dashboard = templatefile(
+    "${path.module}/dashboards/flashsale-http-endpoint-performance.json.tftpl",
+    {
+      loki_datasource_uid = var.loki_datasource_uid
+      namespace           = var.flashsale_namespace
+    }
+  )
 }
 
 resource "grafana_dashboard" "flashsale_async_terminalization" {
   folder      = grafana_folder.flashsale.uid
   overwrite   = true
   config_json = local.flashsale_async_terminalization_dashboard
+}
+
+resource "grafana_dashboard" "flashsale_http_endpoint_performance" {
+  folder      = grafana_folder.flashsale.uid
+  overwrite   = true
+  config_json = local.flashsale_http_endpoint_performance_dashboard
 }
