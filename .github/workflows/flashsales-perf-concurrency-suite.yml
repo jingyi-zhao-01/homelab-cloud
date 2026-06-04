@@ -125,7 +125,7 @@ jobs:
       - name: Run concurrency smoke (10 TPS)
         run: |
           set -euo pipefail
-          KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" make concurrency-smoke
+          KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" USE_K8S_PORT_FORWARD=true make concurrency-smoke
 
   idempotency-lite:
     name: Idempotency Lite Replay
@@ -178,4 +178,4 @@ jobs:
       - name: Run idempotency lite replay
         run: |
           set -euo pipefail
-          KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" make concurrency-idempotency-lite
+          KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" USE_K8S_PORT_FORWARD=true make concurrency-idempotency-lite

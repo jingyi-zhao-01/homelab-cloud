@@ -17,6 +17,12 @@ WAIT_HTTP_RETRIES="${WAIT_HTTP_RETRIES:-40}"
 WAIT_HTTP_SLEEP_SEC="${WAIT_HTTP_SLEEP_SEC:-1}"
 CURL_CONNECT_TIMEOUT_SEC="${CURL_CONNECT_TIMEOUT_SEC:-2}"
 CURL_MAX_TIME_SEC="${CURL_MAX_TIME_SEC:-3}"
+USE_K8S_PORT_FORWARD="${USE_K8S_PORT_FORWARD:-false}"
+USER_LOCAL_PORT="${USER_LOCAL_PORT:-18080}"
+PRODUCT_LOCAL_PORT="${PRODUCT_LOCAL_PORT:-18081}"
+ORDER_LOCAL_PORT="${ORDER_LOCAL_PORT:-18082}"
+
+PORT_FORWARD_PIDS=()
 
 if [[ ! -r "$KUBECONFIG_PATH" ]]; then
   echo "Kubeconfig not found or not readable: $KUBECONFIG_PATH" >&2
@@ -85,7 +91,12 @@ wait_http() {
 }
 
 cleanup() {
-  true
+  if [[ "${#PORT_FORWARD_PIDS[@]}" -gt 0 ]]; then
+    for pid in "${PORT_FORWARD_PIDS[@]}"; do
+      kill "$pid" >/dev/null 2>&1 || true
+      wait "$pid" >/dev/null 2>&1 || true
+    done
+  fi
 }
 trap cleanup EXIT
 
@@ -94,14 +105,55 @@ require_cmd k6
 require_cmd curl
 ensure_node24
 
-# Using Ingress with DNS-configured domain names
-USER_HOST="homelab-user-service.jzhao62.com"
-PRODUCT_HOST="homelab-product-service.jzhao62.com"
-ORDER_HOST="homelab-order-service.jzhao62.com"
+start_port_forward() {
+  local service_name="$1"
+  local local_port="$2"
+  local remote_port="$3"
+  local log_file
+  local pid
 
-USER_URL="http://$USER_HOST"
-PRODUCT_URL="http://$PRODUCT_HOST"
-BASE_URL="http://$ORDER_HOST"
+  log_file="$(mktemp)"
+  echo "Starting port-forward for ${service_name}: 127.0.0.1:${local_port} -> ${remote_port}"
+  kubectl -n "$NAMESPACE" port-forward "svc/${service_name}" "${local_port}:${remote_port}" \
+    >"$log_file" 2>&1 &
+  pid=$!
+  PORT_FORWARD_PIDS+=("$pid")
+
+  for _ in $(seq 1 20); do
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      echo "Port-forward for ${service_name} exited early:" >&2
+      cat "$log_file" >&2
+      exit 1
+    fi
+
+    if grep -q "Forwarding from" "$log_file"; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "Timed out waiting for port-forward on ${service_name}" >&2
+  cat "$log_file" >&2
+  exit 1
+}
+
+if [[ "$USE_K8S_PORT_FORWARD" == "true" ]]; then
+  start_port_forward "flashsales-user-service" "$USER_LOCAL_PORT" "8001"
+  start_port_forward "flashsales-product-service" "$PRODUCT_LOCAL_PORT" "8002"
+  start_port_forward "flashsales-order-service" "$ORDER_LOCAL_PORT" "8003"
+
+  USER_URL="${USER_URL:-http://127.0.0.1:${USER_LOCAL_PORT}}"
+  PRODUCT_URL="${PRODUCT_URL:-http://127.0.0.1:${PRODUCT_LOCAL_PORT}}"
+  BASE_URL="${BASE_URL:-http://127.0.0.1:${ORDER_LOCAL_PORT}}"
+else
+  USER_HOST="${USER_HOST:-homelab-user-service.jzhao62.com}"
+  PRODUCT_HOST="${PRODUCT_HOST:-homelab-product-service.jzhao62.com}"
+  ORDER_HOST="${ORDER_HOST:-homelab-order-service.jzhao62.com}"
+
+  USER_URL="${USER_URL:-http://$USER_HOST}"
+  PRODUCT_URL="${PRODUCT_URL:-http://$PRODUCT_HOST}"
+  BASE_URL="${BASE_URL:-http://$ORDER_HOST}"
+fi
 
 wait_http "$USER_URL" "user-service"
 wait_http "$PRODUCT_URL" "product-service"
