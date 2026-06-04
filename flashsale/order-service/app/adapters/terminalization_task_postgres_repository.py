@@ -66,8 +66,9 @@ class TerminalizationTaskPostgresRepository:
                     SET status = 'processing', attempt_count = attempt_count + 1
                     FROM ready
                     WHERE tasks.task_id = ready.task_id
-                    RETURNING task_id, order_id, reservation_id, action, status,
-                              attempt_count, available_at, last_error, created_at
+                    RETURNING tasks.task_id, tasks.order_id, tasks.reservation_id,
+                              tasks.action, tasks.status, tasks.attempt_count,
+                              tasks.available_at, tasks.last_error, tasks.created_at
                     """,
                     (available_before, limit),
                 )
