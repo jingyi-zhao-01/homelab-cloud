@@ -62,6 +62,13 @@ spec:
                   key: DATABASE_URL
                   optional: true
             {{- end }}
+            {{- if .Values.observability.tracing.existingSecretName }}
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.observability.tracing.existingSecretName }}
+                  key: {{ .Values.observability.tracing.existingSecretKey }}
+            {{- end }}
           ports:
             - containerPort: {{ .Values.orderService.service.port }}
           readinessProbe:

@@ -4,8 +4,11 @@ imagePullSecrets: []
 
 observability:
   tracing:
-    otlpHttpEndpoint: ""
-    otlpHeaders: ""
+    otlpProtocol: "http/protobuf"
+    otlpHttpEndpoint: "https://otlp-gateway-prod-us-west-0.grafana.net/otlp/v1/traces"
+    otlpHeaders: "Authorization=Basic MTMyNzEyMDpnbGNfZXlKdklqb2lNVFE1TVRRNE5pSXNJbTRpT2lKemRHRmpheTB4TXpJM01USXdMVzkwYkhBdGQzSnBkR1V0YUc5dFpXeGhZaUlzSW1zaU9pSnZkRWd6T1ZoMk9URmtOMGhKU0hjM016RmlObkUzUm1raUxDSnRJanA3SW5JaU9pSndjbTlrTFhWekxYZGxjM1F0TUNKOWZRPT0="
+    existingSecretName: ""
+    existingSecretKey: "OTEL_EXPORTER_OTLP_HEADERS"
 
 postgres:
   enabled: true
