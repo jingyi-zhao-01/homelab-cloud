@@ -115,6 +115,10 @@ class PostgresProductRepository(ProductRepository):
                     )
                     """)
                 cur.execute("""
+                    CREATE INDEX IF NOT EXISTS reservations_status_expires_at_idx
+                    ON reservations (status, expires_at, reservation_id)
+                    """)
+                cur.execute("""
                     ALTER TABLE reservations
                     ADD COLUMN IF NOT EXISTS unit_price NUMERIC(12, 2) NULL
                     """)

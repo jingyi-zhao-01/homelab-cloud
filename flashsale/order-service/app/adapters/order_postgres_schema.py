@@ -36,6 +36,10 @@ def ensure_order_tables(cur: Any) -> None:
         ON orders (idempotency_key)
         WHERE idempotency_key IS NOT NULL
         """)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS orders_pending_created_at_idx
+        ON orders (status, created_at, id)
+        """)
 
 
 def ensure_terminalization_tables(cur: Any) -> None:

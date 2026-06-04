@@ -61,6 +61,7 @@ class OrderServiceMigrationCompatibilityTest(unittest.TestCase):
         self.assertIn("ADD COLUMN IF NOT EXISTS idempotency_key TEXT NULL", joined)
         self.assertIn("ADD COLUMN IF NOT EXISTS reservation_ids_json JSONB", joined)
         self.assertIn("CREATE UNIQUE INDEX IF NOT EXISTS orders_idempotency_key_idx", joined)
+        self.assertIn("CREATE INDEX IF NOT EXISTS orders_pending_created_at_idx", joined)
         self.assertIn("CREATE TABLE IF NOT EXISTS order_terminalization_tasks", joined)
         self.assertIn("CREATE INDEX IF NOT EXISTS order_terminalization_tasks_ready_idx", joined)
         self.assertIn("CREATE TABLE IF NOT EXISTS order_terminalization_task_events", joined)

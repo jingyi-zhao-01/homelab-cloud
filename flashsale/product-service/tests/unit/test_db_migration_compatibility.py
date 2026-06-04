@@ -55,6 +55,10 @@ class ProductServiceMigrationCompatibilityTest(unittest.TestCase):
         joined = "\n".join(statements)
         self.assertIn("CREATE TABLE IF NOT EXISTS products", joined)
         self.assertIn("CREATE TABLE IF NOT EXISTS reservations", joined)
+        self.assertIn(
+            "CREATE INDEX IF NOT EXISTS reservations_status_expires_at_idx",
+            joined,
+        )
         self.assertIn("expires_at TIMESTAMPTZ NULL", joined)
 
 
