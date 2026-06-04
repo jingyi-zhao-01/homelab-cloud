@@ -118,7 +118,31 @@ class InventoryReserveEngine:
                     with conn.cursor() as cur:
                         cur.execute(
                             """
-                            SELECT id, name, price, stock
+                            UPDATE products
+                            SET stock = stock - %s
+                            WHERE id = %s AND stock >= %s
+                            RETURNING id, name, price, stock
+                            """,
+                            (quantity, product_id, quantity),
+                        )
+                        updated = cur.fetchone()
+                        if updated:
+                            if retry_index > 0:
+                                elapsed_ms = (
+                                    time.perf_counter() - reserve_start
+                                ) * 1000
+                                lock_logger.info(
+                                    "event=optimistic_retry_succeeded lock_mode=optimistic product_id=%s quantity=%s retries_used=%s elapsed_ms=%.2f",
+                                    product_id,
+                                    quantity,
+                                    retry_index,
+                                    elapsed_ms,
+                                )
+                            return updated
+
+                        cur.execute(
+                            """
+                            SELECT stock
                             FROM products
                             WHERE id = %s
                             """,
@@ -137,30 +161,6 @@ class InventoryReserveEngine:
                                 current_stock,
                             )
                             raise ValueError("insufficient stock")
-
-                        cur.execute(
-                            """
-                            UPDATE products
-                            SET stock = stock - %s
-                            WHERE id = %s AND stock = %s
-                            RETURNING id, name, price, stock
-                            """,
-                            (quantity, product_id, current_stock),
-                        )
-                        updated = cur.fetchone()
-                        if updated:
-                            if retry_index > 0:
-                                elapsed_ms = (
-                                    time.perf_counter() - reserve_start
-                                ) * 1000
-                                lock_logger.info(
-                                    "event=optimistic_retry_succeeded lock_mode=optimistic product_id=%s quantity=%s retries_used=%s elapsed_ms=%.2f",
-                                    product_id,
-                                    quantity,
-                                    retry_index,
-                                    elapsed_ms,
-                                )
-                            return updated
 
                         lock_logger.warning(
                             "event=optimistic_conflict_retry lock_mode=optimistic product_id=%s quantity=%s retry_index=%s retry_limit=%s",

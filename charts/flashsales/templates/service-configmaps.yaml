@@ -23,7 +23,7 @@ data:
   DB_HOST: {{ .Values.productService.env.dbHost | quote }}
   DB_PORT: {{ .Values.productService.env.dbPort | quote }}
   DB_NAME: {{ .Values.productService.env.dbName | quote }}
-  INVENTORY_LOCK_MODE: {{ .Values.productService.env.inventoryLockMode | default "pessimistic" | quote }}
+  INVENTORY_LOCK_MODE: {{ .Values.productService.env.inventoryLockMode | default "optimistic" | quote }}
   OPTIMISTIC_RETRY_LIMIT: {{ .Values.productService.env.optimisticRetryLimit | default "5" | quote }}
 ---
 apiVersion: v1

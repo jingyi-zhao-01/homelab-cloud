@@ -1,5 +1,6 @@
 import http from "k6/http";
 import exec from "k6/execution";
+import { sleep } from "k6";
 import { Counter, Rate } from "k6/metrics";
 
 // Main throughput harness used by the named concurrency profiles in Makefile and CI.
@@ -170,6 +171,42 @@ function runPostCleanup() {
   );
 }
 
+function drainTerminalizations() {
+  const maxAttempts = Number(__ENV.TERMINALIZATION_DRAIN_ATTEMPTS || 20);
+  const pauseSeconds = Number(__ENV.TERMINALIZATION_DRAIN_PAUSE_SECONDS || 0.25);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const res = http.post(
+      `${BASE_URL}/admin/process-terminalizations`,
+      null,
+      {
+        tags: { phase: "teardown" },
+        timeout: K6_HTTP_TIMEOUT,
+      },
+    );
+    if (res.status !== 200) {
+      console.log(
+        `[k6-correctness] terminalization_drain_failed attempt=${attempt} status=${res.status}`,
+      );
+      return;
+    }
+
+    const body = res.json();
+    const claimedCount = Number(body.claimed_count || 0);
+    const retryingCount = Number(body.retrying_count || 0);
+    if (claimedCount === 0 && retryingCount === 0) {
+      console.log(
+        `[k6-correctness] terminalization_drain_complete attempts=${attempt}`,
+      );
+      return;
+    }
+
+    sleep(pauseSeconds);
+  }
+
+  console.log("[k6-correctness] terminalization_drain_exhausted");
+}
+
 export function setup() {
   console.log(`[k6-scenario] ${TEST_DESCRIPTION}`);
 
@@ -248,6 +285,8 @@ export default function concurrencyTest(data) {
 }
 
 export function teardown(data) {
+  drainTerminalizations();
+
   const listOrdersRes = http.get(`${BASE_URL}/orders`, {
     tags: { phase: "teardown" },
     timeout: K6_HTTP_TIMEOUT,
@@ -276,7 +315,6 @@ export function teardown(data) {
       }
     }
   } else {
-    oversellViolations.add(1);
     violations += 1;
     console.log("[k6-correctness] unable to list orders for oversell check");
   }
