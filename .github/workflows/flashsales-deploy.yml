@@ -143,13 +143,60 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/flashsales-${{ matrix.service }}:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/flashsales-${{ matrix.service }}:latest
 
+  deploy-gate:
+    name: Decide Whether To Deploy
+    runs-on: ubuntu-latest
+    needs:
+      - detect-service-changes
+      - predeploy
+      - build-and-push
+    if: ${{ always() }}
+    outputs:
+      should_deploy: ${{ steps.gate.outputs.should_deploy }}
+
+    steps:
+      - name: Evaluate deployment gate
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          service_code_changed="${{ needs['detect-service-changes'].outputs.service_code_changed }}"
+          predeploy_result="${{ needs.predeploy.result }}"
+          build_result="${{ needs['build-and-push'].result }}"
+
+          echo "service_code_changed=${service_code_changed}"
+          echo "predeploy_result=${predeploy_result}"
+          echo "build_result=${build_result}"
+
+          if [ "$service_code_changed" != "true" ]; then
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "No flashsale service code changes detected; proceed directly to deploy."
+            exit 0
+          fi
+
+          if [ "$predeploy_result" != "success" ]; then
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Predeploy gates did not succeed; blocking deploy."
+            exit 0
+          fi
+
+          if [ "$build_result" != "success" ]; then
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Image build/push did not succeed; blocking deploy."
+            exit 0
+          fi
+
+          echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+          echo "Predeploy and build succeeded; proceed to deploy."
+
   deploy:
     name: Deploy to k3s
     runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
     needs:
       - detect-service-changes
-      - build-and-push
-    if: ${{ needs['build-and-push'].result == 'success' }}
+      - deploy-gate
+    if: ${{ always() && needs['deploy-gate'].outputs.should_deploy == 'true' }}
 
     steps:
       - name: Checkout
@@ -327,6 +374,7 @@ jobs:
       - detect-service-changes
       - predeploy
       - build-and-push
+      - deploy-gate
       - deploy
       - postdeploy
     if: ${{ always() }}
