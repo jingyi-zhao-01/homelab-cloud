@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+import httpx
 from fastapi import HTTPException
 from opentelemetry.trace import SpanKind
 
@@ -29,13 +30,24 @@ class ProductReservationHttpClient:
                 "flashsale.quantity": quantity,
             },
         ):
-            with self._client_factory() as client:
-                response = client.post(
-                    f"{PRODUCT_SERVICE_URL}/products/{product_id}/reserve",
-                    json={"quantity": quantity},
-                    headers=inject_trace_headers(),
-                    timeout=PRODUCT_RESERVE_TIMEOUT_SECONDS,
-                )
+            try:
+                with self._client_factory() as client:
+                    response = client.post(
+                        f"{PRODUCT_SERVICE_URL}/products/{product_id}/reserve",
+                        json={"quantity": quantity},
+                        headers=inject_trace_headers(),
+                        timeout=PRODUCT_RESERVE_TIMEOUT_SECONDS,
+                    )
+            except httpx.TimeoutException as exc:
+                raise HTTPException(
+                    status_code=504,
+                    detail="product-service reserve timed out",
+                ) from exc
+            except httpx.RequestError as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail="product-service unavailable",
+                ) from exc
         if response.status_code == 404:
             raise HTTPException(status_code=404, detail=f"product {product_id} not found")
         if response.status_code == 409:
@@ -43,9 +55,30 @@ class ProductReservationHttpClient:
                 status_code=409,
                 detail=f"insufficient stock for product {product_id}",
             )
+        if response.status_code == 429:
+            raise HTTPException(
+                status_code=429,
+                detail="product-service is busy, retry later",
+            )
+        if response.status_code == 408:
+            raise HTTPException(
+                status_code=504,
+                detail="product-service reserve timed out",
+            )
+        if response.status_code >= 500:
+            raise HTTPException(status_code=503, detail="product-service unavailable")
         if response.status_code >= 400:
-            raise HTTPException(status_code=502, detail="product reserve failed")
-        payload = response.json()
+            raise HTTPException(
+                status_code=502,
+                detail=f"product-service returned unexpected status {response.status_code}",
+            )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="product-service returned invalid reservation payload",
+            ) from exc
         if payload.get("unit_price") is None:
             raise HTTPException(status_code=502, detail="product reserve missing price")
         return (
@@ -63,7 +96,7 @@ class ProductReservationHttpClient:
                         headers=inject_trace_headers(),
                         timeout=PRODUCT_RELEASE_TIMEOUT_SECONDS,
                     )
-                except Exception:
+                except (httpx.TimeoutException, httpx.RequestError):
                     continue
 
     def terminalize(
@@ -92,5 +125,9 @@ class ProductReservationHttpClient:
             if response.status_code >= 400:
                 return False, f"status_code={response.status_code}"
             return True, None
+        except httpx.TimeoutException:
+            return False, "timeout"
+        except httpx.RequestError:
+            return False, "unavailable"
         except Exception as exc:
             return False, exc.__class__.__name__

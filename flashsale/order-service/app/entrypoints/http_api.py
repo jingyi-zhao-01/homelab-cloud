@@ -85,7 +85,7 @@ def build_http_api(
                 ORDER_CREATE_MAX_IN_FLIGHT,
             )
             raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="order-service overloaded, retry later",
             ) from exc
         try:
@@ -141,9 +141,14 @@ def build_http_api(
             400: {"model": ErrorResponse, "description": "Order items cannot be empty"},
             404: {"model": ErrorResponse, "description": "User or product not found"},
             409: {"model": ErrorResponse, "description": "Insufficient product stock"},
+            429: {"model": ErrorResponse, "description": "Order service is busy"},
             502: {
                 "model": ErrorResponse,
                 "description": "Dependent service unavailable",
+            },
+            504: {
+                "model": ErrorResponse,
+                "description": "Dependent service timed out",
             },
             503: {"model": ErrorResponse, "description": "Database unavailable"},
         },

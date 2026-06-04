@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+import httpx
 from fastapi import HTTPException
 from opentelemetry.trace import SpanKind
 
@@ -22,13 +23,39 @@ class UserHttpClient:
                 "flashsale.user_id": user_id,
             },
         ):
-            with self._client_factory() as client:
-                response = client.get(
-                    f"{USER_SERVICE_URL}/users/{user_id}",
-                    headers=inject_trace_headers(),
-                    timeout=USER_SERVICE_TIMEOUT_SECONDS,
-                )
+            try:
+                with self._client_factory() as client:
+                    response = client.get(
+                        f"{USER_SERVICE_URL}/users/{user_id}",
+                        headers=inject_trace_headers(),
+                        timeout=USER_SERVICE_TIMEOUT_SECONDS,
+                    )
+            except httpx.TimeoutException as exc:
+                raise HTTPException(
+                    status_code=504,
+                    detail="user-service request timed out",
+                ) from exc
+            except httpx.RequestError as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail="user-service unavailable",
+                ) from exc
         if response.status_code == 404:
             raise HTTPException(status_code=404, detail="user not found")
+        if response.status_code == 429:
+            raise HTTPException(
+                status_code=429,
+                detail="user-service is busy, retry later",
+            )
+        if response.status_code == 408:
+            raise HTTPException(
+                status_code=504,
+                detail="user-service request timed out",
+            )
+        if response.status_code >= 500:
+            raise HTTPException(status_code=503, detail="user-service unavailable")
         if response.status_code >= 400:
-            raise HTTPException(status_code=502, detail="user-service unavailable")
+            raise HTTPException(
+                status_code=502,
+                detail=f"user-service returned unexpected status {response.status_code}",
+            )

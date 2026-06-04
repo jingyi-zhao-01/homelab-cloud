@@ -66,7 +66,13 @@ paths:
                 type: array
                 title: Response List Products Products Get
         '503':
-          description: Database unavailable
+          description: Database unavailable or pool exhausted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Database query timed out
           content:
             application/json:
               schema:
@@ -91,7 +97,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProductOut'
         '503':
-          description: Database unavailable
+          description: Database unavailable or pool exhausted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Database query timed out
           content:
             application/json:
               schema:
@@ -129,8 +141,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Database is busy or locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: Database unavailable
+          description: Database unavailable or pool exhausted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Database query timed out
           content:
             application/json:
               schema:
@@ -176,13 +200,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
-          description: Insufficient stock
+          description: Insufficient stock or inventory is busy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Reservation timed out
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: Database unavailable
+          description: Database unavailable or pool exhausted
           content:
             application/json:
               schema:
@@ -220,8 +250,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Database is busy or locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Database query timed out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: Database unavailable
+          description: Database unavailable or pool exhausted
           content:
             application/json:
               schema:
@@ -260,8 +302,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Database is busy or locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Database query timed out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: Database unavailable
+          description: Database unavailable or pool exhausted
           content:
             application/json:
               schema:
@@ -288,7 +342,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExpireReservationsResult'
         '503':
-          description: Database unavailable
+          description: Database unavailable or pool exhausted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Database query timed out
           content:
             application/json:
               schema:
@@ -305,7 +365,13 @@ paths:
         '204':
           description: Successful Response
         '503':
-          description: Database unavailable
+          description: Database unavailable or pool exhausted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Database query timed out
           content:
             application/json:
               schema:
@@ -322,7 +388,13 @@ paths:
         '204':
           description: Successful Response
         '503':
-          description: Database unavailable
+          description: Database unavailable or pool exhausted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Database query timed out
           content:
             application/json:
               schema:

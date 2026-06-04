@@ -2,6 +2,7 @@ import logging
 import time
 
 from fastapi import HTTPException
+import psycopg
 
 from .config import DATABASE_UNAVAILABLE_MESSAGE, PRODUCT_NOT_FOUND_MESSAGE
 from .models import (
@@ -13,6 +14,52 @@ from .models import (
 )
 from .observability import start_span
 from .repositories import ProductRepository
+
+
+def _exception_name(exc: Exception) -> str:
+    return exc.__class__.__name__
+
+
+def _is_pool_error(exc: Exception) -> bool:
+    return _exception_name(exc) in {"PoolTimeout", "PoolClosed", "TooManyRequests"}
+
+
+def _is_psycopg_error(exc: Exception, *names: str) -> bool:
+    errors = getattr(psycopg, "errors", None)
+    if errors is not None:
+        for name in names:
+            exc_type = getattr(errors, name, None)
+            if exc_type is not None and isinstance(exc, exc_type):
+                return True
+    return _exception_name(exc) in set(names)
+
+
+def _map_inventory_error(exc: Exception) -> HTTPException:
+    if _is_pool_error(exc):
+        return HTTPException(
+            status_code=503,
+            detail="inventory database pool exhausted",
+        )
+    if _is_psycopg_error(exc, "LockNotAvailable", "DeadlockDetected"):
+        return HTTPException(
+            status_code=409,
+            detail="inventory is busy, retry later",
+        )
+    if _is_psycopg_error(exc, "QueryCanceled"):
+        return HTTPException(
+            status_code=504,
+            detail="inventory request timed out",
+        )
+    psycopg_error = getattr(psycopg, "Error", None)
+    if psycopg_error is not None and isinstance(exc, psycopg_error):
+        return HTTPException(
+            status_code=503,
+            detail=DATABASE_UNAVAILABLE_MESSAGE,
+        )
+    return HTTPException(
+        status_code=503,
+        detail=DATABASE_UNAVAILABLE_MESSAGE,
+    )
 
 class ProductService:
     def __init__(
@@ -50,9 +97,7 @@ class ProductService:
             self._logger.exception(
                 "event=product_create_error storage=%s", self._storage
             )
-            raise HTTPException(
-                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
-            ) from exc
+            raise _map_inventory_error(exc) from exc
     def get_product(self, product_id: int) -> ProductOut:
         try:
             product = self._repository.get_product(product_id)
@@ -72,9 +117,7 @@ class ProductService:
                 self._storage,
                 product_id,
             )
-            raise HTTPException(
-                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
-            ) from exc
+            raise _map_inventory_error(exc) from exc
 
     def reserve_product(
         self, product_id: int, payload: ReserveRequest
@@ -119,6 +162,27 @@ class ProductService:
                 self._storage,
             )
             raise HTTPException(status_code=409, detail="insufficient stock") from exc
+        except RuntimeError as exc:
+            if str(exc) == "retry_exhausted":
+                result = "busy"
+                self._logger.warning(
+                    "event=product_reserve_busy product_id=%s quantity=%s storage=%s",
+                    product_id,
+                    payload.quantity,
+                    self._storage,
+                )
+                raise HTTPException(
+                    status_code=409,
+                    detail="inventory is busy, retry later",
+                ) from exc
+            result = "error"
+            self._logger.exception(
+                "event=product_reserve_error storage=%s product_id=%s quantity=%s",
+                self._storage,
+                product_id,
+                payload.quantity,
+            )
+            raise _map_inventory_error(exc) from exc
         except HTTPException:
             raise
         except Exception as exc:
@@ -129,9 +193,7 @@ class ProductService:
                 product_id,
                 payload.quantity,
             )
-            raise HTTPException(
-                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
-            ) from exc
+            raise _map_inventory_error(exc) from exc
         finally:
             elapsed_ms = (time.perf_counter() - start) * 1000
             self._logger.info(
@@ -177,9 +239,7 @@ class ProductService:
                 self._storage,
                 reservation_id,
             )
-            raise HTTPException(
-                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
-            ) from exc
+            raise _map_inventory_error(exc) from exc
         finally:
             elapsed_ms = (time.perf_counter() - start) * 1000
             self._logger.info(
@@ -225,9 +285,7 @@ class ProductService:
                 self._storage,
                 reservation_id,
             )
-            raise HTTPException(
-                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
-            ) from exc
+            raise _map_inventory_error(exc) from exc
         finally:
             elapsed_ms = (time.perf_counter() - start) * 1000
             self._logger.info(
@@ -253,9 +311,7 @@ class ProductService:
                 "event=reservation_expire_error storage=%s",
                 self._storage,
             )
-            raise HTTPException(
-                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
-            ) from exc
+            raise _map_inventory_error(exc) from exc
 
     def list_products(self) -> list[ProductOut]:
         try:
@@ -266,6 +322,4 @@ class ProductService:
             return products
         except Exception as exc:
             self._logger.exception("event=product_list_error storage=%s", self._storage)
-            raise HTTPException(
-                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
-            ) from exc
+            raise _map_inventory_error(exc) from exc
