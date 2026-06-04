@@ -169,6 +169,16 @@ orderService:
   service:
     type: ClusterIP
     port: 8003
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+  livenessProbe:
+    initialDelaySeconds: 20
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 6
   nodeSelector:
     node-purpose: worker
   tolerations: []

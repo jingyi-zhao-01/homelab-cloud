@@ -68,14 +68,18 @@ spec:
             httpGet:
               path: /health
               port: {{ .Values.orderService.service.port }}
-            initialDelaySeconds: 3
-            periodSeconds: 5
+            initialDelaySeconds: {{ .Values.orderService.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.orderService.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.orderService.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.orderService.readinessProbe.failureThreshold }}
           livenessProbe:
             httpGet:
               path: /health
               port: {{ .Values.orderService.service.port }}
-            initialDelaySeconds: 10
-            periodSeconds: 10
+            initialDelaySeconds: {{ .Values.orderService.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.orderService.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.orderService.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.orderService.livenessProbe.failureThreshold }}
           {{- with .Values.orderService.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
