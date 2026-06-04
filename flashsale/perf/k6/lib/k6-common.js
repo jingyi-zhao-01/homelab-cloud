@@ -33,6 +33,7 @@ export function buildConstantArrivalRateOptions({
   duration,
   preAllocatedVUs,
   maxVUs,
+  setupTimeout,
   thresholds,
 }) {
   return {
@@ -46,14 +47,30 @@ export function buildConstantArrivalRateOptions({
         maxVUs,
       },
     },
+    ...(setupTimeout ? { setupTimeout } : {}),
     thresholds,
   };
 }
 
-export function createPostJson(timeout) {
-  return function postJson(url, body) {
+export function createPostJson(timeout, defaultOptions = {}) {
+  return function postJson(url, body, requestOptions = {}) {
+    const defaultHeaders = defaultOptions.headers || {};
+    const requestHeaders = requestOptions.headers || {};
+    const defaultTags = defaultOptions.tags || {};
+    const requestTags = requestOptions.tags || {};
+
     return http.post(url, JSON.stringify(body), {
-      headers: { "Content-Type": "application/json" },
+      ...defaultOptions,
+      ...requestOptions,
+      headers: {
+        ...defaultHeaders,
+        ...requestHeaders,
+        "Content-Type": "application/json",
+      },
+      tags: {
+        ...defaultTags,
+        ...requestTags,
+      },
       timeout,
     });
   };
@@ -68,8 +85,8 @@ export function checkStatus(res, label, acceptedStatuses) {
   });
 }
 
-export function resetService(url, serviceName, timeout) {
-  const res = http.post(`${url}/admin/reset`, null, { timeout });
+export function resetService(url, serviceName, timeout, tags = {}) {
+  const res = http.post(`${url}/admin/reset`, null, { timeout, tags });
   checkStatus(res, `${serviceName} database reset`, 204);
   return res;
 }

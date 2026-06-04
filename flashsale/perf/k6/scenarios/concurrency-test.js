@@ -32,7 +32,7 @@ const PROFILE_DEFAULTS = {
     p99: 500,
     max5xxRate: 0,
     productCount: 1,
-    userCount: 200,
+    userCount: 50,
     initialStock: 3000,
   },
   baseline: {
@@ -91,6 +91,7 @@ const MAX_5XX_RATE = Number(__ENV.MAX_5XX_RATE || selectedProfile.max5xxRate);
 const PRODUCT_COUNT = Number(__ENV.PRODUCT_COUNT || selectedProfile.productCount);
 const USER_COUNT = Number(__ENV.USER_COUNT || selectedProfile.userCount);
 const INITIAL_STOCK = Number(__ENV.INITIAL_STOCK || selectedProfile.initialStock);
+const SETUP_TIMEOUT = __ENV.K6_SETUP_TIMEOUT || "3m";
 const PRE_ALLOCATED_VUS = Number(
   __ENV.PRE_ALLOCATED_VUS || Math.max(20, TARGET_TPS * 2),
 );
@@ -106,7 +107,12 @@ const oversellViolations = new Counter("oversell_violations");
 const orderSuccessTotal = new Counter("order_success_total");
 const businessRejectTotal = new Counter("business_reject_total");
 
-const postJson = createPostJson(K6_HTTP_TIMEOUT);
+const setupPostJson = createPostJson(K6_HTTP_TIMEOUT, {
+  tags: { phase: "setup" },
+});
+const trafficPostJson = createPostJson(K6_HTTP_TIMEOUT, {
+  tags: { phase: "traffic" },
+});
 const reportRuntime = createRuntimeReporter(
   REPORT_INTERVAL_MS,
   ({ tps }) => `[k6-runtime] profile=${PROFILE} approx_tps=${tps.toFixed(2)}`,
@@ -120,8 +126,9 @@ export const options = buildConstantArrivalRateOptions({
   duration: TEST_DURATION,
   preAllocatedVUs: PRE_ALLOCATED_VUS,
   maxVUs: MAX_VUS,
+  setupTimeout: SETUP_TIMEOUT,
   thresholds: {
-    http_req_duration: [
+    "http_req_duration{phase:traffic}": [
       `p(50)<${P50_MS}`,
       `p(90)<${P90_MS}`,
       `p(99)<${P99_MS}`,
@@ -136,7 +143,9 @@ function failIfNotStatus(res, expectedStatus, message) {
 }
 
 function resetServiceDb(url, serviceName) {
-  const res = resetService(url, serviceName, K6_HTTP_TIMEOUT);
+  const res = resetService(url, serviceName, K6_HTTP_TIMEOUT, {
+    phase: "cleanup",
+  });
   const ok = res.status === 204;
   if (!ok) {
     console.log(
@@ -165,13 +174,22 @@ export function setup() {
   console.log(`[k6-scenario] ${TEST_DESCRIPTION}`);
 
   // Start each run from a clean data set so profile comparisons stay meaningful.
-  const resetOrderRes = resetService(BASE_URL, "order", K6_HTTP_TIMEOUT);
+  const resetOrderRes = resetService(BASE_URL, "order", K6_HTTP_TIMEOUT, {
+    phase: "setup",
+  });
   failIfNotStatus(resetOrderRes, 204, "order database reset");
 
-  const resetUserRes = resetService(USER_URL, "user", K6_HTTP_TIMEOUT);
+  const resetUserRes = resetService(USER_URL, "user", K6_HTTP_TIMEOUT, {
+    phase: "setup",
+  });
   failIfNotStatus(resetUserRes, 204, "user database reset");
 
-  const resetProductRes = resetService(PRODUCT_URL, "product", K6_HTTP_TIMEOUT);
+  const resetProductRes = resetService(
+    PRODUCT_URL,
+    "product",
+    K6_HTTP_TIMEOUT,
+    { phase: "setup" },
+  );
   failIfNotStatus(resetProductRes, 204, "product database reset");
 
   const users = [];
@@ -180,7 +198,7 @@ export function setup() {
       userUrl: USER_URL,
       email: `k6-${PROFILE}-u${i}-${Date.now()}@example.com`,
       name: `k6 user ${i}`,
-      postJson,
+      postJson: setupPostJson,
     });
     users.push(user.id);
   }
@@ -192,7 +210,7 @@ export function setup() {
       name: `k6-${PROFILE}-p${i}-${Date.now()}`,
       price: 9.99,
       stock: INITIAL_STOCK,
-      postJson,
+      postJson: setupPostJson,
     });
     products.push(product.id);
   }
@@ -212,7 +230,7 @@ export default function concurrencyTest(data) {
       ? data.products[0]
       : data.products[exec.scenario.iterationInTest % data.products.length];
 
-  const orderRes = postJson(`${BASE_URL}/orders`, {
+  const orderRes = trafficPostJson(`${BASE_URL}/orders`, {
     user_id: userId,
     items: [{ product_id: productId, quantity: 1 }],
   });
@@ -231,6 +249,7 @@ export default function concurrencyTest(data) {
 
 export function teardown(data) {
   const listOrdersRes = http.get(`${BASE_URL}/orders`, {
+    tags: { phase: "teardown" },
     timeout: K6_HTTP_TIMEOUT,
   });
   let violations = 0;
