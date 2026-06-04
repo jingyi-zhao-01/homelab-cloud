@@ -43,6 +43,8 @@ class FakeProductState:
         self.price = price
         self.next_reservation_id = 1
         self.reservations: dict[int, str] = {}
+        self.confirm_calls = 0
+        self.cancel_calls = 0
 
 
 class FakeHttpClient:
@@ -87,6 +89,7 @@ class FakeHttpClient:
             )
         if "/reservations/" in url and url.endswith("/cancel"):
             reservation_id = int(url.rstrip("/").split("/")[-2])
+            self.product_state.cancel_calls += 1
             if self.product_state.reservations.get(reservation_id) == "reserved":
                 self.product_state.reservations[reservation_id] = "cancelled"
                 self.product_state.stock += 1
@@ -105,6 +108,7 @@ class FakeHttpClient:
             )
         if "/reservations/" in url and url.endswith("/confirm"):
             reservation_id = int(url.rstrip("/").split("/")[-2])
+            self.product_state.confirm_calls += 1
             if self.confirm_status_code >= 400:
                 return FakeResponse(self.confirm_status_code, {"detail": "confirm failed"})
             self.product_state.reservations[reservation_id] = "confirmed"
@@ -173,6 +177,7 @@ class OrderServiceLifecycleTest(unittest.TestCase):
 
         with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
             order = self.service.create_order(self.payload)
+            worker_result = self.service.process_terminalization_tasks()
 
         persisted = self.repository.get_order(order.id)
         self.assertIsNotNone(persisted)
@@ -180,26 +185,32 @@ class OrderServiceLifecycleTest(unittest.TestCase):
         self.assertEqual(order.payment_status, "succeeded")
         self.assertEqual(persisted.status, "confirmed")
         self.assertEqual(persisted.payment_status, "succeeded")
+        self.assertEqual(worker_result.succeeded_count, 1)
         self.assertEqual(product_state.stock, 4)
         self.assertEqual(product_state.reservations[1], "confirmed")
+        self.assertEqual(product_state.confirm_calls, 1)
 
-    def test_confirm_failure_marks_order_failed_and_releases_inventory(self) -> None:
+    def test_confirm_failure_retries_in_background_without_failing_request(self) -> None:
         product_state = FakeProductState(stock=5, price=9.99)
 
         with patch(
             "app.service.httpx.Client",
             return_value=FakeHttpClient(product_state, confirm_status_code=502),
         ):
-            with self.assertRaises(HTTPException) as exc_info:
-                self.service.create_order(self.payload)
+            order = self.service.create_order(self.payload)
+            worker_result = self.service.process_terminalization_tasks()
 
-        self.assertEqual(exc_info.exception.status_code, 502)
+        self.assertEqual(order.status, "confirmed")
+        self.assertEqual(order.payment_status, "succeeded")
+        self.assertEqual(worker_result.claimed_count, 1)
+        self.assertEqual(worker_result.retrying_count, 1)
         orders = self.repository.list_orders()
         self.assertEqual(len(orders), 1)
-        self.assertEqual(orders[0].status, "failed")
-        self.assertEqual(orders[0].payment_status, "cancelled")
-        self.assertEqual(product_state.stock, product_state.initial_stock)
-        self.assertEqual(product_state.reservations[1], "cancelled")
+        self.assertEqual(orders[0].status, "confirmed")
+        self.assertEqual(orders[0].payment_status, "succeeded")
+        self.assertEqual(product_state.stock, 4)
+        self.assertEqual(product_state.reservations[1], "reserved")
+        self.assertEqual(product_state.confirm_calls, 1)
 
     def test_out_of_stock_returns_conflict_and_does_not_persist_order(self) -> None:
         product_state = FakeProductState(stock=0, price=9.99)
@@ -223,12 +234,14 @@ class OrderServiceLifecycleTest(unittest.TestCase):
         with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
             first = self.service.create_order(payload)
             second = self.service.create_order(payload)
+            self.service.process_terminalization_tasks()
 
         self.assertEqual(first.id, second.id)
         self.assertEqual(first.status, "confirmed")
         self.assertEqual(second.status, "confirmed")
         self.assertEqual(product_state.stock, 4)
         self.assertEqual(len(product_state.reservations), 1)
+        self.assertEqual(product_state.confirm_calls, 1)
 
     def test_expire_orders_cancels_pending_order_and_releases_inventory(self) -> None:
         product_state = FakeProductState(stock=4, price=9.99)
@@ -253,14 +266,17 @@ class OrderServiceLifecycleTest(unittest.TestCase):
 
         with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
             result = self.service.expire_orders()
+            worker_result = self.service.process_terminalization_tasks()
 
         expired_order = self.repository.get_order(order.id)
         self.assertEqual(result.expired_count, 1)
         self.assertIsNotNone(expired_order)
         self.assertEqual(expired_order.status, "expired")
         self.assertEqual(expired_order.payment_status, "cancelled")
+        self.assertEqual(worker_result.succeeded_count, 1)
         self.assertEqual(product_state.stock, 5)
         self.assertEqual(product_state.reservations[1], "cancelled")
+        self.assertEqual(product_state.cancel_calls, 1)
 
     def test_duplicate_payment_webhook_is_idempotent(self) -> None:
         product_state = FakeProductState(stock=4, price=9.99)
@@ -279,6 +295,7 @@ class OrderServiceLifecycleTest(unittest.TestCase):
         with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
             first = self.service.process_payment_webhook(payload)
             second = self.service.process_payment_webhook(payload)
+            self.service.process_terminalization_tasks()
 
         self.assertEqual(first.id, second.id)
         self.assertEqual(first.status, "confirmed")
@@ -287,6 +304,7 @@ class OrderServiceLifecycleTest(unittest.TestCase):
         self.assertEqual(second.payment_status, "succeeded")
         self.assertEqual(product_state.stock, 4)
         self.assertEqual(product_state.reservations[1], "confirmed")
+        self.assertEqual(product_state.confirm_calls, 1)
 
     def test_payment_success_after_timeout_race_keeps_order_expired(self) -> None:
         product_state = FakeProductState(stock=4, price=9.99)
@@ -313,11 +331,13 @@ class OrderServiceLifecycleTest(unittest.TestCase):
         with patch("app.service.httpx.Client", return_value=FakeHttpClient(product_state)):
             self.service.expire_orders()
             raced = self.service.process_payment_webhook(payload)
+            self.service.process_terminalization_tasks()
 
         self.assertEqual(raced.status, "expired")
         self.assertEqual(raced.payment_status, "cancelled")
         self.assertEqual(product_state.stock, 5)
         self.assertEqual(product_state.reservations[1], "cancelled")
+        self.assertEqual(product_state.cancel_calls, 1)
 
 
 if __name__ == "__main__":

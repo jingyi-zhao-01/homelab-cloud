@@ -2,13 +2,33 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
 
-from .models import OrderItemOut, OrderOut, OrderStatus, PaymentStatus
+from .models import (
+    OrderItemOut,
+    OrderOut,
+    OrderStatus,
+    PaymentStatus,
+    TerminalizationAction,
+    TerminalizationTaskStatus,
+)
 
 
 @dataclass(frozen=True)
 class StoredOrder:
     order: OrderOut
     reservation_ids: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class StoredTerminalizationTask:
+    task_id: int
+    order_id: int
+    reservation_id: int
+    action: TerminalizationAction
+    status: TerminalizationTaskStatus
+    attempt_count: int
+    available_at: datetime
+    created_at: datetime
+    last_error: str | None
 
 
 def to_order(row: Any) -> OrderOut:
@@ -33,6 +53,20 @@ def to_stored_order(row: Any) -> StoredOrder:
     return StoredOrder(
         order=to_order(row),
         reservation_ids=tuple(int(value) for value in row["reservation_ids_json"]),
+    )
+
+
+def to_stored_terminalization_task(row: Any) -> StoredTerminalizationTask:
+    return StoredTerminalizationTask(
+        task_id=int(row["task_id"]),
+        order_id=int(row["order_id"]),
+        reservation_id=int(row["reservation_id"]),
+        action=cast(TerminalizationAction, row["action"]),
+        status=cast(TerminalizationTaskStatus, row["status"]),
+        attempt_count=int(row["attempt_count"]),
+        available_at=cast(datetime, row["available_at"]),
+        created_at=cast(datetime, row["created_at"]),
+        last_error=cast(str | None, row["last_error"]),
     )
 
 

@@ -10,6 +10,7 @@ from .models import (
     OrderCreateRequest,
     OrderOut,
     PaymentWebhookRequest,
+    ProcessTerminalizationTasksResult,
 )
 from .observability import configure_service_logger, create_request_logging_middleware
 from .repositories import InMemoryOrderRepository, PostgresOrderRepository
@@ -37,9 +38,15 @@ def startup() -> None:
     logger.info("event=startup service=%s", SERVICE_NAME)
     try:
         order_service.init_db()
+        order_service.start_terminalization_worker()
     except Exception:
         # Keep service available even if DB startup checks fail.
         pass
+
+
+@app.on_event("shutdown")
+def shutdown() -> None:
+    order_service.stop_terminalization_worker()
 
 
 async def _repository_is_healthy() -> bool:
@@ -158,3 +165,14 @@ def admin_reset() -> Response:
 )
 def admin_expire_orders() -> ExpireOrdersResult:
     return order_service.expire_orders()
+
+
+@app.post(
+    "/admin/process-terminalizations",
+    summary="Process terminalization tasks",
+    description="Runs one pass of the reservation confirm/cancel worker for diagnostics and tests.",
+    tags=["admin"],
+    responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
+)
+def admin_process_terminalizations() -> ProcessTerminalizationTasksResult:
+    return order_service.process_terminalization_tasks()

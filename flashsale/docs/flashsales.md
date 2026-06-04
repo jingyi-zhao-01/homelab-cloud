@@ -85,6 +85,7 @@ Once forwarded, you can create users, products, and orders with the workload API
 
 - [Flashsales harness engineering](flashsales-harness-engineering.md)
 - [ADR 0001: Reduce hotspot order round-trips and default to pessimistic inventory locking](adrs/0001-hotspot-order-path-and-locking.md)
+- [ADR 0002: Move reservation confirm and cancel off the synchronous order path](adrs/0002-async-reservation-terminalization.md)
 - [Repository overview](../../docs/overview.md)
 - [Operations and tooling](../../docs/operations.md)
 

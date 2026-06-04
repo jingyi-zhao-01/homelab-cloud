@@ -155,6 +155,27 @@ class FailingOrderRepository:
     def get_order_by_idempotency_key(self, idempotency_key: str) -> None:
         return None
 
+    def transition_order_and_enqueue_terminalization(
+        self,
+        order_id: int,
+        status: str,
+        payment_status: str,
+        action: str,
+        reservation_ids: list[int],
+    ) -> None:
+        return None
+
+    def claim_terminalization_tasks(self, limit: int, available_before) -> list[object]:
+        return []
+
+    def mark_terminalization_task_succeeded(self, task_id: int) -> None:
+        return None
+
+    def mark_terminalization_task_retrying(
+        self, task_id: int, available_at, last_error: str
+    ) -> None:
+        return None
+
     def list_orders(self) -> list[object]:
         return []
 

@@ -81,6 +81,16 @@ Implication:
 
 - CPU utilization based scaling may not behave as intended
 
+### 6. Reservation terminalization is still too close to request latency
+
+Even after removing the extra price lookup, `confirm` and `cancel` still sit in the `order-service` request path.
+
+Implication:
+
+- client timeout does not mean the backend stopped working
+- late `confirm/cancel` can race with teardown, reset, or expiry flows
+- hotspot investigations need worker and backlog metrics once terminalization moves async
+
 ## Gates
 
 - deploy workflow: `.github/workflows/flashsales-deploy.yml`
@@ -116,6 +126,7 @@ python3 ./flashsale/perf/python/consistency_harness.py
 
 - [Flashsales workload](flashsales.md)
 - [ADR 0001: Reduce hotspot order round-trips and default to pessimistic inventory locking](adrs/0001-hotspot-order-path-and-locking.md)
+- [ADR 0002: Move reservation confirm and cancel off the synchronous order path](adrs/0002-async-reservation-terminalization.md)
 - [Operations and tooling](../../docs/operations.md)
 - [Repository overview](../../docs/overview.md)
 

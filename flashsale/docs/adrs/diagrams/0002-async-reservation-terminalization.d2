@@ -1,0 +1,77 @@
+direction: down
+
+before: {
+  label: "改造前：confirm / cancel 仍在同步请求路径"
+  shape: sequence_diagram
+
+  client
+  order: "order-service API"
+  orders: "order DB"
+  product: "product-service"
+  inventory: "inventory DB"
+
+  client -> order: "POST /orders"
+  order -> product: "reserve(product_id, quantity)"
+  product -> inventory: "lock hotspot row and reserve"
+  inventory -> product: "reservation_id, unit_price"
+  product -> order: "reservation created"
+  order -> orders: "create order pending"
+  order -> order: "process payment"
+
+  sync_terminalization: {
+    label: "热点路径中的同步 terminalization"
+    style.fill: "#FEE2E2"
+    style.stroke: "#DC2626"
+    order -> product: "confirm / cancel reservation"
+    product -> inventory: "update reservation state"
+    inventory -> product: "terminalized"
+    product -> order: "success / error"
+  }
+
+  order -> orders: "update final order state"
+  order -> client: "return only after confirm / cancel finishes"
+}
+
+after: {
+  label: "改造后：confirm / cancel 移到异步 worker"
+  shape: sequence_diagram
+
+  client
+  order: "order-service API"
+  orders: "order DB"
+  queue: "durable queue / outbox"
+  worker: "terminalization worker"
+  product: "product-service"
+  inventory: "inventory DB"
+
+  client -> order: "POST /orders"
+  order -> product: "reserve(product_id, quantity)"
+  product -> inventory: "lock hotspot row and reserve"
+  inventory -> product: "reservation_id, unit_price"
+  product -> order: "reservation created"
+  order -> orders: "create order pending"
+  order -> order: "decide confirm or cancel intent"
+
+  async_enqueue: {
+    label: "新增长链路：durable enqueue"
+    style.fill: "#DCFCE7"
+    style.stroke: "#16A34A"
+    order -> orders: "persist terminalization intent"
+    order -> queue: "enqueue terminalization task"
+  }
+
+  order -> client: "return without waiting for confirm / cancel"
+
+  async_terminalization: {
+    label: "已从请求路径移除，改由后台执行"
+    style.fill: "#EFF6FF"
+    style.stroke: "#2563EB"
+    worker -> queue: "claim task"
+    queue -> worker: "reservation_id + action"
+    worker -> product: "confirm / cancel reservation"
+    product -> inventory: "update reservation state"
+    inventory -> product: "terminalized"
+    product -> worker: "success / idempotent duplicate"
+    worker -> orders: "mark task complete"
+  }
+}

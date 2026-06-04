@@ -17,8 +17,13 @@ from .models import (
     OrderItemOut,
     OrderOut,
     PaymentWebhookRequest,
+    ProcessTerminalizationTasksResult,
 )
 from .repositories import OrderRepository
+from .service_terminalization import (
+    TerminalizationWorker,
+    process_terminalization_tasks,
+)
 
 
 class OrderService:
@@ -28,9 +33,30 @@ class OrderService:
         self._repository = repository
         self._logger = logger
         self._storage = storage
+        self._terminalization_worker = TerminalizationWorker(
+            repository=repository,
+            logger=logger,
+            storage=storage,
+        )
 
     def init_db(self) -> None:
         self._repository.init_db()
+
+    def start_terminalization_worker(
+        self,
+        poll_interval_seconds: float = 0.5,
+        batch_size: int = 32,
+    ) -> None:
+        self._terminalization_worker.start(
+            process_tasks=self.process_terminalization_tasks,
+            poll_interval_seconds=poll_interval_seconds,
+            batch_size=batch_size,
+        )
+
+    def stop_terminalization_worker(self, join_timeout_seconds: float = 2.0) -> None:
+        self._terminalization_worker.stop(
+            join_timeout_seconds=join_timeout_seconds,
+        )
 
     def _ensure_user_exists(self, client: httpx.Client, user_id: int) -> None:
         response = client.get(
@@ -114,22 +140,6 @@ class OrderService:
                     reservation_id,
                 )
 
-    def _confirm_reserved_items(
-        self, client: httpx.Client, reservation_ids: list[int]
-    ) -> None:
-        for reservation_id in reservation_ids:
-            confirm_response = client.post(
-                f"{PRODUCT_SERVICE_URL}/reservations/{reservation_id}/confirm",
-                timeout=DEPENDENCY_TIMEOUT_SECONDS,
-            )
-            if confirm_response.status_code >= 400:
-                self._logger.error(
-                    "event=order_confirm_failed reservation_id=%s status_code=%s",
-                    reservation_id,
-                    confirm_response.status_code,
-                )
-                raise HTTPException(status_code=502, detail="product confirm failed")
-
     def _process_payment(self, order_id: int) -> str:
         self._logger.info(
             "event=order_payment_succeeded order_id=%s mode=internal_default_success",
@@ -139,20 +149,50 @@ class OrderService:
 
     def _complete_order(
         self,
-        client: httpx.Client,
         order_id: int,
         reservation_ids: list[int],
         payment_status: str,
     ) -> OrderOut:
-        self._confirm_reserved_items(client=client, reservation_ids=reservation_ids)
-        order = self._repository.update_order_state(
-            order_id,
-            "confirmed",
+        order = self._repository.transition_order_and_enqueue_terminalization(
+            order_id=order_id,
+            status="confirmed",
             payment_status=payment_status,
+            action="confirm",
+            reservation_ids=reservation_ids,
         )
         if not order:
             raise HTTPException(status_code=404, detail="order not found")
         return order
+
+    def _enqueue_cancellation(
+        self,
+        order_id: int,
+        reservation_ids: list[int],
+        status: str,
+    ) -> None:
+        if not reservation_ids:
+            self._mark_order_terminal(order_id, status)
+            return
+        updated = self._repository.transition_order_and_enqueue_terminalization(
+            order_id=order_id,
+            status=status,
+            payment_status="cancelled",
+            action="cancel",
+            reservation_ids=reservation_ids,
+        )
+        if not updated:
+            self._mark_order_terminal(order_id, status)
+
+    def process_terminalization_tasks(
+        self,
+        limit: int = 32,
+    ) -> ProcessTerminalizationTasksResult:
+        return process_terminalization_tasks(
+            repository=self._repository,
+            logger=self._logger,
+            storage=self._storage,
+            limit=limit,
+        )
 
     def _mark_order_terminal(self, order_id: int, status: str) -> None:
         try:
@@ -235,7 +275,6 @@ class OrderService:
                 order_id = order.id
                 payment_status = self._process_payment(order.id)
                 order = self._complete_order(
-                    client=client,
                     order_id=order.id,
                     reservation_ids=reservation_ids,
                     payment_status=payment_status,
@@ -261,7 +300,7 @@ class OrderService:
                 raise HTTPException(status_code=503, detail="order persistence failed")
             except HTTPException:
                 if order_id is not None:
-                    self._mark_order_terminal(order_id, "failed")
+                    self._enqueue_cancellation(order_id, reservation_ids, "failed")
                 if reservation_ids:
                     self._release_reserved_items(
                         client=client, reservation_ids=reservation_ids
@@ -269,7 +308,7 @@ class OrderService:
                 raise
             except Exception as exc:
                 if order_id is not None:
-                    self._mark_order_terminal(order_id, "failed")
+                    self._enqueue_cancellation(order_id, reservation_ids, "failed")
                 if reservation_ids:
                     self._release_reserved_items(
                         client=client, reservation_ids=reservation_ids
@@ -324,38 +363,26 @@ class OrderService:
             )
             return order
 
-        with httpx.Client() as client:
-            try:
-                return self._complete_order(
-                    client=client,
-                    order_id=order.id,
-                    reservation_ids=list(stored_order.reservation_ids),
-                    payment_status="succeeded",
-                )
-            except HTTPException:
-                self._mark_order_terminal(order.id, "failed")
-                if stored_order.reservation_ids:
-                    self._release_reserved_items(
-                        client=client,
-                        reservation_ids=list(stored_order.reservation_ids),
-                    )
-                raise
-            except Exception as exc:
-                self._mark_order_terminal(order.id, "failed")
-                if stored_order.reservation_ids:
-                    self._release_reserved_items(
-                        client=client,
-                        reservation_ids=list(stored_order.reservation_ids),
-                    )
-                self._logger.exception(
-                    "event=payment_webhook_error order_id=%s event_id=%s storage=%s",
-                    order.id,
-                    payload.event_id,
-                    self._storage,
-                )
-                raise HTTPException(
-                    status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
-                ) from exc
+        try:
+            return self._complete_order(
+                order_id=order.id,
+                reservation_ids=list(stored_order.reservation_ids),
+                payment_status="succeeded",
+            )
+        except HTTPException:
+            self._enqueue_cancellation(order.id, list(stored_order.reservation_ids), "failed")
+            raise
+        except Exception as exc:
+            self._enqueue_cancellation(order.id, list(stored_order.reservation_ids), "failed")
+            self._logger.exception(
+                "event=payment_webhook_error order_id=%s event_id=%s storage=%s",
+                order.id,
+                payload.event_id,
+                self._storage,
+            )
+            raise HTTPException(
+                status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
+            ) from exc
 
     def get_order(self, order_id: int) -> OrderOut:
         try:
@@ -391,20 +418,23 @@ class OrderService:
             ) from exc
 
         expired_count = 0
-        with httpx.Client() as client:
-            for stored_order in stale_orders:
-                if stored_order.reservation_ids:
-                    self._release_reserved_items(
-                        client=client,
-                        reservation_ids=list(stored_order.reservation_ids),
-                    )
+        for stored_order in stale_orders:
+            if stored_order.reservation_ids:
+                updated = self._repository.transition_order_and_enqueue_terminalization(
+                    order_id=stored_order.order.id,
+                    status="expired",
+                    payment_status="cancelled",
+                    action="cancel",
+                    reservation_ids=list(stored_order.reservation_ids),
+                )
+            else:
                 updated = self._repository.update_order_state(
                     stored_order.order.id,
                     "expired",
                     payment_status="cancelled",
                 )
-                if updated:
-                    expired_count += 1
+            if updated:
+                expired_count += 1
 
         self._logger.info(
             "event=order_expired expired_count=%s ttl_seconds=%s storage=%s",

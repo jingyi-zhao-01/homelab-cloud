@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 OrderStatus = Literal["pending", "confirmed", "failed", "cancelled", "expired"]
 PaymentStatus = Literal["pending", "succeeded", "cancelled"]
 PaymentWebhookStatus = Literal["succeeded"]
+TerminalizationAction = Literal["confirm", "cancel"]
+TerminalizationTaskStatus = Literal["queued", "processing", "succeeded", "retrying"]
 
 
 class OrderItemRequest(BaseModel):
@@ -66,6 +68,14 @@ class ExpireOrdersResult(BaseModel):
     expired_count: int = Field(
         description="Number of pending orders marked as expired."
     )
+
+
+class ProcessTerminalizationTasksResult(BaseModel):
+    """Summary of one terminalization worker pass."""
+
+    claimed_count: int = Field(description="Number of tasks claimed by the worker.")
+    succeeded_count: int = Field(description="Number of tasks finished successfully.")
+    retrying_count: int = Field(description="Number of tasks rescheduled for retry.")
 
 
 class PaymentWebhookRequest(BaseModel):
