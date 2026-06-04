@@ -39,11 +39,13 @@ class DatabasePool:
         if self._pool is None:
             with psycopg.connect(self._database_url) as conn:
                 conn.autocommit = autocommit
-                conn.row_factory = row_factory
+                if row_factory is not None:
+                    conn.row_factory = row_factory
                 yield conn
             return
 
         with self._pool.connection() as conn:
             conn.autocommit = autocommit
-            conn.row_factory = row_factory
+            if row_factory is not None:
+                conn.row_factory = row_factory
             yield conn

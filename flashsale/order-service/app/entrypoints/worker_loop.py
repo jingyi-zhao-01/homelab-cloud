@@ -1,4 +1,8 @@
+import logging
 from threading import Event, Lock, Thread
+
+
+logger = logging.getLogger(__name__)
 
 
 class TerminalizationWorkerLoop:
@@ -16,7 +20,12 @@ class TerminalizationWorkerLoop:
 
             def _run() -> None:
                 while not self._stop.is_set():
-                    self._process_tasks(limit=batch_size)
+                    try:
+                        self._process_tasks(limit=batch_size)
+                    except Exception:
+                        logger.exception(
+                            "event=order_service_worker_iteration_failed"
+                        )
                     self._stop.wait(poll_interval_seconds)
 
             self._thread = Thread(
