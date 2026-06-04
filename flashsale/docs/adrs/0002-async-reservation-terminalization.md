@@ -121,6 +121,11 @@ Grafana 应该为这条异步路径增加专门的面板，至少包括：
 
 这些面板会成为后续排查“锁相关外溢症状”的主要入口。在热点流量下，如果 backlog 持续升高，或者 queued age 持续变大，就说明 reservation terminalization 路径开始落后于前台请求速度。
 
+当前仓库里的 IaC 入口：
+
+- Terraform module: `terraform/flashsale-grafana-dashboards`
+- Dashboard: `Flashsale Async Terminalization`
+
 ## 时序图对比
 
 这份 ADR 需要强调的不是“加了一个 worker”这么简单，而是请求时序发生了明确变化：

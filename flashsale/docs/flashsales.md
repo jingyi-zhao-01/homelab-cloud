@@ -71,6 +71,13 @@ Order requests now also carry:
 - internal default-success `payment_status`
 - pending-order timeout cleanup via `/admin/expire-orders`
 
+The current async reservation terminalization observability flow is documented in Terraform:
+
+- dashboard module: [flashsale-grafana-dashboards](../../terraform/flashsale-grafana-dashboards/README.md)
+- primary dashboard: `Flashsale Async Terminalization`
+- SQL panels read from a Grafana `PostgreSQL` datasource backed by Neon
+- log panels read from Loki
+
 ## Debugging
 
 ```bash
@@ -86,6 +93,7 @@ Once forwarded, you can create users, products, and orders with the workload API
 - [Flashsales harness engineering](flashsales-harness-engineering.md)
 - [ADR 0001: Reduce hotspot order round-trips and default to pessimistic inventory locking](adrs/0001-hotspot-order-path-and-locking.md)
 - [ADR 0002: Move reservation confirm and cancel off the synchronous order path](adrs/0002-async-reservation-terminalization.md)
+- [Flashsale architecture](../architecture.md)
 - [Repository overview](../../docs/overview.md)
 - [Operations and tooling](../../docs/operations.md)
 

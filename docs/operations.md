@@ -67,6 +67,16 @@ The current k3s setup relies on Terraform-provisioned AWS SSM parameters for sec
 
 For the Neon and secrets workflow details, see [Infrastructure](infrastructure.md).
 
+For Grafana provisioning related to the flashsale async reservation path, use:
+
+- [terraform/flashsale-grafana-dashboards](../terraform/flashsale-grafana-dashboards/README.md)
+
+Important datasource note:
+
+- the flashsale Grafana dashboard module expects a Grafana `PostgreSQL` datasource backed by Neon
+- this is represented in Terraform as `neon_datasource_uid`
+- Loki remains a separate datasource via `loki_datasource_uid`
+
 For remote spot workers, do not stop at `k3s_server_url` and `k3s_token`. Make sure the worker Terraform inputs also include `trusted_cluster_cidrs` so the control-plane, VPN, or other trusted cluster paths can actually reach the node for cross-node networking and monitoring.
 
 The reusable workflow pair is:
@@ -167,6 +177,7 @@ Local state is not a supported operating mode. Use the GitHub workflows or pass 
 - [Repository overview](overview.md)
 - [Infrastructure](infrastructure.md)
 - [Flashsales workload](../flashsale/docs/flashsales.md)
+- [Flashsale Grafana dashboards](../terraform/flashsale-grafana-dashboards/README.md)
 - [Strategy tester workload](strategy-tester.md)
 - [LeetCode intelligence workload](leetcode-intelligence.md)
 
