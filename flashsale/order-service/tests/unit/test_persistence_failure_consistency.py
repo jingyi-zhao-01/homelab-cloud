@@ -57,16 +57,6 @@ class FakeHttpClient:
     def get(self, url: str, timeout: float) -> FakeResponse:
         if "/users/" in url:
             return FakeResponse(200, {"id": 1})
-        if "/products/" in url:
-            return FakeResponse(
-                200,
-                {
-                    "id": 42,
-                    "name": "flashsale item",
-                    "price": self.product_state.price,
-                    "stock": self.product_state.stock,
-                },
-            )
         raise AssertionError(f"unexpected GET url: {url}")
 
     def post(
@@ -88,6 +78,7 @@ class FakeHttpClient:
                     "reservation_id": reservation_id,
                     "product_id": 42,
                     "quantity": quantity,
+                    "unit_price": self.product_state.price,
                     "status": "reserved",
                     "expires_at": "2099-01-01T00:00:00+00:00",
                 },
@@ -104,6 +95,7 @@ class FakeHttpClient:
                     "reservation_id": reservation_id,
                     "product_id": 42,
                     "quantity": quantity,
+                    "unit_price": self.product_state.price,
                     "status": "cancelled",
                     "expires_at": "2099-01-01T00:00:00+00:00",
                 },
@@ -118,6 +110,7 @@ class FakeHttpClient:
                     "reservation_id": reservation_id,
                     "product_id": 42,
                     "quantity": quantity,
+                    "unit_price": self.product_state.price,
                     "status": "confirmed",
                     "expires_at": "2099-01-01T00:00:00+00:00",
                 },

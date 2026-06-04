@@ -108,6 +108,7 @@ class InMemoryProductRepository:
                 reservation_id=reservation_id,
                 product_id=product_id,
                 quantity=quantity,
+                unit_price=product.price,
                 status="reserved",
                 expires_at=self._reservation_expiry(),
             )
@@ -125,6 +126,7 @@ class InMemoryProductRepository:
                 reservation_id=reservation.reservation_id,
                 product_id=reservation.product_id,
                 quantity=reservation.quantity,
+                unit_price=reservation.unit_price,
                 status="confirmed",
                 expires_at=reservation.expires_at,
             )
@@ -151,6 +153,7 @@ class InMemoryProductRepository:
                 reservation_id=reservation.reservation_id,
                 product_id=reservation.product_id,
                 quantity=reservation.quantity,
+                unit_price=reservation.unit_price,
                 status="cancelled",
                 expires_at=reservation.expires_at,
             )
@@ -179,6 +182,7 @@ class InMemoryProductRepository:
                     reservation_id=reservation.reservation_id,
                     product_id=reservation.product_id,
                     quantity=reservation.quantity,
+                    unit_price=reservation.unit_price,
                     status="expired",
                     expires_at=reservation.expires_at,
                 )

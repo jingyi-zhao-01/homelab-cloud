@@ -423,6 +423,12 @@ components:
           type: integer
           title: Quantity
           description: Reserved quantity for the product.
+        unit_price:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Unit Price
+          description: Unit price snapshot captured when the reservation was created.
         status:
           type: string
           enum:
@@ -473,11 +479,6 @@ components:
         type:
           type: string
           title: Error Type
-        input:
-          title: Input
-        ctx:
-          type: object
-          title: Context
       type: object
       required:
       - loc

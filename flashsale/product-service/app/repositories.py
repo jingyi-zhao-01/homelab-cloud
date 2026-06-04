@@ -108,10 +108,15 @@ class PostgresProductRepository(ProductRepository):
                         reservation_id BIGSERIAL PRIMARY KEY,
                         product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
                         quantity INTEGER NOT NULL CHECK (quantity > 0),
+                        unit_price NUMERIC(12, 2) NULL,
                         status TEXT NOT NULL,
                         expires_at TIMESTAMPTZ NULL,
                         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     )
+                    """)
+                cur.execute("""
+                    ALTER TABLE reservations
+                    ADD COLUMN IF NOT EXISTS unit_price NUMERIC(12, 2) NULL
                     """)
 
     def is_healthy(self) -> bool:
@@ -224,22 +229,29 @@ class PostgresProductRepository(ProductRepository):
                 with conn.cursor() as cur:
                     cur.execute(
                         """
-                        INSERT INTO reservations (product_id, quantity, status, expires_at)
-                        VALUES (%s, %s, %s, NOW() + (%s || ' seconds')::interval)
-                        RETURNING reservation_id, product_id, quantity, status, expires_at
+                        INSERT INTO reservations (product_id, quantity, unit_price, status, expires_at)
+                        VALUES (%s, %s, %s, %s, NOW() + (%s || ' seconds')::interval)
+                        RETURNING reservation_id, product_id, quantity, unit_price, status, expires_at
                         """,
-                        (product_id, quantity, "reserved", RESERVATION_TTL_SECONDS),
+                        (
+                            product_id,
+                            quantity,
+                            updated_row["price"],
+                            "reserved",
+                            RESERVATION_TTL_SECONDS,
+                        ),
                     )
                     reservation_row = cur.fetchone()
                     if not reservation_row:
                         raise RuntimeError("reservation persistence failed")
-                    return ReservationOut(
-                        reservation_id=int(reservation_row["reservation_id"]),
-                        product_id=int(reservation_row["product_id"]),
-                        quantity=int(reservation_row["quantity"]),
-                        status=str(reservation_row["status"]),
-                        expires_at=reservation_row["expires_at"].isoformat()
-                        if reservation_row["expires_at"]
+                        return ReservationOut(
+                            reservation_id=int(reservation_row["reservation_id"]),
+                            product_id=int(reservation_row["product_id"]),
+                            quantity=int(reservation_row["quantity"]),
+                            unit_price=float(reservation_row["unit_price"]),
+                            status=str(reservation_row["status"]),
+                            expires_at=reservation_row["expires_at"].isoformat()
+                            if reservation_row["expires_at"]
                         else None,
                     )
         except ValueError:
@@ -270,7 +282,7 @@ class PostgresProductRepository(ProductRepository):
                     UPDATE reservations
                     SET status = CASE WHEN status = 'reserved' THEN 'confirmed' ELSE status END
                     WHERE reservation_id = %s
-                    RETURNING reservation_id, product_id, quantity, status, expires_at
+                    RETURNING reservation_id, product_id, quantity, unit_price, status, expires_at
                     """,
                     (reservation_id,),
                 )
@@ -281,6 +293,7 @@ class PostgresProductRepository(ProductRepository):
                     reservation_id=int(row["reservation_id"]),
                     product_id=int(row["product_id"]),
                     quantity=int(row["quantity"]),
+                    unit_price=float(row["unit_price"]) if row["unit_price"] is not None else None,
                     status=str(row["status"]),
                     expires_at=row["expires_at"].isoformat() if row["expires_at"] else None,
                 )
@@ -292,7 +305,7 @@ class PostgresProductRepository(ProductRepository):
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT reservation_id, product_id, quantity, status, expires_at
+                    SELECT reservation_id, product_id, quantity, unit_price, status, expires_at
                     FROM reservations
                     WHERE reservation_id = %s
                     FOR UPDATE
@@ -312,7 +325,7 @@ class PostgresProductRepository(ProductRepository):
                         UPDATE reservations
                         SET status = 'cancelled'
                         WHERE reservation_id = %s
-                        RETURNING reservation_id, product_id, quantity, status, expires_at
+                        RETURNING reservation_id, product_id, quantity, unit_price, status, expires_at
                         """,
                         (reservation_id,),
                     )
@@ -322,6 +335,7 @@ class PostgresProductRepository(ProductRepository):
                     reservation_id=int(row["reservation_id"]),
                     product_id=int(row["product_id"]),
                     quantity=int(row["quantity"]),
+                    unit_price=float(row["unit_price"]) if row["unit_price"] is not None else None,
                     status=str(row["status"]),
                     expires_at=row["expires_at"].isoformat() if row["expires_at"] else None,
                 )

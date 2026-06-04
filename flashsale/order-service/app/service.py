@@ -51,30 +51,16 @@ class OrderService:
     def _reserve_and_price_item(
         self, client: httpx.Client, product_id: int, quantity: int
     ) -> tuple[float, int, int]:
-        product_response = client.get(
-            f"{PRODUCT_SERVICE_URL}/products/{product_id}",
-            timeout=DEPENDENCY_TIMEOUT_SECONDS,
-        )
-        if product_response.status_code == 404:
-            self._logger.info("event=order_product_not_found product_id=%s", product_id)
-            raise HTTPException(
-                status_code=404, detail=f"product {product_id} not found"
-            )
-        if product_response.status_code >= 400:
-            self._logger.warning(
-                "event=order_product_service_unavailable product_id=%s status_code=%s",
-                product_id,
-                product_response.status_code,
-            )
-            raise HTTPException(status_code=502, detail="product-service unavailable")
-
-        price = float(product_response.json()["price"])
-
         reserve_response = client.post(
             f"{PRODUCT_SERVICE_URL}/products/{product_id}/reserve",
             json={"quantity": quantity},
             timeout=DEPENDENCY_TIMEOUT_SECONDS,
         )
+        if reserve_response.status_code == 404:
+            self._logger.info("event=order_product_not_found product_id=%s", product_id)
+            raise HTTPException(
+                status_code=404, detail=f"product {product_id} not found"
+            )
         if reserve_response.status_code == 409:
             self._logger.warning(
                 "event=order_reserve_conflict product_id=%s quantity=%s",
@@ -96,8 +82,16 @@ class OrderService:
 
         reservation_payload = reserve_response.json()
         reservation_id = int(reservation_payload["reservation_id"])
+        unit_price = reservation_payload.get("unit_price")
+        if unit_price is None:
+            self._logger.error(
+                "event=order_reserve_missing_price product_id=%s reservation_id=%s",
+                product_id,
+                reservation_id,
+            )
+            raise HTTPException(status_code=502, detail="product reserve missing price")
 
-        return price, quantity, reservation_id
+        return float(unit_price), quantity, reservation_id
 
     def _release_reserved_items(
         self, client: httpx.Client, reservation_ids: list[int]

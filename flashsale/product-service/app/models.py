@@ -37,6 +37,10 @@ class ReservationOut(BaseModel):
     reservation_id: int = Field(description="Identifier of the reservation.")
     product_id: int = Field(description="Identifier of the reserved product.")
     quantity: int = Field(description="Reserved quantity for the product.")
+    unit_price: float | None = Field(
+        default=None,
+        description="Unit price snapshot captured when the reservation was created.",
+    )
     status: ReservationStatus = Field(description="Lifecycle state of the reservation.")
     expires_at: str | None = Field(
         default=None,

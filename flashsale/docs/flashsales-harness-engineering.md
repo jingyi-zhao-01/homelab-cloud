@@ -115,6 +115,7 @@ python3 ./flashsale/perf/python/consistency_harness.py
 ## Related Pages
 
 - [Flashsales workload](flashsales.md)
+- [ADR 0001: Reduce hotspot order round-trips and default to pessimistic inventory locking](adrs/0001-hotspot-order-path-and-locking.md)
 - [Operations and tooling](../../docs/operations.md)
 - [Repository overview](../../docs/overview.md)
 
