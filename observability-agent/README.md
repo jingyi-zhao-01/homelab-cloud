@@ -95,7 +95,7 @@ Returns `{"status": "ok"}` with HTTP 200.
 ## Tests
 
 ```bash
-cd flashsale/perf/python
+cd observability-agent
 python3 test_observability_agent.py
 ```
 
@@ -108,9 +108,9 @@ kubectl logs -n observability-agent \
   -l app.kubernetes.io/component=observability-agent -f
 ```
 
-## Deploy Script Reference
+## File layout
 
-The agent is deployed via its own Helm chart at `charts/observability-agent/`. It is **not** part of the flashsales chart.
-
-Source: `flashsale/perf/python/observability_agent.py`
-Chart files: `charts/observability-agent/files/observability_agent.py` (kept in sync)
+- `observability-agent/observability_agent.py` — canonical agent source
+- `observability-agent/test_observability_agent.py` — tests
+- `charts/observability-agent/files/observability_agent.py` — Helm chart copy (kept in sync)
+- `charts/observability-agent/` — Helm chart (Deployment, Service, Secret, ConfigMap, etc.)
