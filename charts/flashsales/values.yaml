@@ -226,3 +226,33 @@ externalSecrets:
       namespace: external-secrets
       accessKeyIdKey: access-key-id
       secretAccessKeyKey: secret-access-key
+
+# Observability Agent configuration
+observabilityAgent:
+  enabled: false
+  image:
+    repository: python
+    tag: "3.11-slim"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  aws:
+    region: us-west-1
+  ssm:
+    pathPrefix: flashsales/prod
+  grafana:
+    url: "https://grafana.example.com"
+  github:
+    owner: jzhao62
+    repo: homelab-cloud
+  llm:
+    model: "gpt-4o"
+  checkInterval: 300  # 5 minutes
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}

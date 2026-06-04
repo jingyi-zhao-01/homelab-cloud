@@ -40,6 +40,12 @@ variable "database_url" {
   sensitive   = true
 }
 
+variable "grafana_service_account_token" {
+  description = "Grafana service account token for observability agent"
+  type        = string
+  sensitive   = true
+}
+
 variable "tags" {
   description = "Tags applied to all SSM parameters"
   type        = map(string)

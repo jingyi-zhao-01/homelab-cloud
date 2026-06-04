@@ -1,0 +1,175 @@
+{{- if .Values.observabilityAgent.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-observability-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: observability-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "flashsales.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: observability-agent
+  template:
+    metadata:
+      labels:
+        {{- include "flashsales.labels" . | nindent 8 }}
+        app.kubernetes.io/component: observability-agent
+    spec:
+      serviceAccountName: {{ .Release.Name }}-observability-agent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: observability-agent
+          image: "{{ .Values.observabilityAgent.image.repository }}:{{ .Values.observabilityAgent.image.tag }}"
+          imagePullPolicy: {{ .Values.observabilityAgent.image.pullPolicy }}
+          command:
+            - /usr/local/bin/python3
+            - /app/flashsale/perf/python/observability_agent.py
+          env:
+            # GitHub configuration
+            - name: GITHUB_OWNER
+              value: {{ .Values.observabilityAgent.github.owner | quote }}
+            - name: GITHUB_REPO
+              value: {{ .Values.observabilityAgent.github.repo | quote }}
+            
+            # AWS SSM configuration
+            - name: AWS_REGION
+              value: {{ .Values.observabilityAgent.aws.region | quote }}
+            - name: SSM_PATH_PREFIX
+              value: {{ .Values.observabilityAgent.ssm.pathPrefix | quote }}
+            
+            # Grafana configuration
+            - name: GRAFANA_URL
+              value: {{ .Values.observabilityAgent.grafana.url | quote }}
+            
+            # OpenHands configuration
+            - name: LLM_MODEL
+              value: {{ .Values.observabilityAgent.llm.model | quote }}
+            - name: CHECK_INTERVAL
+              value: "{{ .Values.observabilityAgent.checkInterval }}"
+            
+            # Environment override
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          envFrom:
+            - secretRef:
+                name: {{ .Release.Name }}-observability-agent-secrets
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.observabilityAgent.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: app-volume
+              mountPath: /app
+              readOnly: true
+            - name: tmp-volume
+              mountPath: /tmp
+            - name: cache-volume
+              mountPath: /.cache
+              subPath: .cache
+        {{- if .Values.observabilityAgent.tolerations }}
+          {{- toYaml .Values.observabilityAgent.tolerations | nindent 8 }}
+        {{- end }}
+      nodeSelector:
+        {{- include "flashsales.nodeSelector" . | nindent 8 }}
+        {{- if .Values.observabilityAgent.nodeSelector }}
+        {{- toYaml .Values.observabilityAgent.nodeSelector | nindent 8 }}
+        {{- end }}
+      {{- with .Values.observabilityAgent.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: app-volume
+          configMap:
+            name: {{ .Release.Name }}-observability-agent-config
+        - name: tmp-volume
+          emptyDir: {}
+        - name: cache-volume
+          configMap:
+            name: {{ .Release.Name }}-observability-agent-cache
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-observability-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: observability-agent
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-observability-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: observability-agent
+rules:
+  # SSM access for secrets
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  # AWS SSM parameter store access
+  - apiGroups: ["ssm"]
+    resources: ["parameters"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-observability-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: observability-agent
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-observability-agent
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-observability-agent
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-observability-agent-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: observability-agent
+data:
+  # Mount the observability agent script
+  observability_agent.py: |
+    {{- .Files.Get "flashsale/perf/python/observability_agent.py" | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-observability-agent-cache
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flashsales.labels" . | nindent 4 }}
+    app.kubernetes.io/component: observability-agent
+data:
+  # Empty cache directory
+  .gitkeep: ""
+{{- end }}

@@ -21,6 +21,7 @@ This platform gives me a centralized layer where services can converge. The serv
 - Performance experiments and smoke tests live under `flashsale/perf/` and `flashsale/scripts/`.
 - Terraform in `terraform/` provisions Neon, AWS SSM-backed secrets, and a self-healing AWS spot-backed k3s worker.
 - Secret material is kept under `secrets/` and is treated as environment-specific.
+- **Observability Agent** (`flashsale/perf/python/observability_agent.py`): OpenHands SDK-based agent that monitors perf tests, analyzes failures with Grafana, and creates PRs for fixes.
 
 ## Conventions
 

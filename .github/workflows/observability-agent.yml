@@ -1,0 +1,126 @@
+name: Observability Agent
+
+on:
+  workflow_run:
+    workflows:
+      - "Flashsales Perf Concurrency Suite"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Agent mode (continuous or single-run)"
+        required: true
+        default: "single-run"
+        type: choice
+        options:
+          - continuous
+          - single-run
+      run_id:
+        description: "Workflow run ID to analyze (optional, defaults to recent failures)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  run-observability-agent:
+    name: Run Observability Agent
+    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
+    
+    # Only run when workflow_run is completed with failure
+    if: |
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'workflow_run' && 
+       github.event.workflow_run.conclusion == 'failure')
+    
+    environment: observability-agent
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install openhands-sdk boto3 requests
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ fromJson(toJson(vars)).AWS_REGION || 'us-west-1' }}
+          
+      - name: Get Grafana token from SSM
+        id: grafana-token
+        env:
+          SSM_PATH_PREFIX: ${{ vars.SSM_PATH_PREFIX || 'flashsales/prod' }}
+        run: |
+          if [ -n "${{ vars.SSM_PATH_PREFIX }}" ]; then
+            TOKEN=$(aws ssm get-parameter --name "/${SSM_PATH_PREFIX}/grafana-service-account-token" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null)
+            if [ -n "$TOKEN" ]; then
+              echo "grafana_token=${TOKEN}" >> $GITHUB_OUTPUT
+            else
+              echo "Warning: Could not get token from SSM"
+              echo "grafana_token=" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "SSM_PATH_PREFIX not set, skipping SSM token fetch"
+            echo "grafana_token=" >> $GITHUB_OUTPUT
+          fi
+          
+      - name: Run Observability Agent (single-run mode)
+        if: github.event.inputs.mode != 'continuous'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO: ${{ github.event.repository.name }}
+          AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION || 'us-west-1' }}
+          SSM_PATH_PREFIX: ${{ vars.SSM_PATH_PREFIX || 'flashsales/prod' }}
+          GRAFANA_URL: ${{ vars.GRAFANA_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL || 'gpt-4o' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          GRAFANA_TOKEN: ${{ steps.grafana-token.outputs.grafana_token }}
+          CHECK_INTERVAL: 60
+        run: |
+          echo "=== Observability Agent: Single Run Mode ==="
+          echo "Checking for perf test failures..."
+          
+          python flashsale/perf/python/observability_agent.py || true
+          
+          echo "=== Analysis complete ==="
+          
+      - name: Run Observability Agent (continuous mode)
+        if: github.event.inputs.mode == 'continuous'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPO: ${{ github.event.repository.name }}
+          AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION || 'us-west-1' }}
+          SSM_PATH_PREFIX: ${{ vars.SSM_PATH_PREFIX || 'flashsales/prod' }}
+          GRAFANA_URL: ${{ vars.GRAFANA_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL || 'gpt-4o' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          GRAFANA_TOKEN: ${{ steps.grafana-token.outputs.grafana_token }}
+          CHECK_INTERVAL: ${{ vars.CHECK_INTERVAL || '300' }}
+        run: |
+          echo "=== Observability Agent: Continuous Mode ==="
+          echo "Starting background monitoring..."
+          echo "To stop: Cancel this workflow run"
+          
+          # Run the agent in background and capture output
+          timeout ${{ vars.CONTINUOUS_RUN_DURATION || '7200' }} \
+            python flashsale/perf/python/observability_agent.py || true
+          
+          echo "=== Continuous monitoring ended ==="
