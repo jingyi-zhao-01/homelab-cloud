@@ -1,294 +1,116 @@
 # Observability Agent
 
-This directory contains the observability agent for the Flashsales platform.
+HTTP server deployed as a standalone Kubernetes Deployment in namespace `observability-agent`.
 
-## Overview
-
-The observability agent is an OpenHands SDK-based constant worker that:
-
-- **Monitors GitHub Actions workflows** for perf test failures
-- **Uses Grafana MCP** to analyze issues when tests fail
-- **Creates PRs** to fix code issues (if within codebase)
-- **Points out external integrations** that are not in the codebase
+Receives `POST /analyze` payloads from GitHub Actions when a perf test workflow fails,
+then autonomously scaffolds analysis and remediation.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                  Observability Agent (OpenHands SDK)                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌───────────┐ │
-│  │ GitHub API   │  │  SSM Store   │  │  Grafana MCP │  │  LLM      │ │
-│  │ (monitors    │  │ (Grafana    │  │ (queries    │  │ (reasoning│ │
-│  │  failures)   │  │  token)      │  │  metrics)    │  │  /PR gen) │ │
-│  └──────────────┘  └──────────────┘  └──────────────┘  └───────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │  GitHub PRs     │
-                    └─────────────────┘
+GitHub Actions (perf suite fails)
+  │
+  ▼
+observability-agent.yml (POST {run_id, run_name, run_url, conclusion})
+  │
+  ▼
+Observability Agent (k8s Deployment, ns: observability-agent)
+  │
+  ├── SSM → Grafana token, LLM API key
+  ├── Grafana API → metrics
+  ├── GitHub API → job details, logs
+  ├── OpenHands SDK → autonomous scaffold
+  └── GitHub API → create PR
 ```
 
-## Features
+## Quick Start
 
-1. **Continuous Monitoring**: Runs as a constant worker on the control plane node
-2. **Grafana Integration**: Uses Grafana MCP to query metrics when perf tests fail
-3. **Automated Analysis**: Analyzes failures and determines root cause
-4. **PR Creation**: Creates PRs to fix code issues (if within codebase)
-5. **External Issue Detection**: Points out external integration issues
+```bash
+# 1. Deploy the Helm chart
+helm upgrade --install obs-agent ./charts/observability-agent \
+  --namespace observability-agent --create-namespace \
+  --set awsRegion="us-west-1" \
+  --set grafanaUrl="https://grafana.example.com" \
+  --set githubOwner="jzhao62" \
+  --set githubRepo="homelab-cloud" \
+  --set githubToken="ghp_..." \
+  --set agentAuthToken="$(openssl rand -hex 32)"
 
-## Files
+# 2. Set GitHub repo variables
+#    OBSERVABILITY_AGENT_URL = "https://obs-agent.your-domain.com"
+#    OBSERVABILITY_AGENT_TOKEN = (same as agentAuthToken above)
 
-- `observability_agent.py` - Main agent script
-- `test_observability_agent.py` - Test suite (requires external dependencies)
-- `test_observability_agent_simple.py` - Simple test suite (self-contained)
-
-## Requirements
-
-- Python 3.11+
-- boto3 (for AWS SSM)
-- requests (for HTTP APIs)
-- openhands-sdk (optional, for enhanced agent reasoning)
+# 3. Make sure SSM has:
+#    /codex/grafana-service-account-token
+#    /flashsales/prod/llm-api-key (optional – for OpenHands SDK)
+```
 
 ## Configuration
 
-### Environment Variables
-
-The agent requires these environment variables. **None have hardcoded defaults for critical values.**
-
-#### Required (agent exits with a fatal log line if any are missing)
-
-| Variable | Example | Source |
+| Env variable | Required | Source |
 |---|---|---|
-| `GITHUB_OWNER` | `jzhao62` | GitHub Actions context / k8s env |
-| `GITHUB_REPO` | `homelab-cloud` | GitHub Actions context / k8s env |
-| `GITHUB_TOKEN` | `ghp_...` | GitHub Actions `secrets.GITHUB_TOKEN` / k8s Secret |
-| `AWS_REGION` | `us-west-1` | Repository var |
-| `GRAFANA_URL` | `https://grafana.example.com` | Repository var |
+| `AGENT_AUTH_TOKEN` | Yes | k8s Secret (shared with GitHub Actions) |
+| `GITHUB_OWNER` | Yes | k8s Deployment env |
+| `GITHUB_REPO` | Yes | k8s Deployment env |
+| `GITHUB_TOKEN` | Yes | k8s Secret |
+| `AWS_REGION` | Yes | k8s Deployment env |
+| `GRAFANA_URL` | Yes | k8s Deployment env |
+| `GRAFANA_TOKEN_SSM_PATH` | No | Default: `/codex/grafana-service-account-token` |
+| `LLM_API_KEY_SSM_PATH` | No | Default: `/flashsales/prod/llm-api-key` |
+| `LLM_MODEL` | No | e.g. `openai/gpt-4o` |
+| `LLM_BASE_URL` | No | e.g. `https://openrouter.ai/api/v1` |
+| `LISTEN_PORT` | No | Default: `8080` |
+| `LOG_LEVEL` | No | Default: `INFO` |
+| `LOG_FORMAT` | No | Default: `json` |
 
-#### SSM paths (configurable – agent fetches secrets at runtime via boto3)
+## API
 
-| Variable | Default | SSM parameter |
-|---|---|---|
-| `GRAFANA_TOKEN_SSM_PATH` | `/codex/grafana-service-account-token` | Grafana service-account token |
-| `LLM_API_KEY_SSM_PATH` | `/flashsales/prod/llm-api-key` | OpenRouter API key |
+### POST /analyze
 
-#### LLM / OpenRouter (non-secret – stored as repository vars)
+Triggered by GitHub Actions when a perf test fails.
 
-| Variable | Example | Notes |
-|---|---|---|
-| `LLM_MODEL` | `openai/gpt-4o` | OpenRouter model slug |
-| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter base URL |
+**Headers:**
+- `Content-Type: application/json`
+- `X-Agent-Token: <shared-secret>`
 
-#### Agent behaviour
-
-| Variable | Default | Notes |
-|---|---|---|
-| `WORKFLOW_NAME` | `flashsales-perf-concurrency-suite.yml` | Workflow to monitor |
-| `CHECK_INTERVAL` | `300` | Seconds between polls |
-| `LOOKBACK_HOURS` | `12` | Lookback window for failures |
-| `LOG_LEVEL` | `INFO` | Python log level |
-| `LOG_FORMAT` | `json` | `json` for structured, `text` for human-readable |
-
-### AWS SSM Parameters
-
-Parameters that must be provisioned in AWS SSM before deploying the agent:
-
-| SSM path | Terraform variable | Managed by | Notes |
-|---|---|---|---|
-| `/codex/grafana-service-account-token` | `grafana_service_account_token` | `terraform/ssm` | Grafana service-account token (also available at `/${ssm_path_prefix}/grafana-service-account-token`) |
-| `/${ssm_path_prefix}/llm-api-key` | `llm_api_key` | `terraform/ssm` | OpenRouter API key (e.g. from https://openrouter.ai/keys) |
-| `/${ssm_path_prefix}/DATABASE_URL` | `database_url` | `terraform/ssm` | Neon connection string (existing) |
-| `/${ssm_path_prefix}/POSTGRES_USER` | `postgres_user` | `terraform/ssm` | Neon user (existing) |
-| `/${ssm_path_prefix}/POSTGRES_PASSWORD` | `postgres_password` | `terraform/ssm` | Neon password (existing) |
-| `/${ssm_path_prefix}/POSTGRES_DB` | `postgres_db` | `terraform/ssm` | Neon database (existing) |
-
-Parameters managed as **GitHub repository variables** (non-secret):
-`GRAFANA_URL`, `AWS_REGION`, `SSM_PATH_PREFIX`, `LLM_MODEL`, `LLM_BASE_URL`, `CHECK_INTERVAL`, `LOOKBACK_HOURS`, `LOG_LEVEL`, `LOG_FORMAT`, `CONTINUOUS_RUN_DURATION`
-
-Parameters managed as **GitHub environment secrets**:
-`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (SSM access), `GITHUB_TOKEN` (auto-injected)
-
-To provision:
-```bash
-terraform -chdir=terraform/ssm apply \
-  -var grafana_service_account_token="<token>" \
-  -var llm_api_key="<openrouter-key>" \
-  -var ssm_path_prefix="flashsales/prod" \
-  -var aws_region="us-west-1" \
-  # ... other required vars (postgres_user, postgres_password, etc.)
+**Body:**
+```json
+{
+  "run_id": 12345,
+  "run_name": "Flashsales Perf Concurrency Suite",
+  "run_url": "https://github.com/org/repo/actions/runs/12345",
+  "conclusion": "failure"
+}
 ```
 
-### Helm Chart
+**Responses:**
+- `202` — Accepted, analysis queued
+- `400` — Missing `run_id` or invalid JSON
+- `403` — Invalid/missing `X-Agent-Token`
 
-Enable the observability agent in `charts/flashsales/values.yaml`:
+### GET /health
 
-```yaml
-observabilityAgent:
-  enabled: true
-  image:
-    repository: python
-    tag: "3.11-slim"
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: "100m"
-      memory: "128Mi"
-    limits:
-      cpu: "500m"
-      memory: "512Mi"
-  aws:
-    region: "us-west-1"
-  ssm:
-    grafanaTokenPath: "/codex/grafana-service-account-token"
-    llmApiKeyPath: "/flashsales/prod/llm-api-key"
-  grafana:
-    url: "https://your-grafana.example.com"
-  github:
-    owner: "your-org"
-    repo: "your-repo"
-    githubToken: ""   # Set via --set or sealed secret; required for k8s mode
-  llm:
-    model: "openai/gpt-4o"
-    baseUrl: "https://openrouter.ai/api/v1"
-  workflowName: "flashsales-perf-concurrency-suite.yml"
-  checkInterval: 300
-  logLevel: "INFO"
-  logFormat: "json"
-```
+Returns `{"status": "ok"}` with HTTP 200.
 
-## Usage
-
-### Run Manually
-
-```bash
-export GITHUB_OWNER="jzhao62"
-export GITHUB_REPO="homelab-cloud"
-export GITHUB_TOKEN="$(gh auth token)"     # or a PAT
-export AWS_REGION="us-west-1"
-export GRAFANA_URL="https://grafana.example.com"
-export LLM_MODEL="openai/gpt-4o"           # optional
-export LLM_BASE_URL="https://openrouter.ai/api/v1"  # optional
-export GRAFANA_TOKEN_SSM_PATH="/codex/grafana-service-account-token"
-export LLM_API_KEY_SSM_PATH="/flashsales/prod/llm-api-key"
-export LOG_FORMAT="text"                    # readable logs for local runs
-
-python flashsale/perf/python/observability_agent.py
-```
-
-### Run in GitHub Actions
-
-The `observability-agent.yml` workflow in `.github/workflows/` can be triggered:
-
-**Single Run Mode**:
-```bash
-gh workflow run observability-agent.yml -f mode=single-run
-```
-
-**Continuous Mode** (daemon):
-```bash
-gh workflow run observability-agent.yml -f mode=continuous
-```
-
-### As Kubernetes Deployment
-
-Deploy using Helm with the observability agent enabled:
-
-```bash
-helm upgrade -n flashsales flashsales ./charts/flashsales \
-  -f ./charts/flashsales/values.yaml \
-  --set observabilityAgent.enabled=true
-```
-
-## How It Works
-
-1. **Monitoring**: The agent periodically checks GitHub Actions for failed workflow runs
-2. **Analysis**: When a perf test fails, it analyzes the failure:
-   - Queries Grafana for metrics (latency, error rates, throughput)
-   - Uses LLM (if available) to reason about the root cause
-   - Determines if issue is code-related or external
-3. **Remediation**:
-   - For code issues: Creates a PR with suggested fixes
-   - For external issues: Creates a report with findings and recommendations
-
-## Testing
-
-Run the simple test suite:
+## Tests
 
 ```bash
 cd flashsale/perf/python
-python3 test_observability_agent_simple.py
+python3 test_observability_agent.py
 ```
 
-## External Dependencies
+## Logs
 
-The agent requires access to:
-
-- **AWS SSM API**: For reading secrets (SSM paths: `/{SSM_PATH_PREFIX}/*`)
-- **Grafana API**: For metrics queries (read access to dashboards)
-- **GitHub API**: For workflow and PR operations (workflow, repo scopes)
-- **LLM API**: For agent reasoning (OpenAI or compatible endpoint)
-
-## Monitoring
-
-### Check Agent Logs (Kubernetes)
+The agent writes structured JSON to stdout. Key fields: `ts`, `level`, `logger`, `msg`, `exception`.
 
 ```bash
-kubectl logs -n flashsales \
-  -l app.kubernetes.io/component=observability-agent \
-  -f
+kubectl logs -n observability-agent \
+  -l app.kubernetes.io/component=observability-agent -f
 ```
 
-### Monitor Workflow Runs
+## Deploy Script Reference
 
-```bash
-gh run list --limit 10 --workflow observability-agent.yml
-```
+The agent is deployed via its own Helm chart at `charts/observability-agent/`. It is **not** part of the flashsales chart.
 
-## Troubleshooting
-
-### Agent cannot access SSM
-- Verify AWS IAM permissions
-- Check SSM_PATH_PREFIX matches your configuration
-- Ensure the Grafana token parameter exists in SSM
-
-### Agent cannot query Grafana
-- Verify GRAFANA_URL is correct
-- Check GRAFANA_TOKEN has necessary permissions
-- Ensure Grafana is accessible from the agent's network
-
-### Agent cannot create PRs
-- Verify GITHUB_TOKEN has PR creation permissions
-- Check repository permissions (write access to PRs)
-
-### Agent not starting (OpenHands SDK)
-- Install OpenHands SDK: `pip install openhands-sdk`
-- Or use the basic Python implementation (will work without OpenHands)
-
-## Kubernetes RBAC
-
-The agent requires the following RBAC permissions:
-
-```yaml
-rules:
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get", "list"]
-  - apiGroups: ["ssm"]
-    resources: ["parameters"]
-    verbs: ["get"]
-```
-
-## Security
-
-- All secrets are stored in AWS SSM
-- Grafana token is never logged
-- GitHub token is passed securely via workflow environment
-- Agent runs as non-root in Kubernetes
-
-## Related
-
-- [Operations and Tooling](../../docs/operations.md)
-- [Flashsales Workload](../../flashsale/docs/flashsales.md)
-- [Flashsales Grafana Dashboards](../../terraform/flashsale-grafana-dashboards/README.md)
-- [Infrastructure](../../docs/infrastructure.md)
+Source: `flashsale/perf/python/observability_agent.py`
+Chart files: `charts/observability-agent/files/observability_agent.py` (kept in sync)

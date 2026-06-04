@@ -1,4 +1,4 @@
-name: Observability Agent
+name: Observability Agent – Dispatch
 
 on:
   workflow_run:
@@ -8,127 +8,82 @@ on:
       - completed
   workflow_dispatch:
     inputs:
-      mode:
-        description: "Agent mode (continuous or single-run)"
-        required: true
-        default: "single-run"
-        type: choice
-        options:
-          - continuous
-          - single-run
       run_id:
-        description: "Workflow run ID to analyze (optional, defaults to recent failures)"
+        description: "Workflow run ID to analyze (defaults to the triggering run)"
         required: false
         type: string
 
 permissions:
   contents: read
-  issues: write
-  pull-requests: write
 
 jobs:
-  run-observability-agent:
-    name: Run Observability Agent
-    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
+  dispatch-to-agent:
+    name: Dispatch failure to Observability Agent
+    runs-on: ubuntu-latest
 
-    # Only run when workflow_run is completed with failure
+    # Only run when the perf suite completed with failure, or on manual dispatch.
     if: |
       (github.event_name == 'workflow_dispatch') ||
-      (github.event_name == 'workflow_run' && 
+      (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'failure')
 
-    environment: observability-agent
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
+      - name: Build payload
+        id: payload
         run: |
-          python -m pip install --upgrade pip
-          pip install openhands-sdk boto3 requests
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            RUN_NAME="${{ github.event.workflow_run.name }}"
+            RUN_URL="${{ github.event.workflow_run.html_url }}"
+            CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+          else
+            RUN_ID="${{ github.event.inputs.run_id }}"
+            RUN_NAME="manual-dispatch"
+            RUN_URL=""
+            CONCLUSION="failure"
+          fi
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION }}
+          echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "run_name=${RUN_NAME}" >> "$GITHUB_OUTPUT"
+          echo "run_url=${RUN_URL}" >> "$GITHUB_OUTPUT"
+          echo "conclusion=${CONCLUSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Fetch Grafana token from SSM
-        id: ssm-grafana
+      - name: POST to Observability Agent
         env:
-          GRAFANA_TOKEN_SSM_PATH: ${{ vars.GRAFANA_TOKEN_SSM_PATH || '/codex/grafana-service-account-token' }}
+          AGENT_URL: ${{ vars.OBSERVABILITY_AGENT_URL }}
+          AGENT_TOKEN: ${{ secrets.OBSERVABILITY_AGENT_TOKEN }}
         run: |
-          VAL=$(aws ssm get-parameter --name "$GRAFANA_TOKEN_SSM_PATH" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || true)
-          echo "value=${VAL}" >> "$GITHUB_OUTPUT"
+          if [ -z "${AGENT_URL:-}" ]; then
+            echo "OBSERVABILITY_AGENT_URL is not set – skipping dispatch"
+            exit 0
+          fi
 
-      - name: Fetch LLM API key from SSM
-        id: ssm-llm
-        env:
-          LLM_API_KEY_SSM_PATH: ${{ vars.LLM_API_KEY_SSM_PATH || '/flashsales/prod/llm-api-key' }}
-        run: |
-          VAL=$(aws ssm get-parameter --name "$LLM_API_KEY_SSM_PATH" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || true)
-          echo "value=${VAL}" >> "$GITHUB_OUTPUT"
+          PAYLOAD=$(jq -nc '{
+            run_id: ($run_id | tonumber),
+            run_name: $run_name,
+            run_url: $run_url,
+            conclusion: $conclusion
+          }' \
+            --arg run_id "${{ steps.payload.outputs.run_id }}" \
+            --arg run_name "${{ steps.payload.outputs.run_name }}" \
+            --arg run_url "${{ steps.payload.outputs.run_url }}" \
+            --arg conclusion "${{ steps.payload.outputs.conclusion }}")
 
-      - name: Validate required configuration
-        run: |
-          set -euo pipefail
-          MISSING=""
-          
-          if [ -z "${GRAFANA_URL:-}" ];  then MISSING="$MISSING GRAFANA_URL"; fi
-          if [ -z "${AWS_REGION:-}" ];   then MISSING="$MISSING AWS_REGION"; fi
-          
-          if [ -n "$MISSING" ]; then
-            echo "Missing required configuration:$MISSING"
+          echo "Dispatching to ${AGENT_URL}/analyze"
+          echo "Payload: ${PAYLOAD}"
+
+          RESPONSE=$(curl -s -w '\n%{http_code}' \
+            -X POST "${AGENT_URL}/analyze" \
+            -H "Content-Type: application/json" \
+            -H "X-Agent-Token: ${AGENT_TOKEN}" \
+            -d "${PAYLOAD}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP ${HTTP_CODE}: ${BODY}"
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "Agent returned error – check agent logs"
             exit 1
           fi
-          echo "All required configuration present"
-        env:
-          GRAFANA_URL: ${{ vars.GRAFANA_URL }}
-          AWS_REGION: ${{ vars.AWS_REGION }}
-
-      - name: Run Observability Agent
-        env:
-          # --- Required ---
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_OWNER: ${{ github.repository_owner }}
-          GITHUB_REPO: ${{ github.event.repository.name }}
-          AWS_REGION: ${{ vars.AWS_REGION }}
-          GRAFANA_URL: ${{ vars.GRAFANA_URL }}
-
-          # --- SSM paths ---
-          GRAFANA_TOKEN_SSM_PATH: ${{ vars.GRAFANA_TOKEN_SSM_PATH || '/codex/grafana-service-account-token' }}
-          LLM_API_KEY_SSM_PATH: ${{ vars.LLM_API_KEY_SSM_PATH || '/flashsales/prod/llm-api-key' }}
-
-          # --- LLM settings (non-secret) ---
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
-          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
-
-          # --- Agent behaviour ---
-          CHECK_INTERVAL: ${{ github.event.inputs.mode == 'continuous' && vars.CHECK_INTERVAL || '60' }}
-          LOOKBACK_HOURS: ${{ vars.LOOKBACK_HOURS || '12' }}
-          WORKFLOW_NAME: ${{ vars.WORKFLOW_NAME || 'flashsales-perf-concurrency-suite.yml' }}
-
-          # --- Logging ---
-          LOG_LEVEL: ${{ vars.LOG_LEVEL || 'INFO' }}
-          LOG_FORMAT: ${{ vars.LOG_FORMAT || 'json' }}
-
-        run: |
-          MODE="${{ github.event.inputs.mode || 'single-run' }}"
-          echo "=== Observability Agent: ${MODE} mode ==="
-
-          if [ "${MODE}" = "continuous" ]; then
-            DURATION="${{ vars.CONTINUOUS_RUN_DURATION || '7200' }}"
-            echo "Running for ${DURATION}s (set CONTINUOUS_RUN_DURATION to change)"
-            timeout "$DURATION" python flashsale/perf/python/observability_agent.py || true
-          else
-            python flashsale/perf/python/observability_agent.py || true
-          fi
-
-          echo "=== Agent finished ==="

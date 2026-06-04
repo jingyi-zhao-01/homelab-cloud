@@ -13,7 +13,7 @@ This page collects the operational commands and workflow details that used to be
 | `deploy-leetcode-intelligence.yml` | Pushes to `charts/leetcode-intelligence/**` | LeetCode intelligence |
 | `flashsales-perf-concurrency-suite.yml` | Manual or reusable via `flashsales-deploy-post.yml` | Concurrency suite |
 | `flashsales-loadtest-manual.yml` | Manual `workflow_dispatch` | Performance testing |
-| `observability-agent.yml` | Manual or on perf test failures | Observability analysis and auto-remediation |
+| `observability-agent.yml` | Perf test failure or manual | POSTs failed run to agent for autonomous analysis |
 | `terraform-provision.yml` | Manual | Neon and SSM infrastructure provisioning |
 | `terraform-k3s-spot-network.yml` | Manual | Low-cost VPC and public subnets for the spot worker |
 | `terraform-k3s-spot-node.yml` | Manual | One self-healing AWS spot k3s worker |
@@ -30,312 +30,53 @@ AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
 GRAFANA_AUTH
 SSM_PATH_PREFIX
-LLM_API_KEY
 ```
 
-### Observability Agent Required Secrets
+### Observability Agent
 
-The observability agent requires additional configuration:
+The observability agent is deployed in its own **independent namespace** (`observability-agent`).
+It runs as an HTTP server that receives failed workflow run IDs from GitHub Actions
+and autonomously scaffolds analysis and remediation.
 
-- `GITHUB_TOKEN` - GitHub token with permissions to read workflows and create PRs
-- `GRAFANA_AUTH` - Grafana authentication token for metrics access
-- `LLM_API_KEY` - LLM API key for agent reasoning (e.g., OpenAI API key)
+**Architecture**: GitHub Actions → POST `/analyze` → Agent (k8s Deployment) → Grafana + LLM → PR / report.
 
-### SSM Parameters
-
-The agent reads Grafana token from SSM at `/{SSM_PATH_PREFIX}/grafana-service-account-token`.
-
-To provision this parameter:
+### Quick start
 
 ```bash
-terraform -chdir=terraform/ssm apply -var grafana_service_account_token="your-token-here"
+# Deploy the agent to its own namespace
+helm upgrade --install obs-agent ./charts/observability-agent   --namespace observability-agent --create-namespace   --set awsRegion="us-west-1"   --set grafanaUrl="https://grafana.example.com"   --set githubOwner="jzhao62"   --set githubRepo="homelab-cloud"   --set githubToken="ghp_..."   --set agentAuthToken="$(openssl rand -hex 32)"
 ```
 
-`GHCR_PULL_TOKEN` must be able to read private packages in GHCR. In practice that means a classic PAT with `read:packages`, or an equivalent fine-grained token scoped to the repository packages that back the flashsales images.
+### GitHub configuration
 
-## Performance Testing
-
-Perf runs currently provision an ephemeral Neon database through Terraform before the load test executes.
-
-For the current interpretation limits and correctness caveats of the flashsales perf harness, use [Flashsales harness engineering](../flashsale/docs/flashsales-harness-engineering.md) as the source of truth.
-
-```bash
-make concurrency-baseline KUBECONFIG_PATH=secrets/.kube-config
-make concurrency-smoke KUBECONFIG_PATH=secrets/.kube-config
-make concurrency-hotspot-10tps KUBECONFIG_PATH=secrets/.kube-config
-bash ./flashsale/perf/scripts/loadtest-k6.sh -e RAMP_UP=30s -e STEADY=180s -e TARGET_VUS=50
-```
-
-## Developer Setup
-
-```bash
-cd flashsale
-uv sync --extra dev
-uv run pre-commit install
-```
-
-The repo uses pre-commit hooks for whitespace, end-of-file, YAML checks, Helm linting, and shared `pylint` checks for the flashsale microservices.
-
-## Lint Standard
-
-- `pylint` is the shared development linter for the three flashsale microservices.
-- The shared rule currently enforced is `too-many-lines`, with `max-module-lines = 500`.
-- If a Python module approaches the limit, split it by responsibility instead of appending another large section.
-- The shared lint hook runs against `app/` and `tests/` modules in `user-service`, `product-service`, and `order-service`.
-- Run `make lint` before pushing when you touch multiple files or refactor large modules.
-
-## Terraform-Backed Infrastructure
-
-The current k3s setup relies on Terraform-provisioned AWS SSM parameters for secrets delivery, Terraform can also maintain one AWS spot-backed k3s worker, and Terraform state is stored in an S3 bucket configured at init time.
-
-For the Neon and secrets workflow details, see [Infrastructure](infrastructure.md).
-
-For Grafana provisioning related to the flashsale async reservation path, use:
-
-- [terraform/flashsale-grafana-dashboards](../terraform/flashsale-grafana-dashboards/README.md)
-
-Automatic provisioning entrypoint:
-
-- `.github/workflows/terraform-flashsale-grafana-dashboards.yml`
-
-Important datasource note:
-
-- the flashsale Grafana dashboard module expects a Grafana `PostgreSQL` datasource backed by Neon
-- this is represented in Terraform as `neon_datasource_uid`
-- Loki remains a separate datasource via `loki_datasource_uid`
-
-Required GitHub configuration for auto-apply:
-
-- Secret: `GRAFANA_AUTH`
-- Variable: `GRAFANA_URL`
-- Variable: `FLASHSALE_GRAFANA_NEON_DATASOURCE_UID`
-- Variable: `FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID`
-
-The workflow auto-applies on pushes to `main` when files under `terraform/flashsale-grafana-dashboards/**` change.
-
-For remote spot workers, do not stop at `k3s_server_url` and `k3s_token`. Make sure the worker Terraform inputs also include `trusted_cluster_cidrs` so the control-plane, VPN, or other trusted cluster paths can actually reach the node for cross-node networking and monitoring.
-
-The reusable workflow pair is:
-
-- `terraform-k3s-spot-network-internal.yml` for the VPC and public subnets
-- `terraform-k3s-spot-node-internal.yml` for the worker itself
-
-The manual entrypoint is `terraform-k3s-spot-node.yml`, and the most important remote-worker inputs are `trusted_cluster_cidrs` plus optional `extra_k3s_agent_args`.
-
-After a successful spot-node `apply`, the top-level workflow can also reconcile the cluster-level `grafana-k8s-monitoring` Helm release. This is the preferred automation shape for Alloy-based monitoring:
-
-- the EC2 bootstrap only has to join k3s successfully
-- the monitoring stack stays managed as a Kubernetes Helm release instead of a node-local install
-- when a new spot worker becomes `Ready`, the chart-managed DaemonSet collectors can land on it automatically
-
-Use the `reconcile_grafana_monitoring` workflow input if you need to disable that post-apply reconcile for a specific run.
-
-## Spot Worker Tailscale Bootstrap
-
-The spot-worker workflow can bootstrap each new worker directly into your Tailscale network before k3s starts. This is the recommended path when the control-plane already lives on Tailscale and the worker would otherwise join across a mixed public/private network boundary.
-
-Recommended GitHub configuration:
-
-- Secret: `TS_SPOT_AUTH_KEY`
-  Use a pre-auth Tailscale auth key intended for the spot worker bootstrap. Prefer an ephemeral or reusable tagged key with the minimum tailnet permissions needed.
-- Variable: `K3S_SERVER_URL_TAILSCALE`
-  Set this to the control-plane Tailscale API endpoint, for example `https://100.92.165.80:6443`.
-- Variable: `K3S_SPOT_ENABLE_TAILSCALE`
-  Set this to `true` if you want the internal reusable workflow default to enable Tailscale bootstrap.
-- Variable: `K3S_SPOT_TAILSCALE_TAGS`
-  Optional comma-separated tags such as `tag:k3s,tag:spot`.
-
-When Tailscale bootstrap is enabled, the worker user-data does the following:
-
-- installs `tailscaled`
-- joins the tailnet with `TS_SPOT_AUTH_KEY`
-- reads the worker's Tailscale IPv4 address
-- uses that Tailscale address for `--node-ip` and `--node-external-ip`
-- forces flannel to bind to `tailscale0` so the pod overlay does not fall back to the AWS/private NIC
-
-That usually gives more stable kubelet scraping, CoreDNS reachability, and Grafana Alloy connectivity than mixing the home control-plane public IP with the AWS worker private IP.
-
-Important: the control-plane must match this and run k3s with `flannel-iface: tailscale0` too. If only the worker uses Tailscale while the server-side flannel backend still advertises a public or AWS-local IP, nodes may show `Ready` while cross-node pod traffic, CoreDNS lookups, and ingress paths still time out.
-
-## Private Network Access For Public GitHub Actions
-
-If you want to keep using GitHub-hosted runners, the recommended path is to connect those runners to your private cluster network instead of exposing deploy reliability to the public `6443` endpoint.
-
-The flashsales deploy, runtime consistency, and perf workflows support these repository variables/secrets for this:
-
-- `K8S_RUNNER_LABELS_JSON`
-- `K3S_SERVER_URL_TAILSCALE`
-- `TS_CI_TAGS`
-
-And the following repository secrets when using Tailscale OAuth:
-
-- `TS_OAUTH_CLIENT_ID`
-- `TS_OAUTH_SECRET`
-
-Recommended setup:
-
-1. Put the k3s control-plane machine on Tailscale.
-2. Create a reusable tagged OAuth client for GitHub Actions in Tailscale, and make sure the ephemeral CI nodes can reach the control-plane.
-3. Store `TS_OAUTH_CLIENT_ID` and `TS_OAUTH_SECRET` as repository secrets.
-4. Set `TS_CI_TAGS` to something like `tag:ci`.
-5. Set `K3S_SERVER_URL_TAILSCALE` to the Tailscale URL for the control-plane, for example `https://100.x.y.z:6443`.
-6. Leave `K8S_RUNNER_LABELS_JSON` unset if you want to stay on GitHub-hosted runners.
-
-The workflows still read `KUBE_CONFIG_DATA`, but when `K3S_SERVER_URL_TAILSCALE` is set they rewrite the active cluster server in that kubeconfig before running `kubectl`.
-
-This is the preferred path when:
-
-- the k3s API server is on a home ISP connection
-- inbound `6443` is occasionally unreachable from GitHub-hosted runners
-- you want to keep using public GitHub Actions runners
-
-If you later decide to move the k8s-touching jobs onto a self-hosted runner, `K8S_RUNNER_LABELS_JSON` can still point those workflows at labels such as `["self-hosted","linux","x64","homelab-k3s"]`.
-
-Local state is not a supported operating mode. Use the GitHub workflows or pass `TF_STATE_BUCKET` and `AWS_REGION` so local Make targets initialize the S3 backend explicitly.
-
-## Useful Make Targets
-
-| Target | Purpose |
-| --- | --- |
-| `make deploy` | Deploy flashsales to the configured cluster |
-| `make status` | Show pods and services |
-| `make fix-images` | Rebuild, import, restart, and verify flashsales images |
-| `make e2e` | Run the flashsales smoke test |
-| `make neon-plan` | Preview Neon Terraform changes using remote S3 state |
-| `make neon-apply` | Provision Neon resources through Terraform using remote S3 state |
-| `make k3s-network-plan` | Preview the low-cost VPC and public subnet stack for the spot worker |
-| `make k3s-network-apply` | Create or reconcile the low-cost VPC and public subnet stack |
-| `make k3s-spot-plan` | Preview the AWS spot-backed k3s worker Terraform changes |
-| `make k3s-spot-apply` | Create or reconcile one self-healing AWS spot-backed k3s worker using remote S3 state |
-
-## Observability Agent
-
-The observability agent is an OpenHands SDK-based constant worker that monitors GitHub Actions for perf test failures. When a failure is detected it queries Grafana, analyses the root cause, opens a PR when the fix is in the codebase, and flags external issues separately.
-
-### Quick start (GitHub Actions)
-
-```bash
-gh workflow run observability-agent.yml -f mode=single-run
-gh workflow run observability-agent.yml -f mode=continuous
-```
-
-### Configuration
-
-The agent reads **all secrets from AWS SSM** at runtime via boto3; no secrets are hardcoded or stashed in repo variables.
-
-#### Required GitHub repository variables
-
-| Variable | Purpose |
-|---|---|
-| `AWS_REGION` | e.g. `us-west-1` |
-| `GRAFANA_URL` | e.g. `https://grafana.example.com` |
-
-#### Required GitHub environment secrets (`observability-agent` environment)
-
-| Secret | Purpose |
-|---|---|
-| `AWS_ACCESS_KEY_ID` | IAM user for SSM access |
-| `AWS_SECRET_ACCESS_KEY` | Corresponding secret key |
-| `GITHUB_TOKEN` | Auto-injected by GitHub Actions |
-
-#### Optional repository variables
-
-| Variable | Default | Purpose |
+| Type | Name | Purpose |
 |---|---|---|
-| `LLM_MODEL` | – | OpenRouter model slug, e.g. `openai/gpt-4o` |
-| `LLM_BASE_URL` | – | e.g. `https://openrouter.ai/api/v1` |
-| `GRAFANA_TOKEN_SSM_PATH` | `/codex/grafana-service-account-token` | SSM path for Grafana token |
-| `LLM_API_KEY_SSM_PATH` | `/flashsales/prod/llm-api-key` | SSM path for OpenRouter API key |
-| `CHECK_INTERVAL` | `300` | Seconds between polls |
-| `LOOKBACK_HOURS` | `12` | How far back to look for failures |
-| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `LOG_FORMAT` | `json` | `json` (structured) or `text` (human) |
-| `CONTINUOUS_RUN_DURATION` | `7200` | Max seconds for continuous mode |
+| Repo variable | `OBSERVABILITY_AGENT_URL` | Agent endpoint URL (e.g. `https://obs-agent.example.com`) |
+| Env secret | `OBSERVABILITY_AGENT_TOKEN` | Shared auth token (same as `agentAuthToken` Helm value) |
 
 ### AWS SSM parameters
 
-All secrets must be provisioned in AWS SSM before the agent starts. The agent fetches them at start-up and on each poll cycle.
+| Path | Value |
+|---|---|
+| `/codex/grafana-service-account-token` | Grafana service-account token |
+| `/flashsales/prod/llm-api-key` | OpenRouter API key |
 
-| SSM path | Terraform variable | Notes |
-|---|---|---|
-| `/codex/grafana-service-account-token` | `grafana_service_account_token` | Grafana service-account token |
-| `/flashsales/prod/llm-api-key` | `llm_api_key` | OpenRouter API key |
-
-To provision via Terraform:
-
-```bash
-terraform -chdir=terraform/ssm apply \
-  -var grafana_service_account_token="<token>" \
-  -var llm_api_key="<openrouter-key>" \
-  -var ssm_path_prefix="flashsales/prod" \
-  -var aws_region="us-west-1"
-```
-
-### Helm deployment (k8s control-plane node)
-
-```yaml
-# charts/flashsales/values.yaml
-observabilityAgent:
-  enabled: true
-  aws:
-    region: "us-west-1"
-  ssm:
-    grafanaTokenPath: "/codex/grafana-service-account-token"
-    llmApiKeyPath: "/flashsales/prod/llm-api-key"
-  grafana:
-    url: "https://grafana.example.com"
-  github:
-    owner: "jzhao62"
-    repo: "homelab-cloud"
-    githubToken: ""   # provide via --set or a sealed secret
-  llm:
-    model: "openai/gpt-4o"
-    baseUrl: "https://openrouter.ai/api/v1"
-  workflowName: "flashsales-perf-concurrency-suite.yml"
-  checkInterval: 300
-  logLevel: "INFO"
-  logFormat: "json"
-```
+Provision via Terraform: `terraform -chdir=terraform/ssm apply -var grafana_service_account_token=... -var llm_api_key=...`
 
 ### How it works
 
-1. **Poll**: Every `CHECK_INTERVAL` seconds the agent fetches failed workflow runs for `WORKFLOW_NAME`.
-2. **Analyse**: For each failed run it inspects job/step details and categorises them as *code*, *external*, or *perf*.
-3. **Query Grafana**: When a perf job (k6 / loadtest) failed the agent queries Grafana for latency and error-rate panels.
-4. **LLM reasoning**: If OpenHands SDK and an LLM are configured the agent sends the analysis to the LLM for deeper reasoning.
-5. **PR creation**: Code-level issues trigger a PR with the detected failure and suggested fix.
-6. **External flags**: External failures are logged as `ERROR` with the failing job name.
+1. A perf test workflow fails → `observability-agent.yml` triggers.
+2. The workflow extracts `run_id`, `run_name`, `run_url`, `conclusion` from the event.
+3. It POSTs the JSON payload to `{OBSERVABILITY_AGENT_URL}/analyze` with header `X-Agent-Token`.
+4. The agent (k8s deployment in namespace `observability-agent`) receives the request, validates the token, and enqueues it.
+5. A background worker fetches job details, Grafana metrics, and workflow logs.
+6. If OpenHands SDK + LLM are configured, the agent scaffolds an autonomous investigation and fix.
+7. For code issues: a PR is created. For external issues: logged as error.
 
-### Logging
-
-The agent writes structured JSON logs to stdout. Key fields: `ts` (ISO 8601), `level`, `logger`, `msg`, and optionally `exception`.
-
-Set `LOG_FORMAT=text` for human-readable logs (useful for local debugging).
-
-### Monitoring the agent
+### Logs
 
 ```bash
-kubectl logs -n flashsales \
-  -l app.kubernetes.io/component=observability-agent -f
-
-gh run list --limit 10 --workflow observability-agent.yml
+kubectl logs -n observability-agent   -l app.kubernetes.io/component=observability-agent -f
 ```
 
-### Troubleshooting
-
-**Agent cannot access SSM**:
-- Verify AWS IAM permissions
-- Check SSM_PATH_PREFIX matches your configuration
-- Ensure the Grafana token parameter exists in SSM
-
-**Agent cannot query Grafana**:
-- Verify GRAFANA_URL is correct
-- Check GRAFANA_TOKEN has necessary permissions
-- Ensure Grafana is accessible from the agent's network
-
-**Agent cannot create PRs**:
-- Verify GITHUB_TOKEN has PR creation permissions
-- Check repository permissions (write access to PRs)
-
 Back to [README](../README.md).
-

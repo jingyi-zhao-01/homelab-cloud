@@ -1,0 +1,6 @@
+apiVersion: v2
+name: observability-agent
+description: Observability Agent – receives perf-test failure events and autonomously scaffolds analysis and fixes
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

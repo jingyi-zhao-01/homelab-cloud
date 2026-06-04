@@ -1,0 +1,95 @@
+# -- Number of replicas (always 1 for this singleton agent).
+replicaCount: 1
+
+image:
+  repository: python
+  tag: "3.11-slim"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+# ---------------------------------------------------------------------------
+# Required – no defaults.  Must be set at deploy time.
+# ---------------------------------------------------------------------------
+
+# AWS region for boto3 SSM client (e.g. us-west-1).
+awsRegion: ""
+
+# Grafana base URL (e.g. https://grafana.example.com).
+grafanaUrl: ""
+
+# GitHub owner / repo used for workflow API calls and PR creation.
+githubOwner: ""
+githubRepo: ""
+
+# ---------------------------------------------------------------------------
+# SSM paths for secrets (fetched at runtime via boto3).
+# ---------------------------------------------------------------------------
+ssm:
+  grafanaTokenPath: "/codex/grafana-service-account-token"
+  llmApiKeyPath: "/flashsales/prod/llm-api-key"
+
+# ---------------------------------------------------------------------------
+# LLM / OpenRouter (non-secret values).
+# ---------------------------------------------------------------------------
+llm:
+  model: ""
+  baseUrl: ""
+
+# ---------------------------------------------------------------------------
+# Agent behaviour.
+# ---------------------------------------------------------------------------
+
+# Listen port for the HTTP server inside the container.
+listenPort: 8080
+
+# Shared secret that GitHub Actions must send in the X-Agent-Token header.
+# Required so only trusted callers can trigger analysis.
+agentAuthToken: ""
+
+# GitHub personal access token (mounted from a Secret).
+# When the GitHub workflow is the caller this is auto-injected;
+# for k8s mode it must be provided via --set or a sealed secret.
+githubToken: ""
+
+# Logging.
+logLevel: "INFO"
+logFormat: "json"
+
+# ---------------------------------------------------------------------------
+# Service.
+# ---------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 8080
+
+# ---------------------------------------------------------------------------
+# Ingress (optional – enables GitHub Actions to POST from outside the cluster).
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: obs-agent.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# ---------------------------------------------------------------------------
+# Kubernetes scheduling.
+# ---------------------------------------------------------------------------
+nodeSelector: {}
+tolerations: []
+affinity: {}

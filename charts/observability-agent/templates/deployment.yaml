@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "observability-agent.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "observability-agent.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "observability-agent.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "observability-agent.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "observability-agent.fullname" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: agent
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - python3
+            - /app/observability_agent.py
+          env:
+            # --- Required ---
+            - name: AWS_REGION
+              value: {{ required "awsRegion is required" .Values.awsRegion | quote }}
+            - name: GRAFANA_URL
+              value: {{ required "grafanaUrl is required" .Values.grafanaUrl | quote }}
+            - name: GITHUB_OWNER
+              value: {{ required "githubOwner is required" .Values.githubOwner | quote }}
+            - name: GITHUB_REPO
+              value: {{ required "githubRepo is required" .Values.githubRepo | quote }}
+
+            # --- SSM paths ---
+            - name: GRAFANA_TOKEN_SSM_PATH
+              value: {{ .Values.ssm.grafanaTokenPath | quote }}
+            - name: LLM_API_KEY_SSM_PATH
+              value: {{ .Values.ssm.llmApiKeyPath | quote }}
+
+            # --- LLM ---
+            - name: LLM_MODEL
+              value: {{ .Values.llm.model | quote }}
+            - name: LLM_BASE_URL
+              value: {{ .Values.llm.baseUrl | quote }}
+
+            # --- HTTP server ---
+            - name: LISTEN_PORT
+              value: "{{ .Values.listenPort }}"
+            - name: AGENT_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "observability-agent.fullname" . }}
+                  key: AGENT_AUTH_TOKEN
+
+            # --- GitHub token (from secret) ---
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "observability-agent.fullname" . }}
+                  key: GITHUB_TOKEN
+
+            # --- Logging ---
+            - name: LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            - name: LOG_FORMAT
+              value: {{ .Values.logFormat | quote }}
+            - name: PYTHONUNBUFFERED
+              value: "1"
+
+          ports:
+            - name: http
+              containerPort: {{ .Values.listenPort }}
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: agent-script
+              mountPath: /app
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: agent-script
+          configMap:
+            name: {{ include "observability-agent.fullname" . }}-script
+            defaultMode: 0444
+        - name: tmp
+          emptyDir: {}
