@@ -23,7 +23,10 @@ class InventoryReserveEngine:
     def reserve(self, product_id: int, quantity: int) -> dict[str, object] | None:
         if self._lock_mode == "optimistic":
             return self._reserve_optimistic(product_id, quantity)
-        return self._reserve_pessimistic(product_id, quantity)
+        if self._lock_mode == "pessimistic":
+            return self._reserve_pessimistic(product_id, quantity)
+        lock_logger.error("event=invalid_lock_mode product_id=%s quantity=%s lock_mode=%s", product_id, quantity, self._lock_mode)
+        raise ValueError(f"Invalid lock mode: {self._lock_mode}")
 
     def _reserve_pessimistic(
         self, product_id: int, quantity: int
@@ -72,10 +75,10 @@ class InventoryReserveEngine:
                         """
                         UPDATE products
                         SET stock = stock - %s
-                        WHERE id = %s
+                        WHERE id = %s AND stock >= %s
                         RETURNING id, name, price, stock
                         """,
-                        (quantity, product_id),
+                        (quantity, product_id, quantity),
                     )
                     updated = cur.fetchone()
                     if not updated:
