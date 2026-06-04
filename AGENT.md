@@ -112,6 +112,7 @@ Preferred verification after flashsale changes:
 ```bash
 bash ./flashsale/scripts/e2e-smoke.sh
 make concurrency-smoke
+make concurrency-hotspot-10tps
 make concurrency-baseline
 make concurrency-hotspot
 ```

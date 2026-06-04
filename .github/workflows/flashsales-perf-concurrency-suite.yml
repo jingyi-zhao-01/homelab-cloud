@@ -72,7 +72,7 @@ jobs:
           kubectl -n "$NAMESPACE" get svc flashsales-order-service
 
   smoke:
-    name: Concurrency Smoke (10 TPS)
+    name: Smoke Test (10 TPS)
     runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
     needs: prepare
     if: ${{ needs.prepare.result == 'success' }}
@@ -122,7 +122,7 @@ jobs:
       - name: Pause 3 minutes before smoke
         run: sleep 180
 
-      - name: Run concurrency smoke (10 TPS)
+      - name: Run non-hotspot smoke (10 TPS)
         run: |
           set -euo pipefail
           KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" USE_K8S_PORT_FORWARD=true make concurrency-smoke
@@ -179,3 +179,56 @@ jobs:
         run: |
           set -euo pipefail
           KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" USE_K8S_PORT_FORWARD=true make concurrency-idempotency-lite
+
+  hotspot-10tps:
+    name: Hotspot 10 TPS
+    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
+    needs: idempotency-lite
+    if: ${{ needs.idempotency-lite.result == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Connect Tailscale for private k3s access
+        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
+          tags: ${{ env.TS_CI_TAGS }}
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+          K3S_SERVER_URL_TAILSCALE: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          if [ -n "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
+            CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
+            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K3S_SERVER_URL_TAILSCALE}"
+            kubectl config set-cluster "$CLUSTER_NAME" --server="$K3S_SERVER_URL_TAILSCALE"
+          fi
+
+      - name: Run hotspot 10 TPS lane
+        run: |
+          set -euo pipefail
+          KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" USE_K8S_PORT_FORWARD=true make concurrency-hotspot-10tps

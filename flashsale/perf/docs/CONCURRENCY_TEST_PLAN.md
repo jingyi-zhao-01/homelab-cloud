@@ -16,6 +16,18 @@ All profiles run via `flashsale/perf/k6/scenarios/concurrency-test.js` and are e
 
 - TPS: 10
 - Duration: 3m
+- Non-hotspot mode: traffic is spread across multiple products.
+- P50 < 100ms
+- P90 < 200ms
+- P99 < 500ms
+- 5xx rate = 0
+- Oversell = 0
+
+1. `concurrency-hotspot-10tps`
+
+- TPS: 10
+- Duration: 3m
+- Hotspot mode: many users contend for one product.
 - P50 < 100ms
 - P90 < 200ms
 - P99 < 500ms
@@ -65,6 +77,7 @@ All profiles run via `flashsale/perf/k6/scenarios/concurrency-test.js` and are e
 From repo root:
 
 - `make concurrency-smoke`
+- `make concurrency-hotspot-10tps`
 - `make concurrency-baseline`
 - `make concurrency-stress100`
 - `make concurrency-stress200`
@@ -75,10 +88,12 @@ From repo root:
 Run in this order:
 
 1. Smoke
-2. Baseline
-3. Stress100
-4. Stress200
-5. Hotspot
+2. Idempotency Lite
+3. Hotspot 10 TPS
+4. Baseline
+5. Stress100
+6. Stress200
+7. Hotspot
 
 Repeat each profile 3 times and compare medians (especially P99 and 5xx).
 

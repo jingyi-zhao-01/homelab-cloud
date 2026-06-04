@@ -64,7 +64,10 @@
 - `default()` 负责下单流量。
 - `teardown()` 会先校验是否出现 oversell，再做 terminalization drain 和全量 cleanup。
 
-其中 `hotspot` profile 是故意把所有请求压到一个商品上，用来观察热点库存路径。
+其中：
+
+- `smoke` profile 是真正的非热点冒烟场景，会把流量分散到多个商品。
+- `hotspot10` 和 `hotspot` profile 会故意把所有请求压到一个商品上，用来观察热点库存路径。
 
 ### `k6-hotspot-order-scenario.js`
 
