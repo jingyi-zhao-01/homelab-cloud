@@ -54,6 +54,10 @@ data:
   USER_SERVICE_URL: {{ .Values.orderService.env.userServiceUrl | quote }}
   PRODUCT_SERVICE_URL: {{ .Values.orderService.env.productServiceUrl | quote }}
   DEPENDENCY_TIMEOUT_SECONDS: {{ .Values.orderService.env.dependencyTimeoutSeconds | quote }}
+  USER_SERVICE_TIMEOUT_SECONDS: {{ .Values.orderService.env.userServiceTimeoutSeconds | quote }}
+  PRODUCT_RESERVE_TIMEOUT_SECONDS: {{ .Values.orderService.env.productReserveTimeoutSeconds | quote }}
+  PRODUCT_RELEASE_TIMEOUT_SECONDS: {{ .Values.orderService.env.productReleaseTimeoutSeconds | quote }}
+  PRODUCT_TERMINALIZE_TIMEOUT_SECONDS: {{ .Values.orderService.env.productTerminalizeTimeoutSeconds | quote }}
   ORDER_CREATE_MAX_IN_FLIGHT: {{ .Values.orderService.env.maxInflightOrders | default "64" | quote }}
   DB_HOST: {{ ternary "flashsales-db-proxy" .Values.orderService.env.dbHost .Values.dbProxy.enabled | quote }}
   DB_PORT: {{ ternary (.Values.dbProxy.service.dataPort | toString) .Values.orderService.env.dbPort .Values.dbProxy.enabled | quote }}

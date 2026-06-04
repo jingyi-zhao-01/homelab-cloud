@@ -3,7 +3,12 @@ from collections.abc import Callable
 from fastapi import HTTPException
 from opentelemetry.trace import SpanKind
 
-from app.config import DEPENDENCY_TIMEOUT_SECONDS, PRODUCT_SERVICE_URL
+from app.config import (
+    PRODUCT_RELEASE_TIMEOUT_SECONDS,
+    PRODUCT_RESERVE_TIMEOUT_SECONDS,
+    PRODUCT_SERVICE_URL,
+    PRODUCT_TERMINALIZE_TIMEOUT_SECONDS,
+)
 from app.domain.statuses import TerminalizationAction
 from app.observability import inject_trace_headers, start_span
 
@@ -29,7 +34,7 @@ class ProductReservationHttpClient:
                     f"{PRODUCT_SERVICE_URL}/products/{product_id}/reserve",
                     json={"quantity": quantity},
                     headers=inject_trace_headers(),
-                    timeout=DEPENDENCY_TIMEOUT_SECONDS,
+                    timeout=PRODUCT_RESERVE_TIMEOUT_SECONDS,
                 )
         if response.status_code == 404:
             raise HTTPException(status_code=404, detail=f"product {product_id} not found")
@@ -56,7 +61,7 @@ class ProductReservationHttpClient:
                     client.post(
                         f"{PRODUCT_SERVICE_URL}/reservations/{reservation_id}/cancel",
                         headers=inject_trace_headers(),
-                        timeout=DEPENDENCY_TIMEOUT_SECONDS,
+                        timeout=PRODUCT_RELEASE_TIMEOUT_SECONDS,
                     )
                 except Exception:
                     continue
@@ -82,7 +87,7 @@ class ProductReservationHttpClient:
                     response = client.post(
                         f"{PRODUCT_SERVICE_URL}/reservations/{reservation_id}/{action}",
                         headers=inject_trace_headers(),
-                        timeout=DEPENDENCY_TIMEOUT_SECONDS,
+                        timeout=PRODUCT_TERMINALIZE_TIMEOUT_SECONDS,
                     )
             if response.status_code >= 400:
                 return False, f"status_code={response.status_code}"

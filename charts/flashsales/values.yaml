@@ -103,7 +103,7 @@ userService:
     dbPort: ""
     dbName: ""
     dbPoolMinSize: "1"
-    dbPoolMaxSize: "2"
+    dbPoolMaxSize: "4"
     dbPoolTimeoutSeconds: "5"
 
 productService:
@@ -134,7 +134,7 @@ productService:
     dbPort: ""
     dbName: ""
     dbPoolMinSize: "1"
-    dbPoolMaxSize: "3"
+    dbPoolMaxSize: "8"
     dbPoolTimeoutSeconds: "5"
     inventoryLockMode: pessimistic
     optimisticRetryLimit: "5"
@@ -179,13 +179,17 @@ orderService:
   env:
     userServiceUrl: http://flashsales-user-service:8001
     productServiceUrl: http://flashsales-product-service:8002
-    dependencyTimeoutSeconds: "3"
+    dependencyTimeoutSeconds: "8"
+    userServiceTimeoutSeconds: "5"
+    productReserveTimeoutSeconds: "8"
+    productReleaseTimeoutSeconds: "5"
+    productTerminalizeTimeoutSeconds: "8"
     maxInflightOrders: "64"
     dbHost: ""
     dbPort: ""
     dbName: ""
     dbPoolMinSize: "2"
-    dbPoolMaxSize: "4"
+    dbPoolMaxSize: "8"
     dbPoolTimeoutSeconds: "5"
     redisUrl: redis://:redis-pass@flashsales-redis:6379/0
     rabbitmqUrl: amqp://flashsales:mq-pass@flashsales-rabbitmq:5672/
@@ -205,7 +209,7 @@ orderService:
     affinity: {}
     env:
       dbPoolMinSize: "1"
-      dbPoolMaxSize: "2"
+      dbPoolMaxSize: "4"
       dbPoolTimeoutSeconds: "5"
 
 # Example to force all three services onto non-control worker nodes:
