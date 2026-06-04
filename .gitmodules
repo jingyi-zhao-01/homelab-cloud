@@ -1,0 +1,4 @@
+[submodule "docs/wiki"]
+	path = docs/wiki
+	url = https://github.com/jingyi-zhao-01/homelab-cloud.wiki.git
+	branch = master
