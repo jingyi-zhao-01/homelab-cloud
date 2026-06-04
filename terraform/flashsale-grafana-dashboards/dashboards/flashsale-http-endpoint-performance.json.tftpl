@@ -90,6 +90,7 @@
       "id": 3,
       "type": "timeseries",
       "title": "P50 Latency By Endpoint (ms)",
+      "description": "Median latency per endpoint from request logs. Useful for spotting baseline shifts before tail latency explodes.",
       "datasource": {
         "type": "loki",
         "uid": "${loki_datasource_uid}"
@@ -114,6 +115,7 @@
       "id": 4,
       "type": "timeseries",
       "title": "P99 Latency By Endpoint (ms)",
+      "description": "99th percentile latency per endpoint from request logs. This is the panel to watch for sharp tail regressions.",
       "datasource": {
         "type": "loki",
         "uid": "${loki_datasource_uid}"
@@ -136,8 +138,9 @@
     },
     {
       "id": 5,
-      "type": "bargauge",
+      "type": "timeseries",
       "title": "Top Endpoints By Request Volume (5m)",
+      "description": "Top 15 busiest endpoints over time, ranked by recent request rate.",
       "datasource": {
         "type": "loki",
         "uid": "${loki_datasource_uid}"
@@ -146,22 +149,23 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(15, sum by (service, method, path) (count_over_time({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" [5m])))",
+          "expr": "topk(15, sum by (service, method, path) (rate({namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" [5m])))",
           "legendFormat": "{{service}} {{method}} {{path}}",
-          "queryType": "instant"
+          "queryType": "range"
         }
       ],
       "options": {
-        "displayMode": "basic",
-        "orientation": "horizontal",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showUnfilled": true
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
       "id": 6,
-      "type": "bargauge",
+      "type": "timeseries",
       "title": "Top Endpoints By P95 Latency (5m)",
+      "description": "Top 15 slowest endpoints over time, ranked by recent p95 latency.",
       "datasource": {
         "type": "loki",
         "uid": "${loki_datasource_uid}"
@@ -172,14 +176,14 @@
           "refId": "A",
           "expr": "topk(15, quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path))",
           "legendFormat": "{{service}} {{method}} {{path}}",
-          "queryType": "instant"
+          "queryType": "range"
         }
       ],
       "options": {
-        "displayMode": "basic",
-        "orientation": "horizontal",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showUnfilled": true
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
@@ -211,6 +215,7 @@
       "id": 8,
       "type": "logs",
       "title": "Request Logs",
+      "description": "Raw request logs behind the endpoint metrics. Use this to inspect specific slow or erroring paths after spotting them in the charts above.",
       "datasource": {
         "type": "loki",
         "uid": "${loki_datasource_uid}"

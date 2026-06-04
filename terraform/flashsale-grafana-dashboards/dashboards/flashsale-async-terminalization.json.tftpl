@@ -27,6 +27,7 @@
       "id": 1,
       "type": "stat",
       "title": "Terminalization Backlog",
+      "description": "Current number of queued or retrying terminalization tasks waiting to confirm or cancel reservations.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
@@ -52,6 +53,7 @@
       "id": 2,
       "type": "stat",
       "title": "Oldest Queued Age (s)",
+      "description": "Age in seconds of the oldest task that is still queued or retrying. Rising values mean the worker is falling behind.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
@@ -103,6 +105,7 @@
       "id": 4,
       "type": "stat",
       "title": "Orders Waiting On Reservation Work",
+      "description": "Distinct orders that still have at least one queued, retrying, or processing terminalization task.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
@@ -128,6 +131,7 @@
       "id": 5,
       "type": "bargauge",
       "title": "Retry Count By Action",
+      "description": "Number of retrying tasks split by reservation action. A skew toward cancel or confirm can narrow the failing path quickly.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
@@ -151,6 +155,7 @@
       "id": 6,
       "type": "table",
       "title": "Task State Breakdown",
+      "description": "Snapshot of task counts and highest attempt count by action and processing state.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
@@ -171,6 +176,7 @@
       "id": 7,
       "type": "stat",
       "title": "Oldest Waiting Order Age (s)",
+      "description": "Age in seconds of the oldest order that still depends on unfinished reservation terminalization work.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
@@ -196,6 +202,7 @@
       "id": 8,
       "type": "timeseries",
       "title": "Terminalization Success Events (5m)",
+      "description": "Successful confirm or cancel terminalization events over time from worker logs.",
       "datasource": {
         "type": "loki",
         "uid": "${loki_datasource_uid}"
@@ -219,6 +226,7 @@
       "id": 9,
       "type": "timeseries",
       "title": "Terminalization Retry / Error Events (5m)",
+      "description": "Retry and exception event volume over time from the terminalization worker logs.",
       "datasource": {
         "type": "loki",
         "uid": "${loki_datasource_uid}"
@@ -247,6 +255,7 @@
       "id": 10,
       "type": "logs",
       "title": "Terminalization Worker Logs",
+      "description": "Raw terminalization worker logs for drilling into specific retries, errors, and success events.",
       "datasource": {
         "type": "loki",
         "uid": "${loki_datasource_uid}"
