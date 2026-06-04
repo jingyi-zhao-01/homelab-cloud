@@ -13,6 +13,22 @@ ADR 0001 已经去掉了一次同步商品查询，并把默认锁模式切到 `
 - teardown、reset、expire 逻辑随后可能与这些晚到的 terminalization 调用发生竞态
 - 最终表现为可避免的 `404`、终态日志噪音，以及“库存状态变化”和“订单状态变化”之间更大的故障窗口
 
+这不是一个“只有高压测档位才会暴露”的问题。即使是最保守的 smoke lane，也已经出现了需要把 terminalization 从同步路径拆出去的信号。
+
+直接证据：
+
+- GitHub Actions run：[`Flashsales Deploy` / `Postdeploy Runtime Gates` / `Concurrency Smoke (10 TPS)`](https://github.com/jingyi-zhao-01/homelab-cloud/actions/runs/26942234571/job/79486795441)
+- 这条 job 页面显示：
+  - lane 名称是 `Concurrency Smoke (10 TPS)`
+  - `Process completed with exit code 2`
+  - job 在 `2026-06-04` 失败，持续约 `7m 40s`
+
+它说明的问题不是“10 TPS 很高”，而是：
+
+- 当前热点路径的单位请求成本依然偏重
+- `confirm/cancel` 的消费速度仍可能落后于前台请求进入速度
+- 一旦 terminalization 积压，请求超时、重试、迟到调用和 teardown/reset 竞态就会连锁放大
+
 当前 `order-service` 的同步路径是：
 
 1. 校验用户
@@ -42,6 +58,30 @@ ADR 0001 已经去掉了一次同步商品查询，并把默认锁模式切到 `
 4. 后台 worker 消费这条 task，并调用 `product-service /reservations/{id}/confirm` 或 `/cancel`
 5. worker 在成功后标记 task 完成；遇到瞬时失败时安全重试；重复执行应保持幂等无害
 
+### 为什么这里必须引入 queue
+
+这里引入 queue，不是为了“技术栈更高级”，而是为了把两类本质不同的责任拆开：
+
+- 前台同步请求负责表达订单业务意图
+- 后台异步 worker 负责把这个意图最终落实为 reservation terminalization
+
+如果没有 durable queue，而继续把 `confirm/cancel` 绑在同步路径里，会同时出现几类问题：
+
+1. client timeout 与业务正确性被耦合
+   请求超时不代表系统已经停止执行；同步 terminalization 会把“用户是否还在等待”和“库存是否已经最终处理”绑死在一次请求生命周期里。
+
+2. 后台落后无法被显式观测
+   没有 queue 时，只能看到 `/orders` 变慢；有 queue 以后，才能明确看到 `queued`、`processing`、`retrying`、`error`、`succeeded` 这些状态。
+
+3. 重试策略无处安放
+   `confirm/cancel` 是跨服务副作用，天然需要 retry / backoff / stuck task 可见性；如果仍然放在同步路径里，这些机制会直接污染前台 latency。
+
+4. 恢复能力太弱
+   Pod 重启、worker 重启、request timeout、teardown/reset 与迟到调用竞态，都会放大为状态不一致风险。durable queue 至少能把“待执行工作”保留下来。
+
+5. 10 TPS 也可能失败
+   上面的 smoke lane 已经说明，是否需要 queue 不是由 TPS 数值表面大小决定，而是由“热点路径单位请求成本 + terminalization 消费速度 + 锁竞争”共同决定。
+
 ### 必须满足的性质
 
 - 入队必须是 durable 的
@@ -64,6 +104,18 @@ ADR 0001 已经去掉了一次同步商品查询，并把默认锁模式切到 `
 - API Pod 绑定的 fire-and-forget 在重启时可能直接丢失
 - 当前问题正是在 contention、timeout、restart 这些场景里暴露出来的，而这些场景恰恰最依赖 durability
 - queue 或 outbox 能提供明确的 retry、backlog 可见性，以及更安全的恢复行为
+
+当前实现选择：
+
+- queue owner：`order-service`
+- durable medium：`PostgreSQL`
+- queue implementation：`flashsale/order-service/queue.py`
+
+这样做的原因是：
+
+- 这条 queue 承载的是“订单工作流派生出的 terminalization 意图”，owner 应该是 `order-service`
+- 先用 Postgres 跑通 durable queue，可以在不额外引入 broker 的前提下，把正确性、重试、可观测性和恢复语义先建立起来
+- 后续如果需要迁移到 NATS JetStream、RabbitMQ 或其他 broker，也可以保留当前 owner 边界，只替换 queue backend
 
 ## 影响
 
@@ -145,8 +197,11 @@ D2 源码： [0002-async-reservation-terminalization.d2](diagrams/0002-async-res
 
 ## 相关变更
 
+- `flashsale/order-service/queue.py`
 - `flashsale/order-service/app/service.py`
 - `flashsale/order-service/app/repositories.py`
+- `flashsale/order-service/app/repository_postgres.py`
+- `flashsale/order-service/app/repository_postgres_terminalization.py`
 - `flashsale/product-service/app/main.py`
 - `flashsale/product-service/app/service.py`
 - `flashsale/product-service/app/repositories.py`
