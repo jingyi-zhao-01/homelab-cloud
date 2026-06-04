@@ -128,7 +128,7 @@ python3 ./flashsale/perf/python/consistency_harness.py
 - [Flashsales workload](flashsales.md)
 - [ADR 0001: Reduce hotspot order round-trips and default to pessimistic inventory locking](adrs/0001-hotspot-order-path-and-locking.md)
 - [ADR 0002: Move reservation confirm and cancel off the synchronous order path](adrs/0002-async-reservation-terminalization.md)
-- [ADR 0003: Move order confirmation off the synchronous create-order path](adrs/0003-move-order-confirmation-off-synchronous-path.md)
+- [ADR 0002-1: Move order confirmation off the synchronous create-order path](adrs/0002-1-order-confirmation-off-synchronous-path.md)
 - [Operations and tooling](../../docs/operations.md)
 - [Repository overview](../../docs/overview.md)
 

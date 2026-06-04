@@ -1,32 +1,41 @@
-# ADR 0003：将 `/orders` 的确认步骤移出同步请求路径
+# ADR 0002-1：将 `/orders` 的确认步骤移出同步请求路径
 
 - 状态：Accepted
 - 日期：2026-06-04
 
 ## 背景
 
-在 `order-service` 的 `POST /orders` trace 中，请求链路依次包含：
+这份 ADR 不是一条新的架构方向，而是 ADR 0002 的延伸。
+
+ADR 0002 已经把 reservation 的 `confirm / cancel` 从同步下单路径里拆出去，让后台 worker 去处理 terminalization。
+但在 `order-service` 的真实 `POST /orders` trace 里，我们还看到了一条过长的同步链路：
 
 1. `validate user`
 2. `reserve inventory`
 3. `persist order`
 4. `enqueue terminalization`
 
-在修复前，第 4 步并不只是“写一条 task”，而是同步等待 `confirm / cancel` 的终态处理完成。也就是说，`/orders` 会一直阻塞到 `product-service` 的终态调用结束，再把订单写到最终状态后才返回。
+在这条链路里，真正拖长用户请求尾部的，不只是 reservation 终态处理本身，还包括 `order-service` 仍然把“确认结果”当成请求路径的一部分去处理的倾向。
+换句话说，0002 已经把“库存终态”拆出去了，但 `/orders` 这个入口本身还需要再瘦身一次。
 
-这会带来几个直接问题：
-
-- trace 链路很长，用户请求必须等待多个串行依赖完成
-- `product-service` 的 reservation terminalization 会放大尾延迟
-- `order-service` 自己的订单落库和终态更新之间，没有把“业务意图”与“后台执行”拆开
-- 一旦终态处理慢，前台请求就会把慢点全部背到自己身上
-
-本次 trace 的现象就是这个问题的直接表现：
+本次 trace 的直接表现是：
 
 - `user-service lookup` 约 1.2s
 - `product-service reserve` 约 1.6s
 - `order db create` 约 1.2s
-- 终态确认段还会继续拉长请求尾部
+- 同步确认尾段继续拉长请求
+
+## 与 ADR 0002 的关系
+
+可以把两份 ADR 看成同一条链路上的两次切分：
+
+- ADR 0002 关注的是：reservation 的 `confirm / cancel` 不能再阻塞前台请求
+- ADR 0002-1 关注的是：`POST /orders` 不应该再等到“最终确认语义”都落地之后才返回
+
+它们复用的是同一套 `durable queue + worker` 思路，但切开的边界不同：
+
+- 0002 切的是 reservation terminalization
+- 0002-1 切的是 order create path 的同步确认尾段
 
 ## 决策
 
@@ -52,9 +61,10 @@
 
 修复前，`/orders` 路径必须等待：
 
+- 用户校验
 - 商品预留
 - 订单写入
-- 订单终态确认
+- 订单确认尾段
 - 终态确认完成后的订单状态回写
 
 修复后，`/orders` 只需要等待：
@@ -64,7 +74,7 @@
 - 订单写入
 - durable enqueue
 
-也就是说，最重的同步尾段从请求路径里消失了。请求依然要等待 user lookup 和 reserve inventory，但不再背负终态处理的额外延迟。
+也就是说，最重的同步尾段从请求路径里消失了。请求依然要等待 `user lookup` 和 `reserve inventory`，但不再背负终态处理的额外延迟。
 
 ## 影响
 
@@ -90,6 +100,17 @@
 - `event=order_service_terminalization_call`
 
 如果 `order_service_create_order_timing` 下降，而 `order_service_terminalization_call` 仍然抖动，说明前台路径已经被切短，但后台终态消费还在落后。
+
+## 时序图对比
+
+下面这张图把 ADR 0002 和 ADR 0002-1 放在一起看：
+
+- 左边是 ADR 0002 已经引入的异步 reservation terminalization
+- 右边是 ADR 0002-1 在此基础上进一步把 `/orders` 的确认尾段移出请求路径
+
+D2 源码： [0002-1-order-confirmation-comparison.d2](diagrams/0002-1-order-confirmation-comparison.d2)
+
+渲染图： [0002-1-order-confirmation-comparison.svg](diagrams/0002-1-order-confirmation-comparison.svg)
 
 ## 相关变更
 

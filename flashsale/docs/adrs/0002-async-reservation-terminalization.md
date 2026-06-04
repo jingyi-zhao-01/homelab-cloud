@@ -205,3 +205,4 @@ D2 源码： [0002-async-reservation-terminalization.d2](diagrams/0002-async-res
 - `flashsale/product-service/app/main.py`
 - `flashsale/product-service/app/service.py`
 - `flashsale/product-service/app/repositories.py`
+- `flashsale/docs/adrs/0002-1-order-confirmation-off-synchronous-path.md`

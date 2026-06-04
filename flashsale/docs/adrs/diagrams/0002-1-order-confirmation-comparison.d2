@@ -1,0 +1,59 @@
+direction: right
+
+before: {
+  label: "ADR 0002: reservation terminalization moves off the sync path"
+  shape: sequence_diagram
+
+  client
+  order: "order-service API"
+  orders: "order DB"
+  queue: "durable queue / outbox"
+  worker: "terminalization worker"
+  product: "product-service"
+  inventory: "inventory DB"
+
+  client -> order: "POST /orders"
+  order -> product: "reserve(product_id, quantity)"
+  product -> inventory: "lock hotspot row and reserve"
+  inventory -> product: "reservation_id, unit_price"
+  product -> order: "reservation created"
+  order -> orders: "create order pending"
+  order -> queue: "enqueue confirm / cancel intent"
+  order -> client: "return after durable enqueue"
+
+  worker -> queue: "claim task"
+  queue -> worker: "reservation_id + action"
+  worker -> product: "confirm / cancel reservation"
+  product -> inventory: "update reservation state"
+  inventory -> product: "terminalized"
+  worker -> orders: "mark task complete"
+}
+
+after: {
+  label: "ADR 0002-1: /orders returns before order confirmation fully settles"
+  shape: sequence_diagram
+
+  client
+  order: "order-service API"
+  orders: "order DB"
+  queue: "durable queue / outbox"
+  worker: "terminalization worker"
+  product: "product-service"
+  inventory: "inventory DB"
+
+  client -> order: "POST /orders"
+  order -> product: "reserve(product_id, quantity)"
+  product -> inventory: "lock hotspot row and reserve"
+  inventory -> product: "reservation_id, unit_price"
+  product -> order: "reservation created"
+  order -> orders: "create pending order"
+  order -> queue: "persist terminalization intent"
+  order -> client: "return pending order without waiting"
+
+  worker -> queue: "claim task"
+  queue -> worker: "reservation_id + action"
+  worker -> product: "confirm / cancel reservation"
+  product -> inventory: "update reservation state"
+  inventory -> product: "terminalized"
+  worker -> orders: "update final order state"
+}

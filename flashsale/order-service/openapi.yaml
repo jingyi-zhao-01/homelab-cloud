@@ -75,8 +75,8 @@ paths:
       tags:
       - orders
       summary: Create order
-      description: Validates the user, reserves product stock, and persists a new
-        order.
+      description: Validates the user, reserves product stock, persists a pending
+        order, and enqueues terminalization work.
       operationId: create_order_orders_post
       requestBody:
         content:
