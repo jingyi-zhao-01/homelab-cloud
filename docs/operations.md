@@ -44,7 +44,14 @@ and autonomously scaffolds analysis and remediation.
 
 ```bash
 # Deploy the agent to its own namespace
-helm upgrade --install obs-agent ./charts/observability-agent   --namespace observability-agent --create-namespace   --set awsRegion="us-west-1"   --set grafanaUrl="https://grafana.example.com"   --set githubOwner="jzhao62"   --set githubRepo="homelab-cloud"   --set githubToken="ghp_..."   --set agentAuthToken="$(openssl rand -hex 32)"
+helm upgrade --install obs-agent ./charts/observability-agent \
+  --namespace observability-agent --create-namespace \
+  --set awsRegion="us-west-1" \
+  --set grafanaUrl="https://grafana.example.com" \
+  --set githubOwner="jzhao62" \
+  --set githubRepo="homelab-cloud" \
+  --set githubToken="ghp_..." \
+  --set agentAuthToken="$(openssl rand -hex 32)"
 ```
 
 ### GitHub configuration
@@ -76,7 +83,8 @@ Provision via Terraform: `terraform -chdir=terraform/ssm apply -var grafana_serv
 ### Logs
 
 ```bash
-kubectl logs -n observability-agent   -l app.kubernetes.io/component=observability-agent -f
+kubectl logs -n observability-agent \
+  -l app.kubernetes.io/component=observability-agent -f
 ```
 
 Back to [README](../README.md).
