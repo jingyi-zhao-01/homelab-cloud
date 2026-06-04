@@ -1,3 +1,4 @@
+import anyio
 from fastapi import FastAPI, Response, status
 from fastapi.responses import JSONResponse
 
@@ -28,6 +29,7 @@ else:
     storage = "memory"
 
 order_service = OrderService(repository=repository, logger=logger, storage=storage)
+probe_limiter = anyio.CapacityLimiter(8)
 
 
 @app.on_event("startup")
@@ -40,18 +42,25 @@ def startup() -> None:
         pass
 
 
+async def _repository_is_healthy() -> bool:
+    try:
+        return await anyio.to_thread.run_sync(
+            repository.is_healthy,
+            limiter=probe_limiter,
+        )
+    except Exception:
+        logger.warning("event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True)
+        return False
+
+
 @app.get(
     "/health",
     summary="Service health check",
     description="Returns readiness for order-service, including database reachability.",
     tags=["system"],
 )
-def health() -> HealthResponse:
-    try:
-        healthy = repository.is_healthy()
-    except Exception:
-        logger.warning("event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True)
-        healthy = False
+async def health() -> HealthResponse:
+    healthy = await _repository_is_healthy()
     if not healthy:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -66,7 +75,7 @@ def health() -> HealthResponse:
     description="Returns basic process liveness for order-service without touching dependencies.",
     tags=["system"],
 )
-def live() -> HealthResponse:
+async def live() -> HealthResponse:
     return HealthResponse(status="ok", service=SERVICE_NAME)
 
 

@@ -1,6 +1,7 @@
 import sys
 import types
 import unittest
+from inspect import iscoroutinefunction
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -33,6 +34,13 @@ class OrderServiceHealthProbeTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["status"], "database-unavailable")
+
+    def test_probe_routes_are_async(self) -> None:
+        health_route = next(route for route in app.routes if route.path == "/health")
+        live_route = next(route for route in app.routes if route.path == "/live")
+
+        self.assertTrue(iscoroutinefunction(health_route.endpoint))
+        self.assertTrue(iscoroutinefunction(live_route.endpoint))
 
 
 if __name__ == "__main__":
