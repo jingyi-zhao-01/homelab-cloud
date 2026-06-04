@@ -128,7 +128,10 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
         "/orders",
         status_code=201,
         summary="Create order",
-        description="Validates the user, reserves product stock, and persists a new order.",
+        description=(
+            "Validates the user, reserves product stock, persists a pending order, "
+            "and enqueues terminalization work."
+        ),
         tags=["orders"],
         responses={
             400: {"model": ErrorResponse, "description": "Order items cannot be empty"},

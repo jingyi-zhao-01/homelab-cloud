@@ -142,6 +142,9 @@ class FlashsaleIntegrationClient:
             expected_status=expected_status,
         )
 
+    def get_order(self, order_id: int) -> dict[str, Any]:
+        return request_json("GET", f"{BASE_ORDER_URL}/orders/{order_id}")
+
     def payment_webhook(
         self, *, order_id: int, event_id: str, status: str
     ) -> dict[str, Any]:
@@ -160,6 +163,9 @@ class FlashsaleIntegrationClient:
 
     def expire_orders(self) -> dict[str, Any]:
         return request_json("POST", f"{BASE_ORDER_URL}/admin/expire-orders")
+
+    def process_terminalizations(self) -> dict[str, Any]:
+        return request_json("POST", f"{BASE_ORDER_URL}/admin/process-terminalizations")
 
     def seed_pending_order(
         self, *, user_id: int, product_id: int, reservation_id: int

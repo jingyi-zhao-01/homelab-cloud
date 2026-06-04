@@ -37,9 +37,11 @@ class OrderServiceComposeIntegrationTest(unittest.TestCase):
             quantity=2,
             idempotency_key="compose-order-1",
         )
+        self.client.process_terminalizations()
+        order = self.client.get_order(int(response["id"]))
 
-        self.assertEqual(response["status"], "confirmed")
-        self.assertEqual(response["payment_status"], "succeeded")
+        self.assertEqual(order["status"], "confirmed")
+        self.assertEqual(order["payment_status"], "succeeded")
 
     def test_duplicate_payment_webhook_is_idempotent(self) -> None:
         """Replaying a succeeded payment webhook should not alter the outcome."""
@@ -49,6 +51,8 @@ class OrderServiceComposeIntegrationTest(unittest.TestCase):
             quantity=2,
             idempotency_key="compose-order-webhook",
         )
+        self.client.process_terminalizations()
+        confirmed = self.client.get_order(int(order["id"]))
 
         replay = self.client.payment_webhook(
             order_id=int(order["id"]),
@@ -56,6 +60,8 @@ class OrderServiceComposeIntegrationTest(unittest.TestCase):
             status="succeeded",
         )
 
+        self.assertEqual(confirmed["status"], "confirmed")
+        self.assertEqual(confirmed["payment_status"], "succeeded")
         self.assertEqual(replay["status"], "confirmed")
         self.assertEqual(replay["payment_status"], "succeeded")
 

@@ -3,6 +3,7 @@ import logging
 import time
 
 from app.application.results import ProcessTerminalizationTasksResult
+from app.domain.statuses import PaymentStatus, OrderStatus, TerminalizationAction
 from app.observability import start_span
 from app.ports.product_reservation_client import ProductReservationClient
 from app.ports.unit_of_work import UnitOfWork
@@ -53,6 +54,8 @@ class ProcessTerminalizationTaskUseCase:
                 ok, error = self._products.terminalize(
                     task.reservation_id, task.action
                 )
+                if ok and task.action == "confirm":
+                    ok, error = self._update_order_state(task.order_id, task.action)
                 elapsed_ms = (time.perf_counter() - started_at) * 1000
             terminalization_logger.info(
                 "event=order_service_terminalization_call order_id=%s reservation_id=%s action=%s elapsed_ms=%.2f confirm_cancel_ms=%.2f result=%s attempt_count=%s",
@@ -97,3 +100,24 @@ class ProcessTerminalizationTaskUseCase:
             succeeded_count=succeeded_count,
             retrying_count=retrying_count,
         )
+
+    def _update_order_state(
+        self, order_id: int, action: TerminalizationAction
+    ) -> tuple[bool, str | None]:
+        if action != "confirm":
+            return True, None
+        target_status: OrderStatus
+        target_payment_status: PaymentStatus
+        target_status = "confirmed"
+        target_payment_status = "succeeded"
+        try:
+            updated = self._uow.orders.update_state(
+                order_id,
+                status=target_status,
+                payment_status=target_payment_status,
+            )
+        except Exception as exc:  # pragma: no cover - defensive retry path
+            return False, exc.__class__.__name__
+        if not updated:
+            return False, "order_not_found"
+        return True, None

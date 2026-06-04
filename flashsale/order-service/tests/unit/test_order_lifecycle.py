@@ -190,6 +190,36 @@ class FakeUnitOfWork:
         self.orders = FakeOrderRepository()
         self.tasks = FakeTerminalizationTaskRepository()
 
+    def create_order_and_enqueue_terminalization(
+        self,
+        user_id: int,
+        total_amount: float,
+        items: list[OrderItem],
+        reservation_ids: list[int],
+        idempotency_key: str | None = None,
+        action: str = "confirm",
+    ) -> Order:
+        if idempotency_key:
+            existing = self.orders.get_by_idempotency_key(idempotency_key)
+            if existing:
+                return existing
+        order = self.orders.create(
+            user_id=user_id,
+            total_amount=total_amount,
+            items=items,
+            reservation_ids=reservation_ids,
+            idempotency_key=idempotency_key,
+            status="pending",
+            payment_status="pending",
+        )
+        self.tasks.enqueue(
+            order_id=order.id,
+            reservation_ids=reservation_ids,
+            action=action,
+            now=datetime.now(timezone.utc),
+        )
+        return order
+
     def finalize_order(
         self,
         order_id: int,
@@ -314,12 +344,14 @@ class OrderServiceLifecycleTest(unittest.TestCase):
 
     def test_successful_order_is_confirmed(self) -> None:
         order = self.create_orders.create_order(self.command)
+        self.assertEqual(order.status, "pending")
+        self.assertEqual(order.payment_status, "pending")
         worker_result = self.process_tasks.process()
 
         persisted = self.uow.orders.get(order.id)
         self.assertIsNotNone(persisted)
-        self.assertEqual(order.status, "confirmed")
-        self.assertEqual(order.payment_status, "succeeded")
+        self.assertEqual(order.status, "pending")
+        self.assertEqual(order.payment_status, "pending")
         self.assertEqual(persisted.status, "confirmed")
         self.assertEqual(persisted.payment_status, "succeeded")
         self.assertEqual(worker_result.succeeded_count, 1)
@@ -331,13 +363,15 @@ class OrderServiceLifecycleTest(unittest.TestCase):
         self.products.confirm_status_code = 502
 
         order = self.create_orders.create_order(self.command)
+        self.assertEqual(order.status, "pending")
+        self.assertEqual(order.payment_status, "pending")
         worker_result = self.process_tasks.process()
 
-        self.assertEqual(order.status, "confirmed")
-        self.assertEqual(order.payment_status, "succeeded")
+        self.assertEqual(order.status, "pending")
+        self.assertEqual(order.payment_status, "pending")
         self.assertEqual(worker_result.claimed_count, 1)
         self.assertEqual(worker_result.retrying_count, 1)
-        self.assertEqual(self.uow.orders.list_all()[0].status, "confirmed")
+        self.assertEqual(self.uow.orders.list_all()[0].status, "pending")
         self.assertEqual(self.products.stock, 4)
         self.assertEqual(self.products.reservations[1], "reserved")
         self.assertEqual(self.products.confirm_calls, 1)
@@ -364,6 +398,8 @@ class OrderServiceLifecycleTest(unittest.TestCase):
         self.process_tasks.process()
 
         self.assertEqual(first.id, second.id)
+        self.assertEqual(first.status, "pending")
+        self.assertEqual(second.status, "pending")
         self.assertEqual(self.products.stock, 4)
         self.assertEqual(len(self.products.reservations), 1)
         self.assertEqual(self.products.confirm_calls, 1)

@@ -48,6 +48,17 @@ class FailingUnitOfWork:
     def __init__(self) -> None:
         self.orders = FailingOrdersRepository()
 
+    def create_order_and_enqueue_terminalization(
+        self,
+        user_id: int,
+        total_amount: float,
+        items,
+        reservation_ids,
+        idempotency_key: str | None = None,
+        action: str = "confirm",
+    ):
+        raise RuntimeError("simulated persistence failure")
+
 
 class OrderPersistenceFailureConsistencyTest(unittest.TestCase):
     def test_persistence_failure_does_not_consume_inventory(self) -> None:

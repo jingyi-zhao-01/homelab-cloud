@@ -31,7 +31,7 @@ class CreateOrderUseCase:
         total_start = time.perf_counter()
         user_validate_ms = 0.0
         reserve_ms = 0.0
-        order_id: int | None = None
+        order: Order | None = None
         result = "unknown"
         if not command.items:
             raise HTTPException(status_code=400, detail="order items cannot be empty")
@@ -40,7 +40,7 @@ class CreateOrderUseCase:
             if existing:
                 order_logger.info(
                     "event=order_service_create_order_timing order_id=%s idempotency_hit=true "
-                    "user_validate_ms=0.00 reserve_ms=0.00 confirm_cancel_ms=0.00 total_order_ms=0.00 result=idempotency_replay",
+                    "user_validate_ms=0.00 reserve_ms=0.00 total_order_ms=0.00 result=idempotency_replay",
                     existing.id,
                 )
                 return existing
@@ -83,41 +83,28 @@ class CreateOrderUseCase:
                 order_items.append(item)
             with start_span(
                 "order-service",
-                "persist order",
+                "persist order and enqueue terminalization",
                 attributes={"flashsale.reservation_count": len(reservation_ids)},
             ):
-                order = self._uow.orders.create(
+                order = self._uow.create_order_and_enqueue_terminalization(
                     user_id=command.user_id,
                     total_amount=total_amount,
                     items=order_items,
                     reservation_ids=reservation_ids,
                     idempotency_key=command.idempotency_key,
                 )
-            order_id = order.id
-            with start_span(
-                "order-service",
-                "enqueue terminalization",
-                attributes={"flashsale.order_id": order.id},
-            ):
-                finalized = self._require_finalized(
-                    order.id, reservation_ids, "succeeded"
-                )
             result = "success"
-            return finalized
+            return order
         except RuntimeError as exc:
             result = "order_persistence_failed"
             self._products.release(reservation_ids)
             raise HTTPException(status_code=503, detail="order persistence failed") from exc
         except HTTPException:
             result = "http_error"
-            if order_id is not None:
-                self._enqueue_cancellation(order_id, reservation_ids, "failed")
             self._products.release(reservation_ids)
             raise
         except Exception as exc:
             result = "error"
-            if order_id is not None:
-                self._enqueue_cancellation(order_id, reservation_ids, "failed")
             self._products.release(reservation_ids)
             raise HTTPException(
                 status_code=503,
@@ -127,8 +114,8 @@ class CreateOrderUseCase:
             total_order_ms = (time.perf_counter() - total_start) * 1000
             order_logger.info(
                 "event=order_service_create_order_timing order_id=%s idempotency_hit=false "
-                "user_validate_ms=%.2f reserve_ms=%.2f confirm_cancel_ms=0.00 total_order_ms=%.2f result=%s",
-                order_id,
+                "user_validate_ms=%.2f reserve_ms=%.2f total_order_ms=%.2f result=%s",
+                order.id if order is not None else None,
                 user_validate_ms,
                 reserve_ms,
                 total_order_ms,

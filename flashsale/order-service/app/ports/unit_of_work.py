@@ -16,6 +16,16 @@ class UnitOfWork(Protocol):
 
     def reset(self) -> None: ...
 
+    def create_order_and_enqueue_terminalization(
+        self,
+        user_id: int,
+        total_amount: float,
+        items: list["OrderItem"],
+        reservation_ids: list[int],
+        idempotency_key: str | None = None,
+        action: TerminalizationAction = "confirm",
+    ) -> Order: ...
+
     def finalize_order(
         self,
         order_id: int,
