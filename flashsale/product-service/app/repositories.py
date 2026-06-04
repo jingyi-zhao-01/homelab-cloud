@@ -6,10 +6,14 @@ import psycopg
 from psycopg.rows import dict_row
 
 from .config import (
+    DB_POOL_MAX_SIZE,
+    DB_POOL_MIN_SIZE,
+    DB_POOL_TIMEOUT_SECONDS,
     INVENTORY_LOCK_MODE,
     OPTIMISTIC_RETRY_LIMIT,
     RESERVE_SQL_LOG_SLOW_MS,
 )
+from .db_pool import DatabasePool
 from .in_memory_repository import InMemoryProductRepository, RESERVATION_TTL_SECONDS, seed_items
 from .locking import InventoryReserveEngine
 from .models import ProductCreate, ProductOut, ReservationOut
@@ -75,12 +79,19 @@ class ProductRepository(ABC):
 class PostgresProductRepository(ProductRepository):
     def __init__(self, database_url: str) -> None:
         self._database_url = database_url
+        self._pool = DatabasePool(
+            database_url=database_url,
+            min_size=DB_POOL_MIN_SIZE,
+            max_size=DB_POOL_MAX_SIZE,
+            timeout_seconds=DB_POOL_TIMEOUT_SECONDS,
+        )
         self._inventory_lock_mode = INVENTORY_LOCK_MODE
         self._reserve_engine = InventoryReserveEngine(
             database_url=database_url,
             lock_mode=INVENTORY_LOCK_MODE,
             retry_limit=OPTIMISTIC_RETRY_LIMIT,
             slow_ms_threshold=RESERVE_SQL_LOG_SLOW_MS,
+            pool=self._pool,
         )
 
     @staticmethod
@@ -173,9 +184,7 @@ class PostgresProductRepository(ProductRepository):
                 )
 
     def create_product(self, payload: ProductCreate) -> ProductOut:
-        with psycopg.connect(
-            self._database_url, autocommit=True, row_factory=dict_row
-        ) as conn:
+        with self._pool.connection(autocommit=True, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -196,7 +205,7 @@ class PostgresProductRepository(ProductRepository):
                 )
 
     def get_product(self, product_id: int) -> ProductOut | None:
-        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+        with self._pool.connection(row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -259,9 +268,7 @@ class PostgresProductRepository(ProductRepository):
                 )
 
     def confirm_reservation(self, reservation_id: int) -> ReservationOut | None:
-        with psycopg.connect(
-            self._database_url, autocommit=True, row_factory=dict_row
-        ) as conn:
+        with self._pool.connection(autocommit=True, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -285,9 +292,7 @@ class PostgresProductRepository(ProductRepository):
                 )
 
     def cancel_reservation(self, reservation_id: int) -> ReservationOut | None:
-        with psycopg.connect(
-            self._database_url, autocommit=False, row_factory=dict_row
-        ) as conn:
+        with self._pool.connection(autocommit=False, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -328,9 +333,7 @@ class PostgresProductRepository(ProductRepository):
 
     def expire_reservations(self) -> int:
         expired_count = 0
-        with psycopg.connect(
-            self._database_url, autocommit=False, row_factory=dict_row
-        ) as conn:
+        with self._pool.connection(autocommit=False, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -356,15 +359,13 @@ class PostgresProductRepository(ProductRepository):
         return expired_count
 
     def has_product(self, product_id: int) -> bool:
-        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+        with self._pool.connection(row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT id FROM products WHERE id = %s", (product_id,))
                 return cur.fetchone() is not None
 
     def release_product(self, product_id: int, quantity: int) -> ProductOut | None:
-        with psycopg.connect(
-            self._database_url, autocommit=True, row_factory=dict_row
-        ) as conn:
+        with self._pool.connection(autocommit=True, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -381,7 +382,7 @@ class PostgresProductRepository(ProductRepository):
                 return self._to_product(row)
 
     def list_products(self) -> list[ProductOut]:
-        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+        with self._pool.connection(row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT id, name, price, stock

@@ -33,3 +33,7 @@ class TerminalizationWorkerLoop:
             self._stop.set()
             self._thread.join(timeout=join_timeout_seconds)
             self._thread = None
+
+    def wait_forever(self, idle_seconds: float = 3600.0) -> None:
+        while not self._stop.wait(idle_seconds):
+            pass

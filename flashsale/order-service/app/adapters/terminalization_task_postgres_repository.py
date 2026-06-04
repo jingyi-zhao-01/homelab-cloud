@@ -5,16 +5,28 @@ import psycopg
 from psycopg.rows import dict_row
 
 from app.adapters.order_postgres_rows import to_task
+from app.config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, DB_POOL_TIMEOUT_SECONDS
 from app.domain.reservation_terminalization_task import ReservationTerminalizationTask
 from app.domain.statuses import TerminalizationAction, TerminalizationEventType
+from app.db_pool import DatabasePool
 from app.observability import start_span
 
 ROW_FACTORY = cast(Any, dict_row)
 
 
 class TerminalizationTaskPostgresRepository:
-    def __init__(self, database_url: str) -> None:
+    def __init__(
+        self,
+        database_url: str,
+        pool: DatabasePool | None = None,
+    ) -> None:
         self._database_url = database_url
+        self._pool = pool or DatabasePool(
+            database_url=database_url,
+            min_size=DB_POOL_MIN_SIZE,
+            max_size=DB_POOL_MAX_SIZE,
+            timeout_seconds=DB_POOL_TIMEOUT_SECONDS,
+        )
 
     def enqueue(
         self,
@@ -23,7 +35,7 @@ class TerminalizationTaskPostgresRepository:
         action: TerminalizationAction,
         now: datetime,
     ) -> None:
-        with psycopg.connect(self._database_url, autocommit=True, row_factory=ROW_FACTORY) as conn:
+        with self._pool.connection(autocommit=True, row_factory=ROW_FACTORY) as conn:
             with conn.cursor() as cur:
                 for reservation_id in reservation_ids:
                     cur.execute(
@@ -37,7 +49,8 @@ class TerminalizationTaskPostgresRepository:
                         (order_id, reservation_id, action, now, now),
                     )
                     task = cur.fetchone()
-                    self.record_event(
+                    self._record_event(
+                        cur,
                         task_id=int(task["task_id"]),
                         order_id=order_id,
                         reservation_id=reservation_id,
@@ -56,7 +69,7 @@ class TerminalizationTaskPostgresRepository:
             "queue claim ready tasks",
             attributes={"db.system": "postgresql", "flashsale.batch_limit": limit},
         ):
-            with psycopg.connect(self._database_url, row_factory=ROW_FACTORY) as conn:
+            with self._pool.connection(row_factory=ROW_FACTORY) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -81,7 +94,8 @@ class TerminalizationTaskPostgresRepository:
                     rows = [to_task(row) for row in cur.fetchall()]
                     conn.commit()
                     for task in rows:
-                        self.record_event(
+                        self._record_event(
+                            cur,
                             task_id=task.task_id,
                             order_id=task.order_id,
                             reservation_id=task.reservation_id,
@@ -113,15 +127,17 @@ class TerminalizationTaskPostgresRepository:
         attempt_count: int,
         last_error: str | None = None,
     ) -> None:
-        with psycopg.connect(self._database_url, autocommit=True) as conn:
+        with self._pool.connection(autocommit=True) as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO order_terminalization_task_events (
-                        task_id, order_id, reservation_id, action, event_type, attempt_count, last_error
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (task_id, order_id, reservation_id, action, event_type, attempt_count, last_error),
+                self._record_event(
+                    cur,
+                    task_id=task_id,
+                    order_id=order_id,
+                    reservation_id=reservation_id,
+                    action=action,
+                    event_type=event_type,
+                    attempt_count=attempt_count,
+                    last_error=last_error,
                 )
 
     def _mark(
@@ -131,7 +147,7 @@ class TerminalizationTaskPostgresRepository:
         available_at: datetime | None,
         last_error: str | None,
     ) -> None:
-        with psycopg.connect(self._database_url, autocommit=True, row_factory=ROW_FACTORY) as conn:
+        with self._pool.connection(autocommit=True, row_factory=ROW_FACTORY) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -152,7 +168,8 @@ class TerminalizationTaskPostgresRepository:
                     """,
                     (status, available_at, last_error, task_id),
                 )
-                self.record_event(
+                self._record_event(
+                    cur,
                     task_id=int(task["task_id"]),
                     order_id=int(task["order_id"]),
                     reservation_id=int(task["reservation_id"]),
@@ -161,3 +178,23 @@ class TerminalizationTaskPostgresRepository:
                     attempt_count=int(task["attempt_count"]),
                     last_error=last_error,
                 )
+
+    def _record_event(
+        self,
+        cur: Any,
+        task_id: int,
+        order_id: int,
+        reservation_id: int,
+        action: TerminalizationAction,
+        event_type: TerminalizationEventType,
+        attempt_count: int,
+        last_error: str | None = None,
+    ) -> None:
+        cur.execute(
+            """
+            INSERT INTO order_terminalization_task_events (
+                task_id, order_id, reservation_id, action, event_type, attempt_count, last_error
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (task_id, order_id, reservation_id, action, event_type, attempt_count, last_error),
+        )

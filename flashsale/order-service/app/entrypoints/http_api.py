@@ -30,7 +30,9 @@ from app.observability import (
 SERVICE_NAME = "order-service"
 
 
-def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimiter]:
+def build_http_api(
+    run_background_worker: bool = True,
+) -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimiter]:
     initialize_tracing(SERVICE_NAME)
     logger = configure_service_logger(SERVICE_NAME)
     app = FastAPI(title=SERVICE_NAME, version="0.1.0")
@@ -52,13 +54,15 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
     def startup() -> None:
         try:
             uow.init_db()
-            worker.start()
+            if run_background_worker:
+                worker.start()
         except Exception:
             pass
 
     @app.on_event("shutdown")
     def shutdown() -> None:
-        worker.stop()
+        if run_background_worker:
+            worker.stop()
 
     async def _repository_is_healthy() -> bool:
         try:

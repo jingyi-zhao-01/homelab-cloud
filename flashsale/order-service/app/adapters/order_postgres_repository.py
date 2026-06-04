@@ -12,9 +12,11 @@ from app.adapters.order_postgres_rows import (
     dump_reservation_ids,
     to_order,
 )
+from app.config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, DB_POOL_TIMEOUT_SECONDS
 from app.domain.order import Order, OrderItem
 from app.domain.state_machines import transition_order
 from app.domain.statuses import OrderStatus, PaymentStatus
+from app.db_pool import DatabasePool
 from app.observability import start_span
 
 ROW_FACTORY = cast(Any, dict_row)
@@ -22,8 +24,18 @@ db_logger = logging.getLogger("order-service.db")
 
 
 class OrderPostgresRepository:
-    def __init__(self, database_url: str) -> None:
+    def __init__(
+        self,
+        database_url: str,
+        pool: DatabasePool | None = None,
+    ) -> None:
         self._database_url = database_url
+        self._pool = pool or DatabasePool(
+            database_url=database_url,
+            min_size=DB_POOL_MIN_SIZE,
+            max_size=DB_POOL_MAX_SIZE,
+            timeout_seconds=DB_POOL_TIMEOUT_SECONDS,
+        )
 
     def create(
         self,
@@ -42,9 +54,7 @@ class OrderPostgresRepository:
             "order db create",
             attributes={"db.system": "postgresql"},
         ):
-            with psycopg.connect(
-                self._database_url, autocommit=True, row_factory=ROW_FACTORY
-            ) as conn:
+            with self._pool.connection(autocommit=True, row_factory=ROW_FACTORY) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -78,7 +88,17 @@ class OrderPostgresRepository:
                         )
                         return order
                     if idempotency_key:
-                        existing = self.get_by_idempotency_key(idempotency_key)
+                        cur.execute(
+                            """
+                            SELECT id, user_id, created_at, total_amount, status,
+                                   payment_status, idempotency_key, reservation_ids_json, items_json
+                            FROM orders
+                            WHERE idempotency_key = %s
+                            """,
+                            (idempotency_key,),
+                        )
+                        existing_row = cur.fetchone()
+                        existing = to_order(existing_row) if existing_row else None
                         if existing:
                             result = "idempotency_replay"
                             db_logger.info(
@@ -101,7 +121,7 @@ class OrderPostgresRepository:
         if not current:
             return None
         updated = transition_order(current, status, payment_status)
-        with psycopg.connect(self._database_url, autocommit=True, row_factory=ROW_FACTORY) as conn:
+        with self._pool.connection(autocommit=True, row_factory=ROW_FACTORY) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -136,7 +156,7 @@ class OrderPostgresRepository:
         return rows[0] if rows else None
 
     def _fetch_many(self, clause: str, params: tuple[object, ...]) -> list[Order]:
-        with psycopg.connect(self._database_url, row_factory=ROW_FACTORY) as conn:
+        with self._pool.connection(row_factory=ROW_FACTORY) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     f"""

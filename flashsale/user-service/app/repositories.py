@@ -5,6 +5,8 @@ from typing import Protocol
 import psycopg
 from psycopg.rows import dict_row
 
+from .config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, DB_POOL_TIMEOUT_SECONDS
+from .db_pool import DatabasePool
 from .models import UserCreate, UserOut
 
 
@@ -56,6 +58,12 @@ class InMemoryUserRepository:
 class PostgresUserRepository:
     def __init__(self, database_url: str) -> None:
         self._database_url = database_url
+        self._pool = DatabasePool(
+            database_url=database_url,
+            min_size=DB_POOL_MIN_SIZE,
+            max_size=DB_POOL_MAX_SIZE,
+            timeout_seconds=DB_POOL_TIMEOUT_SECONDS,
+        )
 
     def init_db(self) -> None:
         with psycopg.connect(self._database_url, autocommit=True) as conn:
@@ -81,9 +89,7 @@ class PostgresUserRepository:
                 cur.execute("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
 
     def create_user(self, payload: UserCreate) -> UserOut:
-        with psycopg.connect(
-            self._database_url, autocommit=True, row_factory=dict_row
-        ) as conn:
+        with self._pool.connection(autocommit=True, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -103,7 +109,7 @@ class PostgresUserRepository:
                 )
 
     def get_user(self, user_id: int) -> UserOut | None:
-        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+        with self._pool.connection(row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -123,7 +129,7 @@ class PostgresUserRepository:
                 )
 
     def list_users(self) -> list[UserOut]:
-        with psycopg.connect(self._database_url, row_factory=dict_row) as conn:
+        with self._pool.connection(row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT id, name, email

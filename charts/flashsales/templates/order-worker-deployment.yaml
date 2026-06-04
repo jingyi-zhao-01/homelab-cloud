@@ -1,51 +1,57 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: flashsales-order-service
+  name: flashsales-order-worker
   namespace: {{ include "flashsales.namespace" . }}
   labels:
     {{- include "flashsales.labels" . | nindent 4 }}
-    app.kubernetes.io/component: order-service
+    app.kubernetes.io/component: order-worker
 spec:
-  {{- if not .Values.orderService.autoscaling.enabled }}
-  replicas: {{ .Values.orderService.replicaCount }}
-  {{- end }}
+  replicas: {{ .Values.orderService.workerReplicaCount }}
   selector:
     matchLabels:
-      app.kubernetes.io/component: order-service
+      app.kubernetes.io/component: order-worker
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/component: order-service
+        app.kubernetes.io/component: order-worker
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.orderService.nodeSelector }}
+      {{- with .Values.orderService.worker.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.orderService.affinity }}
+      {{- with .Values.orderService.worker.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.orderService.tolerations }}
+      {{- with .Values.orderService.worker.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: order-service
+        - name: order-worker
           image: "{{ .Values.orderService.image.repository }}:{{ .Values.orderService.image.tag }}"
           imagePullPolicy: {{ .Values.orderService.image.pullPolicy }}
+          command:
+            - python
+            - -m
+            - app.entrypoints.worker_main
           envFrom:
             - configMapRef:
                 name: flashsales-order-service-config
           env:
-            - name: ORDER_SERVICE_RUN_BACKGROUND_WORKER
-              value: {{ .Values.orderService.runBackgroundWorker | quote }}
+            - name: DB_POOL_MIN_SIZE
+              value: {{ .Values.orderService.worker.env.dbPoolMinSize | quote }}
+            - name: DB_POOL_MAX_SIZE
+              value: {{ .Values.orderService.worker.env.dbPoolMaxSize | quote }}
+            - name: DB_POOL_TIMEOUT_SECONDS
+              value: {{ .Values.orderService.worker.env.dbPoolTimeoutSeconds | quote }}
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
@@ -71,25 +77,7 @@ spec:
                   name: {{ .Values.observability.tracing.existingSecretName }}
                   key: {{ .Values.observability.tracing.existingSecretKey }}
             {{- end }}
-          ports:
-            - containerPort: {{ .Values.orderService.service.port }}
-          readinessProbe:
-            httpGet:
-              path: /ready
-              port: {{ .Values.orderService.service.port }}
-            initialDelaySeconds: {{ .Values.orderService.readinessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.orderService.readinessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.orderService.readinessProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.orderService.readinessProbe.failureThreshold }}
-          livenessProbe:
-            httpGet:
-              path: /live
-              port: {{ .Values.orderService.service.port }}
-            initialDelaySeconds: {{ .Values.orderService.livenessProbe.initialDelaySeconds }}
-            periodSeconds: {{ .Values.orderService.livenessProbe.periodSeconds }}
-            timeoutSeconds: {{ .Values.orderService.livenessProbe.timeoutSeconds }}
-            failureThreshold: {{ .Values.orderService.livenessProbe.failureThreshold }}
-          {{- with .Values.orderService.resources }}
+          {{- with .Values.orderService.worker.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}

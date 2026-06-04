@@ -63,6 +63,8 @@ psycopg==3.2.3
     # via product-service (flashsale/product-service/pyproject.toml)
 psycopg-binary==3.2.3
     # via psycopg
+psycopg-pool==3.2.3
+    # via product-service (flashsale/product-service/pyproject.toml)
 pydantic==2.10.1
     # via
     #   product-service (flashsale/product-service/pyproject.toml)

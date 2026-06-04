@@ -102,6 +102,9 @@ userService:
     dbHost: ""
     dbPort: ""
     dbName: ""
+    dbPoolMinSize: "1"
+    dbPoolMaxSize: "2"
+    dbPoolTimeoutSeconds: "5"
 
 productService:
   replicaCount: 1
@@ -130,11 +133,15 @@ productService:
     dbHost: ""
     dbPort: ""
     dbName: ""
+    dbPoolMinSize: "1"
+    dbPoolMaxSize: "3"
+    dbPoolTimeoutSeconds: "5"
     inventoryLockMode: pessimistic
     optimisticRetryLimit: "5"
 
 orderService:
   replicaCount: 1
+  workerReplicaCount: 1
   autoscaling:
     enabled: true
     minReplicas: 2
@@ -168,6 +175,7 @@ orderService:
     node-purpose: worker
   tolerations: []
   affinity: {}
+  runBackgroundWorker: false
   env:
     userServiceUrl: http://flashsales-user-service:8001
     productServiceUrl: http://flashsales-product-service:8002
@@ -176,10 +184,29 @@ orderService:
     dbHost: ""
     dbPort: ""
     dbName: ""
+    dbPoolMinSize: "2"
+    dbPoolMaxSize: "4"
+    dbPoolTimeoutSeconds: "5"
     redisUrl: redis://:redis-pass@flashsales-redis:6379/0
     rabbitmqUrl: amqp://flashsales:mq-pass@flashsales-rabbitmq:5672/
     inventoryLockMode: pessimistic
     optimisticRetryLimit: "5"
+  worker:
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "250m"
+        memory: "256Mi"
+    nodeSelector:
+      node-purpose: worker
+    tolerations: []
+    affinity: {}
+    env:
+      dbPoolMinSize: "1"
+      dbPoolMaxSize: "2"
+      dbPoolTimeoutSeconds: "5"
 
 # Example to force all three services onto non-control worker nodes:
 # userService:

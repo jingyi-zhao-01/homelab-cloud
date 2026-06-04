@@ -5,6 +5,8 @@ import psycopg
 from psycopg.rows import dict_row
 from opentelemetry.trace import SpanKind
 
+from app.config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, DB_POOL_TIMEOUT_SECONDS
+from app.db_pool import DatabasePool
 from app.observability import start_span
 
 lock_logger = logging.getLogger("product-service.locking")
@@ -17,11 +19,18 @@ class InventoryReserveEngine:
         lock_mode: str,
         retry_limit: int,
         slow_ms_threshold: float = 200,
+        pool: DatabasePool | None = None,
     ) -> None:
         self._database_url = database_url
         self._lock_mode = lock_mode
         self._retry_limit = retry_limit
         self._slow_ms_threshold = slow_ms_threshold
+        self._pool = pool or DatabasePool(
+            database_url=database_url,
+            min_size=DB_POOL_MIN_SIZE,
+            max_size=DB_POOL_MAX_SIZE,
+            timeout_seconds=DB_POOL_TIMEOUT_SECONDS,
+        )
 
     def reserve(self, product_id: int, quantity: int) -> dict[str, object] | None:
         with start_span(
@@ -108,9 +117,7 @@ class InventoryReserveEngine:
     ) -> dict[str, object] | None:
         tx_start = time.perf_counter()
         try:
-            with psycopg.connect(
-                self._database_url, autocommit=False, row_factory=dict_row
-            ) as conn:
+            with self._pool.connection(autocommit=False, row_factory=dict_row) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SET LOCAL lock_timeout = '1s'")
                     cur.execute("SET LOCAL statement_timeout = '3s'")
@@ -206,8 +213,8 @@ class InventoryReserveEngine:
         reserve_start = time.perf_counter()
         try:
             for retry_index in range(self._retry_limit):
-                with psycopg.connect(
-                    self._database_url, autocommit=True, row_factory=dict_row
+                with self._pool.connection(
+                    autocommit=True, row_factory=dict_row
                 ) as conn:
                     with conn.cursor() as cur:
                         cur.execute(
@@ -296,9 +303,7 @@ class InventoryReserveEngine:
     ) -> dict[str, object] | None:
         tx_start = time.perf_counter()
         try:
-            with psycopg.connect(
-                self._database_url, autocommit=False, row_factory=dict_row
-            ) as conn:
+            with self._pool.connection(autocommit=False, row_factory=dict_row) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SET LOCAL lock_timeout = '1s'")
                     cur.execute("SET LOCAL statement_timeout = '3s'")
@@ -403,8 +408,8 @@ class InventoryReserveEngine:
         reserve_start = time.perf_counter()
         try:
             for retry_index in range(self._retry_limit):
-                with psycopg.connect(
-                    self._database_url, autocommit=False, row_factory=dict_row
+                with self._pool.connection(
+                    autocommit=False, row_factory=dict_row
                 ) as conn:
                     with conn.cursor() as cur:
                         cur.execute("SET LOCAL lock_timeout = '1s'")
