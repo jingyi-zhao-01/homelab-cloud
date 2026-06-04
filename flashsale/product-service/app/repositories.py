@@ -244,14 +244,14 @@ class PostgresProductRepository(ProductRepository):
                     reservation_row = cur.fetchone()
                     if not reservation_row:
                         raise RuntimeError("reservation persistence failed")
-                        return ReservationOut(
-                            reservation_id=int(reservation_row["reservation_id"]),
-                            product_id=int(reservation_row["product_id"]),
-                            quantity=int(reservation_row["quantity"]),
-                            unit_price=float(reservation_row["unit_price"]),
-                            status=str(reservation_row["status"]),
-                            expires_at=reservation_row["expires_at"].isoformat()
-                            if reservation_row["expires_at"]
+                    return ReservationOut(
+                        reservation_id=int(reservation_row["reservation_id"]),
+                        product_id=int(reservation_row["product_id"]),
+                        quantity=int(reservation_row["quantity"]),
+                        unit_price=float(reservation_row["unit_price"]),
+                        status=str(reservation_row["status"]),
+                        expires_at=reservation_row["expires_at"].isoformat()
+                        if reservation_row["expires_at"]
                         else None,
                     )
         except ValueError:
