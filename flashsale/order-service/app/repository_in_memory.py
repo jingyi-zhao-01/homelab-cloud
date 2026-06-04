@@ -2,10 +2,18 @@ from datetime import datetime, timezone
 from itertools import count
 from threading import Lock
 
-from .models import OrderItemOut, OrderOut, OrderStatus, PaymentStatus, TerminalizationAction
+from .models import (
+    OrderItemOut,
+    OrderOut,
+    OrderStatus,
+    PaymentStatus,
+    TerminalizationAction,
+    TerminalizationEventType,
+)
 from .order_storage import (
     StoredOrder,
     StoredTerminalizationTask,
+    StoredTerminalizationTaskEvent,
     transition_payment_status,
     transition_status,
 )
@@ -16,8 +24,10 @@ class InMemoryOrderRepository:
         self._orders: dict[int, StoredOrder] = {}
         self._idempotency_keys: dict[str, int] = {}
         self._terminalization_tasks: dict[int, StoredTerminalizationTask] = {}
+        self._terminalization_task_events: list[StoredTerminalizationTaskEvent] = []
         self._counter = count(1)
         self._task_counter = count(1)
+        self._event_counter = count(1)
         self._lock = Lock()
 
     def init_db(self) -> None:
@@ -31,8 +41,10 @@ class InMemoryOrderRepository:
             self._orders.clear()
             self._idempotency_keys.clear()
             self._terminalization_tasks.clear()
+            self._terminalization_task_events.clear()
             self._counter = count(1)
             self._task_counter = count(1)
+            self._event_counter = count(1)
 
     def create_order(
         self,
@@ -148,6 +160,19 @@ class InMemoryOrderRepository:
                     created_at=now,
                     last_error=None,
                 )
+                self._terminalization_task_events.append(
+                    StoredTerminalizationTaskEvent(
+                        event_id=next(self._event_counter),
+                        task_id=task_id,
+                        order_id=order_id,
+                        reservation_id=reservation_id,
+                        action=action,
+                        event_type="queued",
+                        attempt_count=0,
+                        occurred_at=now,
+                        last_error=None,
+                    )
+                )
             self._orders[order_id] = StoredOrder(
                 order=updated,
                 reservation_ids=stored.reservation_ids,
@@ -181,6 +206,19 @@ class InMemoryOrderRepository:
                     last_error=task.last_error,
                 )
                 self._terminalization_tasks[task_id] = updated
+                self._terminalization_task_events.append(
+                    StoredTerminalizationTaskEvent(
+                        event_id=next(self._event_counter),
+                        task_id=updated.task_id,
+                        order_id=updated.order_id,
+                        reservation_id=updated.reservation_id,
+                        action=updated.action,
+                        event_type="processing",
+                        attempt_count=updated.attempt_count,
+                        occurred_at=available_before,
+                        last_error=updated.last_error,
+                    )
+                )
                 claimed.append(updated)
         return claimed
 
@@ -197,6 +235,19 @@ class InMemoryOrderRepository:
                 available_at=task.available_at,
                 created_at=task.created_at,
                 last_error=None,
+            )
+            self._terminalization_task_events.append(
+                StoredTerminalizationTaskEvent(
+                    event_id=next(self._event_counter),
+                    task_id=task.task_id,
+                    order_id=task.order_id,
+                    reservation_id=task.reservation_id,
+                    action=task.action,
+                    event_type="succeeded",
+                    attempt_count=task.attempt_count,
+                    occurred_at=datetime.now(timezone.utc),
+                    last_error=None,
+                )
             )
 
     def mark_terminalization_task_retrying(
@@ -217,6 +268,44 @@ class InMemoryOrderRepository:
                 available_at=available_at,
                 created_at=task.created_at,
                 last_error=last_error,
+            )
+            self._terminalization_task_events.append(
+                StoredTerminalizationTaskEvent(
+                    event_id=next(self._event_counter),
+                    task_id=task.task_id,
+                    order_id=task.order_id,
+                    reservation_id=task.reservation_id,
+                    action=task.action,
+                    event_type="retrying",
+                    attempt_count=task.attempt_count,
+                    occurred_at=datetime.now(timezone.utc),
+                    last_error=last_error,
+                )
+            )
+
+    def record_terminalization_task_event(
+        self,
+        task_id: int,
+        order_id: int,
+        reservation_id: int,
+        action: TerminalizationAction,
+        event_type: TerminalizationEventType,
+        attempt_count: int,
+        last_error: str | None = None,
+    ) -> None:
+        with self._lock:
+            self._terminalization_task_events.append(
+                StoredTerminalizationTaskEvent(
+                    event_id=next(self._event_counter),
+                    task_id=task_id,
+                    order_id=order_id,
+                    reservation_id=reservation_id,
+                    action=action,
+                    event_type=event_type,
+                    attempt_count=attempt_count,
+                    occurred_at=datetime.now(timezone.utc),
+                    last_error=last_error,
+                )
             )
 
     def list_orders(self) -> list[OrderOut]:

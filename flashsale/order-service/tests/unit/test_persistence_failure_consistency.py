@@ -176,6 +176,18 @@ class FailingOrderRepository:
     ) -> None:
         return None
 
+    def record_terminalization_task_event(
+        self,
+        task_id: int,
+        order_id: int,
+        reservation_id: int,
+        action: str,
+        event_type: str,
+        attempt_count: int,
+        last_error: str | None = None,
+    ) -> None:
+        return None
+
     def list_orders(self) -> list[object]:
         return []
 

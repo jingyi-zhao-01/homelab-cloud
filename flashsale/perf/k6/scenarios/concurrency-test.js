@@ -1,6 +1,5 @@
 import http from "k6/http";
 import exec from "k6/execution";
-import { sleep } from "k6";
 import { Counter, Rate } from "k6/metrics";
 
 // Main throughput harness used by the named concurrency profiles in Makefile and CI.
@@ -10,11 +9,9 @@ import {
   buildConstantArrivalRateOptions,
   createPostJson,
   createRuntimeReporter,
-  checkStatus,
-  createUser,
-  createProduct,
-  resetService,
 } from "../lib/k6-common.js";
+import { initializePerfRun } from "../setup/index.js";
+import { cleanupPerfRun } from "../teardown/index.js";
 
 const BASE_URL = __ENV.BASE_URL || "http://homelab-order-service.jzhao62.com";
 const USER_URL = __ENV.USER_URL || "http://homelab-user-service.jzhao62.com";
@@ -23,7 +20,7 @@ const K6_HTTP_TIMEOUT = __ENV.K6_HTTP_TIMEOUT || "20s";
 const PROFILE = __ENV.PROFILE || "smoke";
 const REPORT_INTERVAL_MS = Number(__ENV.REPORT_INTERVAL_MS || 5000);
 
-// These defaults encode the intended operating point for each perf lane.
+// 这些 profile 默认值定义了不同压测档位的目标工作点。
 const PROFILE_DEFAULTS = {
   smoke: {
     tps: 10,
@@ -102,6 +99,12 @@ const TEST_DESCRIPTION =
   __ENV.TEST_DESCRIPTION ||
   `Concurrency profile=${PROFILE} tps=${TARGET_TPS} duration=${TEST_DURATION}`;
 const POST_CLEANUP = (__ENV.POST_CLEANUP || "true").toLowerCase() === "true";
+const TERMINALIZATION_DRAIN_ATTEMPTS = Number(
+  __ENV.TERMINALIZATION_DRAIN_ATTEMPTS || 20,
+);
+const TERMINALIZATION_DRAIN_PAUSE_SECONDS = Number(
+  __ENV.TERMINALIZATION_DRAIN_PAUSE_SECONDS || 0.25,
+);
 
 const http5xxRate = new Rate("http_5xx_rate");
 const oversellViolations = new Counter("oversell_violations");
@@ -139,122 +142,35 @@ export const options = buildConstantArrivalRateOptions({
   },
 });
 
-function failIfNotStatus(res, expectedStatus, message) {
-  checkStatus(res, message, expectedStatus);
-}
-
-function resetServiceDb(url, serviceName) {
-  const res = resetService(url, serviceName, K6_HTTP_TIMEOUT, {
-    phase: "cleanup",
-  });
-  const ok = res.status === 204;
-  if (!ok) {
-    console.log(
-      `[k6-post-cleanup] reset_failed service=${serviceName} status=${res.status}`,
-    );
-  }
-  return ok;
-}
-
-function runPostCleanup() {
-  if (!POST_CLEANUP) {
-    console.log("[k6-post-cleanup] skipped (POST_CLEANUP=false)");
-    return;
-  }
-
-  const orderOk = resetServiceDb(BASE_URL, "order");
-  const userOk = resetServiceDb(USER_URL, "user");
-  const productOk = resetServiceDb(PRODUCT_URL, "product");
-  const allOk = orderOk && userOk && productOk;
-  console.log(
-    `[k6-post-cleanup] completed order_reset=${orderOk} user_reset=${userOk} product_reset=${productOk} all_ok=${allOk}`,
-  );
-}
-
-function drainTerminalizations() {
-  const maxAttempts = Number(__ENV.TERMINALIZATION_DRAIN_ATTEMPTS || 20);
-  const pauseSeconds = Number(__ENV.TERMINALIZATION_DRAIN_PAUSE_SECONDS || 0.25);
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const res = http.post(
-      `${BASE_URL}/admin/process-terminalizations`,
-      null,
-      {
-        tags: { phase: "teardown" },
-        timeout: K6_HTTP_TIMEOUT,
-      },
-    );
-    if (res.status !== 200) {
-      console.log(
-        `[k6-correctness] terminalization_drain_failed attempt=${attempt} status=${res.status}`,
-      );
-      return;
-    }
-
-    const body = res.json();
-    const claimedCount = Number(body.claimed_count || 0);
-    const retryingCount = Number(body.retrying_count || 0);
-    if (claimedCount === 0 && retryingCount === 0) {
-      console.log(
-        `[k6-correctness] terminalization_drain_complete attempts=${attempt}`,
-      );
-      return;
-    }
-
-    sleep(pauseSeconds);
-  }
-
-  console.log("[k6-correctness] terminalization_drain_exhausted");
-}
-
 export function setup() {
-  console.log(`[k6-scenario] ${TEST_DESCRIPTION}`);
+  const timestamp = Date.now();
 
-  // Start each run from a clean data set so profile comparisons stay meaningful.
-  const resetOrderRes = resetService(BASE_URL, "order", K6_HTTP_TIMEOUT, {
-    phase: "setup",
-  });
-  failIfNotStatus(resetOrderRes, 204, "order database reset");
-
-  const resetUserRes = resetService(USER_URL, "user", K6_HTTP_TIMEOUT, {
-    phase: "setup",
-  });
-  failIfNotStatus(resetUserRes, 204, "user database reset");
-
-  const resetProductRes = resetService(
-    PRODUCT_URL,
-    "product",
-    K6_HTTP_TIMEOUT,
-    { phase: "setup" },
-  );
-  failIfNotStatus(resetProductRes, 204, "product database reset");
-
-  const users = [];
-  for (let i = 0; i < USER_COUNT; i += 1) {
-    const user = createUser({
-      userUrl: USER_URL,
-      email: `k6-${PROFILE}-u${i}-${Date.now()}@example.com`,
-      name: `k6 user ${i}`,
-      postJson: setupPostJson,
-    });
-    users.push(user.id);
-  }
-
-  const products = [];
-  for (let i = 0; i < PRODUCT_COUNT; i += 1) {
-    const product = createProduct({
-      productUrl: PRODUCT_URL,
-      name: `k6-${PROFILE}-p${i}-${Date.now()}`,
+  // 每轮压测都用新的批次数据初始化，避免复用旧用户/旧商品导致结果不可比。
+  const initialized = initializePerfRun({
+    description: TEST_DESCRIPTION,
+    orderUrl: BASE_URL,
+    userUrl: USER_URL,
+    productUrl: PRODUCT_URL,
+    timeout: K6_HTTP_TIMEOUT,
+    postJson: setupPostJson,
+    userBatch: {
+      emailPrefix: `k6-${PROFILE}-u`,
+      namePrefix: "k6 user",
+      count: USER_COUNT,
+      timestamp,
+    },
+    productBatch: {
+      namePrefix: `k6-${PROFILE}-p`,
       price: 9.99,
       stock: INITIAL_STOCK,
-      postJson: setupPostJson,
-    });
-    products.push(product.id);
-  }
+      count: PRODUCT_COUNT,
+      timestamp,
+    },
+  });
 
   return {
-    users,
-    products,
+    users: initialized.users.map((user) => user.id),
+    products: initialized.products.map((product) => product.id),
     initialStock: INITIAL_STOCK,
   };
 }
@@ -262,7 +178,7 @@ export function setup() {
 export default function concurrencyTest(data) {
   const userId = data.users[exec.scenario.iterationInTest % data.users.length];
   const productId =
-    // The hotspot profile intentionally keeps all demand on a single product.
+    // hotspot 档位故意把所有流量集中到一个商品上，用来观察热点路径行为。
     PROFILE === "hotspot"
       ? data.products[0]
       : data.products[exec.scenario.iterationInTest % data.products.length];
@@ -285,8 +201,6 @@ export default function concurrencyTest(data) {
 }
 
 export function teardown(data) {
-  drainTerminalizations();
-
   const listOrdersRes = http.get(`${BASE_URL}/orders`, {
     tags: { phase: "teardown" },
     timeout: K6_HTTP_TIMEOUT,
@@ -294,7 +208,7 @@ export function teardown(data) {
   let violations = 0;
 
   if (listOrdersRes.status === 200) {
-    // Oversell is validated after the traffic run because k6 VUs do not share state cheaply.
+    // oversell 校验放在末尾统一做，因为 k6 VU 之间不适合高频共享业务状态。
     const orders = listOrdersRes.json();
     const soldByProduct = {};
     for (const order of orders) {
@@ -323,5 +237,16 @@ export function teardown(data) {
     oversellViolations.add(violations);
   }
 
-  runPostCleanup();
+  cleanupPerfRun({
+    orderUrl: BASE_URL,
+    userUrl: USER_URL,
+    productUrl: PRODUCT_URL,
+    timeout: K6_HTTP_TIMEOUT,
+    postCleanup: POST_CLEANUP,
+    drainTerminalizationsFirst: true,
+    drainOptions: {
+      maxAttempts: TERMINALIZATION_DRAIN_ATTEMPTS,
+      pauseSeconds: TERMINALIZATION_DRAIN_PAUSE_SECONDS,
+    },
+  });
 }

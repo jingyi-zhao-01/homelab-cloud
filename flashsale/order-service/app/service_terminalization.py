@@ -131,6 +131,15 @@ def process_terminalization_tasks(
                     storage,
                 )
             except Exception as exc:
+                repository.record_terminalization_task_event(
+                    task_id=task.task_id,
+                    order_id=task.order_id,
+                    reservation_id=task.reservation_id,
+                    action=task.action,
+                    event_type="error",
+                    attempt_count=task.attempt_count,
+                    last_error=exc.__class__.__name__,
+                )
                 next_attempt_at = datetime.now(timezone.utc) + timedelta(
                     seconds=min(task.attempt_count, 10)
                 )

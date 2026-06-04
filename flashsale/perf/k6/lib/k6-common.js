@@ -91,6 +91,23 @@ export function resetService(url, serviceName, timeout, tags = {}) {
   return res;
 }
 
+export function resetAllServices({
+  orderUrl,
+  userUrl,
+  productUrl,
+  timeout,
+  tags = {},
+}) {
+  const orderRes = resetService(orderUrl, "order", timeout, tags);
+  const userRes = resetService(userUrl, "user", timeout, tags);
+  const productRes = resetService(productUrl, "product", timeout, tags);
+  return {
+    order: orderRes,
+    user: userRes,
+    product: productRes,
+  };
+}
+
 export function seedProducts(productUrl, timeout) {
   const res = http.post(`${productUrl}/admin/seed`, null, { timeout });
   checkStatus(res, "products seeded", 204);
@@ -144,47 +161,48 @@ export function createRuntimeReporter(reportIntervalMs, formatMessage) {
   };
 }
 
-export function setupSingleUserAndProductScenario({
-  description,
-  baseUrl,
+export function createUsersBatch({
   userUrl,
-  productUrl,
-  timeout,
+  postJson,
   emailPrefix,
-  userName,
-  productPrefix,
-  productPrice,
-  productStock,
-  seedProductsFirst = true,
+  namePrefix,
+  count,
+  timestamp = Date.now(),
 }) {
-  console.log(`[k6-scenario] ${description}`);
-
-  const postJson = createPostJson(timeout);
-  const ts = Date.now();
-
-  resetService(baseUrl, "order", timeout);
-  resetService(userUrl, "user", timeout);
-  if (seedProductsFirst) {
-    seedProducts(productUrl, timeout);
+  const users = [];
+  for (let i = 0; i < count; i += 1) {
+    const user = createUser({
+      userUrl,
+      email: `${emailPrefix}-${i}-${timestamp}@example.com`,
+      name: `${namePrefix} ${i}`,
+      postJson,
+    });
+    users.push(user);
   }
+  return users;
+}
 
-  const user = createUser({
-    userUrl,
-    email: `${emailPrefix}-${ts}@example.com`,
-    name: userName,
-    postJson,
-  });
-
-  const product = createProduct({
-    productUrl,
-    name: `${productPrefix}-${ts}`,
-    price: productPrice,
-    stock: productStock,
-    postJson,
-  });
-
-  return {
-    user_id: user.id,
-    product_id: product.id,
-  };
+export function createProductsBatch({
+  productUrl,
+  postJson,
+  namePrefix,
+  price,
+  stock,
+  count,
+  timestamp = Date.now(),
+  labelPrefix = "setup product created",
+}) {
+  const products = [];
+  for (let i = 0; i < count; i += 1) {
+    const product = createProduct({
+      productUrl,
+      name: `${namePrefix}-${i}-${timestamp}`,
+      price,
+      stock,
+      postJson,
+      label: labelPrefix,
+    });
+    products.push(product);
+  }
+  return products;
 }

@@ -21,4 +21,5 @@ const scenario = createHotspotOrderScenario({
 
 export const options = scenario.options;
 export const setup = scenario.setup;
+export const teardown = scenario.teardown;
 export default scenario.default;

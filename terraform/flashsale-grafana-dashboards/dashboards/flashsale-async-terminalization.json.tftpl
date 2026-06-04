@@ -25,177 +25,170 @@
   "panels": [
     {
       "id": 1,
-      "type": "stat",
-      "title": "Terminalization Backlog",
-      "description": "Current number of queued or retrying terminalization tasks waiting to confirm or cancel reservations.",
+      "type": "timeseries",
+      "title": "Queue Backlog Over Time",
+      "description": "Backlog over time for queued and retrying terminalization tasks. This is the main queue-pressure signal during perf runs.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
       },
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "targets": [
         {
           "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT COUNT(*)::double precision AS value FROM order_terminalization_tasks WHERE status IN ('queued', 'retrying');"
+          "format": "time_series",
+          "rawSql": "WITH deltas AS ( SELECT $__timeGroupAlias(occurred_at, '1m'), SUM(CASE WHEN event_type IN ('queued', 'retrying') THEN 1 WHEN event_type = 'processing' THEN -1 ELSE 0 END)::double precision AS delta FROM order_terminalization_task_events WHERE $__timeFilter(occurred_at) GROUP BY 1 ) SELECT time, SUM(delta) OVER (ORDER BY time) AS value FROM deltas ORDER BY time;"
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center"
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
       "id": 2,
-      "type": "stat",
-      "title": "Oldest Queued Age (s)",
-      "description": "Age in seconds of the oldest task that is still queued or retrying. Rising values mean the worker is falling behind.",
+      "type": "timeseries",
+      "title": "Active Terminalization Tasks Over Time",
+      "description": "Count of terminalization tasks that have been enqueued but not yet succeeded. This is the main work-in-flight view during perf runs.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
       },
-      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "targets": [
         {
           "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT COALESCE(EXTRACT(EPOCH FROM NOW() - MIN(available_at)), 0)::double precision AS value FROM order_terminalization_tasks WHERE status IN ('queued', 'retrying');"
+          "format": "time_series",
+          "rawSql": "WITH deltas AS ( SELECT $__timeGroupAlias(occurred_at, '1m'), SUM(CASE WHEN event_type = 'queued' THEN 1 WHEN event_type = 'succeeded' THEN -1 ELSE 0 END)::double precision AS delta FROM order_terminalization_task_events WHERE $__timeFilter(occurred_at) GROUP BY 1 ) SELECT time, SUM(delta) OVER (ORDER BY time) AS value FROM deltas ORDER BY time;"
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center"
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
       "id": 3,
-      "type": "stat",
-      "title": "Stuck Processing Tasks",
-      "description": "Proxy for the ADR's dead-letter/stuck view. Current code has retrying and processing states, but no dead-letter state yet.",
+      "type": "timeseries",
+      "title": "Tasks Enqueued By Action",
+      "description": "Per-minute enqueue rate split by confirm and cancel actions. Useful for checking how much terminalization work your perf test generated.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
       },
-      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
       "targets": [
         {
           "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT COUNT(*)::double precision AS value FROM order_terminalization_tasks WHERE status = 'processing' AND created_at < NOW() - INTERVAL '${processing_sla_minutes} minutes';"
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(occurred_at, '1m'), COUNT(*)::double precision AS value, action AS metric FROM order_terminalization_task_events WHERE $__timeFilter(occurred_at) AND event_type = 'queued' GROUP BY 1, 3 ORDER BY 1;"
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center"
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
       "id": 4,
-      "type": "stat",
-      "title": "Orders Waiting On Reservation Work",
-      "description": "Distinct orders that still have at least one queued, retrying, or processing terminalization task.",
+      "type": "timeseries",
+      "title": "Processing Starts By Action",
+      "description": "Per-minute task claim rate split by action. This shows how quickly workers are pulling work off the queue.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
       },
-      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
       "targets": [
         {
           "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT COUNT(DISTINCT order_id)::double precision AS value FROM order_terminalization_tasks WHERE status IN ('queued', 'retrying', 'processing');"
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(occurred_at, '1m'), COUNT(*)::double precision AS value, action AS metric FROM order_terminalization_task_events WHERE $__timeFilter(occurred_at) AND event_type = 'processing' GROUP BY 1, 3 ORDER BY 1;"
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center"
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
       "id": 5,
-      "type": "bargauge",
-      "title": "Retry Count By Action",
-      "description": "Number of retrying tasks split by reservation action. A skew toward cancel or confirm can narrow the failing path quickly.",
+      "type": "timeseries",
+      "title": "Retry Events By Action",
+      "description": "Per-minute retry volume split by action. Spikes here usually mean a downstream dependency is flaky or timing out.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
       },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 5 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "targets": [
         {
           "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT action AS metric, COUNT(*)::double precision AS value FROM order_terminalization_tasks WHERE status = 'retrying' GROUP BY action ORDER BY action;"
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(occurred_at, '1m'), COUNT(*)::double precision AS value, action AS metric FROM order_terminalization_task_events WHERE $__timeFilter(occurred_at) AND event_type = 'retrying' GROUP BY 1, 3 ORDER BY 1;"
         }
       ],
       "options": {
-        "displayMode": "basic",
-        "orientation": "horizontal",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/value/", "values": false },
-        "showUnfilled": true
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
       "id": 6,
-      "type": "table",
-      "title": "Task State Breakdown",
-      "description": "Snapshot of task counts and highest attempt count by action and processing state.",
+      "type": "timeseries",
+      "title": "Success Events By Action",
+      "description": "Per-minute completion volume split by action. During healthy perf runs this should track behind processing starts with minimal lag.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
         "uid": "${neon_datasource_uid}"
       },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 5 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "targets": [
         {
           "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT action, status, COUNT(*)::bigint AS tasks, MAX(attempt_count)::bigint AS max_attempts FROM order_terminalization_tasks GROUP BY action, status ORDER BY action, status;"
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(occurred_at, '1m'), COUNT(*)::double precision AS value, action AS metric FROM order_terminalization_task_events WHERE $__timeFilter(occurred_at) AND event_type = 'succeeded' GROUP BY 1, 3 ORDER BY 1;"
         }
       ],
       "options": {
-        "showHeader": true
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
       "id": 7,
-      "type": "stat",
-      "title": "Oldest Waiting Order Age (s)",
-      "description": "Age in seconds of the oldest order that still depends on unfinished reservation terminalization work.",
+      "type": "timeseries",
+      "title": "Error Events Over Time",
+      "description": "Per-minute terminalization exceptions before retry rescheduling. This is the cleanest signal for hard worker failures during a perf run.",
       "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "${neon_datasource_uid}"
+        "type": "loki",
+        "uid": "${loki_datasource_uid}"
       },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 5 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
       "targets": [
         {
           "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT COALESCE(MAX(EXTRACT(EPOCH FROM NOW() - o.created_at)), 0)::double precision AS value FROM orders o WHERE EXISTS (SELECT 1 FROM order_terminalization_tasks t WHERE t.order_id = o.id AND t.status IN ('queued', 'retrying', 'processing'));"
+          "expr": "sum by (action) (count_over_time({namespace=\"$namespace\"} |= \"event=terminalization_task_error\" | logfmt | __error__=\"\" [5m]))",
+          "queryType": "range"
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center"
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       }
     },
     {
@@ -207,7 +200,7 @@
         "type": "loki",
         "uid": "${loki_datasource_uid}"
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
       "targets": [
         {
           "refId": "A",
@@ -231,7 +224,7 @@
         "type": "loki",
         "uid": "${loki_datasource_uid}"
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
       "targets": [
         {
           "refId": "A",
@@ -260,7 +253,7 @@
         "type": "loki",
         "uid": "${loki_datasource_uid}"
       },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 21 },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 40 },
       "targets": [
         {
           "refId": "A",

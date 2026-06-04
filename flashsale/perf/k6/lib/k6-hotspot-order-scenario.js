@@ -10,8 +10,9 @@ import {
   envNumber,
   envString,
   checkStatus,
-  setupSingleUserAndProductScenario,
 } from "./k6-common.js";
+import { setupSingleUserAndProductScenario } from "../setup/index.js";
+import { cleanupPerfRun } from "../teardown/index.js";
 
 export function createHotspotOrderScenario({
   defaultBaseUrl,
@@ -29,7 +30,7 @@ export function createHotspotOrderScenario({
   defaultDescription,
   defaultProductStock = 100000,
 }) {
-  // All knobs remain env-overridable so CI and local runs can reuse one scenario shape.
+  // 所有参数都允许被环境变量覆盖，方便本地、CI、不同压测强度复用同一个场景骨架。
   const BASE_URL = envString("BASE_URL", defaultBaseUrl);
   const USER_URL = envString("USER_URL", defaultUserUrl);
   const PRODUCT_URL = envString("PRODUCT_URL", defaultProductUrl);
@@ -55,6 +56,8 @@ export function createHotspotOrderScenario({
     defaultP95ThresholdMs,
   );
   const TEST_DESCRIPTION = envString("TEST_DESCRIPTION", defaultDescription);
+  const POST_CLEANUP =
+    (envString("POST_CLEANUP", "true") || "true").toLowerCase() === "true";
 
   const postJson = createPostJson(K6_HTTP_TIMEOUT);
   const reportRuntime = createRuntimeReporter(
@@ -95,7 +98,7 @@ export function createHotspotOrderScenario({
     },
 
     default(data) {
-      // Every iteration buys the same product to amplify contention on one inventory row.
+      // 每次迭代都购买同一个商品，故意把竞争集中到同一条库存记录上。
       const orderRes = postJson(`${BASE_URL}/orders`, {
         user_id: data.user_id,
         items: [
@@ -109,6 +112,16 @@ export function createHotspotOrderScenario({
       checkStatus(orderRes, "order accepted", [200, 201]);
       reportRuntime();
       sleep(1);
+    },
+
+    teardown() {
+      cleanupPerfRun({
+        orderUrl: BASE_URL,
+        userUrl: USER_URL,
+        productUrl: PRODUCT_URL,
+        timeout: K6_HTTP_TIMEOUT,
+        postCleanup: POST_CLEANUP,
+      });
     },
   };
 }

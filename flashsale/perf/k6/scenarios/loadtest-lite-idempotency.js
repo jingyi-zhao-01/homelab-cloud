@@ -12,11 +12,10 @@ import {
   envNumber,
   envString,
   checkStatus,
-  resetService,
-  seedProducts,
-  createUser,
   createProduct,
 } from "../lib/k6-common.js";
+import { initializePerfRun } from "../setup/index.js";
+import { cleanupPerfRun } from "../teardown/index.js";
 
 const BASE_URL = envString("BASE_URL", "http://127.0.0.1:18082");
 const USER_URL = envString("USER_URL", "http://127.0.0.1:18080");
@@ -36,6 +35,7 @@ const TEST_DESCRIPTION = envString(
   "TEST_DESCRIPTION",
   "Idempotency lite: replay the same order request and verify one order plus one stock decrement",
 );
+const POST_CLEANUP = (envString("POST_CLEANUP", "true") || "true").toLowerCase() === "true";
 
 const idempotencyMismatchRate = new Rate("idempotency_mismatch_rate");
 const stockDoubleConsumeRate = new Rate("idempotency_stock_double_consume_rate");
@@ -65,24 +65,25 @@ export const options = buildRampOptions({
 });
 
 export function setup() {
-  console.log(`[k6-scenario] ${TEST_DESCRIPTION}`);
-
   const ts = Date.now();
-
-  // Keep one stable user for the run; each iteration creates its own product.
-  resetService(BASE_URL, "order", K6_HTTP_TIMEOUT);
-  resetService(USER_URL, "user", K6_HTTP_TIMEOUT);
-  seedProducts(PRODUCT_URL, K6_HTTP_TIMEOUT);
-
-  const user = createUser({
+  const initialized = initializePerfRun({
+    description: TEST_DESCRIPTION,
+    orderUrl: BASE_URL,
     userUrl: USER_URL,
-    email: `k6-idempotency-${ts}@example.com`,
-    name: "k6 idempotency user",
+    productUrl: PRODUCT_URL,
+    timeout: K6_HTTP_TIMEOUT,
     postJson,
+    seedProductsFirst: true,
+    userBatch: {
+      emailPrefix: "k6-idempotency",
+      namePrefix: "k6 idempotency user",
+      count: 1,
+      timestamp: ts,
+    },
   });
 
   return {
-    user_id: user.id,
+    user_id: initialized.users[0].id,
   };
 }
 
@@ -144,4 +145,14 @@ export default function loadtestScenario(data) {
   reportRuntime();
 
   sleep(1);
+}
+
+export function teardown() {
+  cleanupPerfRun({
+    orderUrl: BASE_URL,
+    userUrl: USER_URL,
+    productUrl: PRODUCT_URL,
+    timeout: K6_HTTP_TIMEOUT,
+    postCleanup: POST_CLEANUP,
+  });
 }

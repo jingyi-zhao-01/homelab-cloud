@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any, cast
 
 from .models import (
+    TerminalizationEventType,
     OrderItemOut,
     OrderOut,
     OrderStatus,
@@ -28,6 +29,19 @@ class StoredTerminalizationTask:
     attempt_count: int
     available_at: datetime
     created_at: datetime
+    last_error: str | None
+
+
+@dataclass(frozen=True)
+class StoredTerminalizationTaskEvent:
+    event_id: int
+    task_id: int
+    order_id: int
+    reservation_id: int
+    action: TerminalizationAction
+    event_type: TerminalizationEventType
+    attempt_count: int
+    occurred_at: datetime
     last_error: str | None
 
 

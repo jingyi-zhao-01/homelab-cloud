@@ -6,6 +6,7 @@ from .models import (
     OrderOut,
     OrderStatus,
     PaymentStatus,
+    TerminalizationEventType,
     TerminalizationAction,
 )
 from .order_storage import StoredOrder, StoredTerminalizationTask
@@ -64,6 +65,17 @@ class OrderRepository(Protocol):
         task_id: int,
         available_at: datetime,
         last_error: str,
+    ) -> None: ...
+
+    def record_terminalization_task_event(
+        self,
+        task_id: int,
+        order_id: int,
+        reservation_id: int,
+        action: TerminalizationAction,
+        event_type: TerminalizationEventType,
+        attempt_count: int,
+        last_error: str | None = None,
     ) -> None: ...
 
     def list_orders(self) -> list[OrderOut]: ...
