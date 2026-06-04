@@ -93,7 +93,7 @@ jobs:
     needs:
       - detect-service-changes
       - predeploy
-    if: ${{ needs.detect-service-changes.outputs.service_code_changed == 'true' && needs.predeploy.result == 'success' }}
+    if: ${{ always() && (needs.detect-service-changes.outputs.service_code_changed != 'true' || needs.predeploy.result == 'success') }}
     strategy:
       fail-fast: false
       matrix:
@@ -108,10 +108,25 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      - name: Decide whether to build images
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.detect-service-changes.outputs.service_code_changed }}" = "true" ]; then
+            echo "build_images=true" >> "$GITHUB_OUTPUT"
+            echo "Flashsale service code changes detected; building images"
+          else
+            echo "build_images=false" >> "$GITHUB_OUTPUT"
+            echo "No Flashsale service code changes detected; skipping image build and reusing chart defaults"
+          fi
+
       - name: Set up Docker Buildx
+        if: ${{ steps.gate.outputs.build_images == 'true' }}
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
+        if: ${{ steps.gate.outputs.build_images == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -119,6 +134,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Push ${{ matrix.service }}
+        if: ${{ steps.gate.outputs.build_images == 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: flashsale/${{ matrix.service }}
@@ -133,7 +149,7 @@ jobs:
     needs:
       - detect-service-changes
       - build-and-push
-    if: ${{ needs.detect-service-changes.outputs.service_code_changed == 'true' && needs.build-and-push.result == 'success' }}
+    if: ${{ needs.build-and-push.result == 'success' }}
 
     steps:
       - name: Checkout
@@ -232,6 +248,7 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Verify GHCR pull credentials can read deployed images
+        if: ${{ needs.detect-service-changes.outputs.service_code_changed == 'true' }}
         env:
           GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
@@ -248,21 +265,33 @@ jobs:
           docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-order-service:"$IMAGE_TAG" >/dev/null
 
       - name: Deploy Helm release
+        env:
+          SERVICE_CODE_CHANGED: ${{ needs.detect-service-changes.outputs.service_code_changed }}
         run: |
-          IMAGE_TAG="${{ github.sha }}"
+          set -euo pipefail
+          helm_args=(
+            --set imagePullSecrets[0].name=ghcr-pull-secret
+          )
+
+          if [ "$SERVICE_CODE_CHANGED" = "true" ]; then
+            IMAGE_TAG="${{ github.sha }}"
+            helm_args+=(
+              --set userService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-user-service
+              --set userService.image.tag="$IMAGE_TAG"
+              --set userService.image.pullPolicy=IfNotPresent
+              --set productService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-product-service
+              --set productService.image.tag="$IMAGE_TAG"
+              --set productService.image.pullPolicy=IfNotPresent
+              --set orderService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-order-service
+              --set orderService.image.tag="$IMAGE_TAG"
+              --set orderService.image.pullPolicy=IfNotPresent
+            )
+          fi
+
           helm upgrade --install "$RELEASE" "$CHART_PATH" \
             -n "$NAMESPACE" \
             --create-namespace \
-            --set imagePullSecrets[0].name=ghcr-pull-secret \
-            --set userService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-user-service \
-            --set userService.image.tag="$IMAGE_TAG" \
-            --set userService.image.pullPolicy=IfNotPresent \
-            --set productService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-product-service \
-            --set productService.image.tag="$IMAGE_TAG" \
-            --set productService.image.pullPolicy=IfNotPresent \
-            --set orderService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-order-service \
-            --set orderService.image.tag="$IMAGE_TAG" \
-            --set orderService.image.pullPolicy=IfNotPresent
+            "${helm_args[@]}"
 
       - name: Wait for rollouts
         run: |
@@ -287,16 +316,7 @@ jobs:
   postdeploy:
     name: Postdeploy Runtime Gates
     needs:
-      - detect-service-changes
       - deploy
-    if: ${{ needs.detect-service-changes.outputs.service_code_changed == 'true' && needs.deploy.result == 'success' }}
-    uses: ./.github/workflows/flashsales-deploy-post.yml
-    secrets: inherit
-
-  perf-only:
-    name: Perf Test Without Redeploy
-    needs:
-      - detect-service-changes
-    if: ${{ needs.detect-service-changes.outputs.service_code_changed != 'true' }}
+    if: ${{ needs.deploy.result == 'success' }}
     uses: ./.github/workflows/flashsales-deploy-post.yml
     secrets: inherit
