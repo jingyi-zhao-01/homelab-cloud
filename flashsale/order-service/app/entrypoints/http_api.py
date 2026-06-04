@@ -1,6 +1,6 @@
 import anyio
 import httpx
-from fastapi import FastAPI, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.responses import JSONResponse
 
 from app.adapters.order_mapping import to_api_order
@@ -10,6 +10,7 @@ from app.adapters.user_http_client import UserHttpClient
 from app.application.commands import CreateOrderCommand, PaymentWebhookCommand
 from app.application.order_runtime import OrderRuntime
 from app.config import db_url
+from app.config import ORDER_CREATE_MAX_IN_FLIGHT
 from app.entrypoints.worker_loop import TerminalizationWorkerLoop
 from app.models import (
     ErrorResponse,
@@ -41,6 +42,7 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
     )
     worker = TerminalizationWorkerLoop(runtime.process_tasks.process)
     probe_limiter = anyio.CapacityLimiter(8)
+    orders_limiter = anyio.CapacityLimiter(ORDER_CREATE_MAX_IN_FLIGHT)
     repository = uow
     app.state.repository = repository
 
@@ -67,6 +69,23 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
                 "event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True
             )
             return False
+
+    async def order_capacity_guard() -> None:
+        try:
+            orders_limiter.acquire_nowait()
+        except anyio.WouldBlock as exc:
+            logger.warning(
+                "event=order_service_admission_rejected path=/orders max_in_flight=%s result=busy",
+                ORDER_CREATE_MAX_IN_FLIGHT,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="order-service overloaded, retry later",
+            ) from exc
+        try:
+            yield
+        finally:
+            orders_limiter.release()
 
     @app.get(
         "/health",
@@ -119,6 +138,7 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
             },
             503: {"model": ErrorResponse, "description": "Database unavailable"},
         },
+        dependencies=[Depends(order_capacity_guard)],
     )
     def create_order(payload: OrderCreateRequest) -> OrderOut:
         order = runtime.create_orders.create_order(

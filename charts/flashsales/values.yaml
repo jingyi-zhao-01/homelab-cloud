@@ -3,17 +3,18 @@ namespaceOverride: ""
 imagePullSecrets: []
 
 postgres:
-  enabled: false
+  enabled: true
   image:
     repository: postgres
     tag: "16-alpine"
     pullPolicy: IfNotPresent
   resources:
     requests:
-      cpu: "100m"
+      cpu: "500m"
+      memory: "1Gi"
     limits:
-      cpu: "250m"
-      memory: "128Mi"
+      cpu: "2"
+      memory: "2Gi"
   service:
     type: ClusterIP
     port: 5432
@@ -22,8 +23,22 @@ postgres:
     password: flashsales-pass
     database: flashsales
   storage:
-    size: 5Gi
+    size: 20Gi
     className: ""
+  runtime:
+    maxConnections: "200"
+    sharedBuffers: "512MB"
+    effectiveCacheSize: "1536MB"
+    workMem: "8MB"
+    maintenanceWorkMem: "128MB"
+    checkpointCompletionTarget: "0.9"
+    walBuffers: "16MB"
+    randomPageCost: "1.1"
+    logLockWaits: "on"
+    deadlockTimeout: "200ms"
+    logMinDurationStatement: "200ms"
+    logLinePrefix: "%m [%p] %q%u@%d "
+    sharedPreloadLibraries: ""
 
 redis:
   enabled: false
@@ -186,7 +201,8 @@ orderService:
   env:
     userServiceUrl: http://flashsales-user-service:8001
     productServiceUrl: http://flashsales-product-service:8002
-    dependencyTimeoutSeconds: "8"
+    dependencyTimeoutSeconds: "3"
+    maxInflightOrders: "32"
     dbHost: flashsales-postgres
     dbPort: "5432"
     dbName: flashsales

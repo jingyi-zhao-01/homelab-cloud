@@ -218,42 +218,24 @@ class PostgresProductRepository(ProductRepository):
         start = time.perf_counter()
         result = "updated"
         try:
-            updated_row = self._reserve_engine.reserve(product_id, quantity)
-
-            if not updated_row:
+            reservation_row = self._reserve_engine.reserve_with_reservation(
+                product_id,
+                quantity,
+                RESERVATION_TTL_SECONDS,
+            )
+            if not reservation_row:
                 result = "missing"
                 return None
-            with psycopg.connect(
-                self._database_url, autocommit=True, row_factory=dict_row
-            ) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO reservations (product_id, quantity, unit_price, status, expires_at)
-                        VALUES (%s, %s, %s, %s, NOW() + (%s || ' seconds')::interval)
-                        RETURNING reservation_id, product_id, quantity, unit_price, status, expires_at
-                        """,
-                        (
-                            product_id,
-                            quantity,
-                            updated_row["price"],
-                            "reserved",
-                            RESERVATION_TTL_SECONDS,
-                        ),
-                    )
-                    reservation_row = cur.fetchone()
-                    if not reservation_row:
-                        raise RuntimeError("reservation persistence failed")
-                    return ReservationOut(
-                        reservation_id=int(reservation_row["reservation_id"]),
-                        product_id=int(reservation_row["product_id"]),
-                        quantity=int(reservation_row["quantity"]),
-                        unit_price=float(reservation_row["unit_price"]),
-                        status=str(reservation_row["status"]),
-                        expires_at=reservation_row["expires_at"].isoformat()
-                        if reservation_row["expires_at"]
-                        else None,
-                    )
+            return ReservationOut(
+                reservation_id=int(reservation_row["reservation_id"]),
+                product_id=int(reservation_row["product_id"]),
+                quantity=int(reservation_row["quantity"]),
+                unit_price=float(reservation_row["unit_price"]),
+                status=str(reservation_row["status"]),
+                expires_at=reservation_row["expires_at"].isoformat()
+                if reservation_row["expires_at"]
+                else None,
+            )
         except ValueError:
             result = "insufficient_stock"
             raise

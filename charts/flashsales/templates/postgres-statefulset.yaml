@@ -26,14 +26,39 @@ spec:
           imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
           args:
             - "-c"
-            - "log_lock_waits=on"
+            - "max_connections={{ .Values.postgres.runtime.maxConnections }}"
             - "-c"
-            - "deadlock_timeout=200ms"
+            - "shared_buffers={{ .Values.postgres.runtime.sharedBuffers }}"
             - "-c"
-            - "log_min_duration_statement=200ms"
+            - "effective_cache_size={{ .Values.postgres.runtime.effectiveCacheSize }}"
+            - "-c"
+            - "work_mem={{ .Values.postgres.runtime.workMem }}"
+            - "-c"
+            - "maintenance_work_mem={{ .Values.postgres.runtime.maintenanceWorkMem }}"
+            - "-c"
+            - "checkpoint_completion_target={{ .Values.postgres.runtime.checkpointCompletionTarget }}"
+            - "-c"
+            - "wal_buffers={{ .Values.postgres.runtime.walBuffers }}"
+            - "-c"
+            - "random_page_cost={{ .Values.postgres.runtime.randomPageCost }}"
+            - "-c"
+            - "log_lock_waits={{ .Values.postgres.runtime.logLockWaits }}"
+            - "-c"
+            - "deadlock_timeout={{ .Values.postgres.runtime.deadlockTimeout }}"
+            - "-c"
+            - "log_min_duration_statement={{ .Values.postgres.runtime.logMinDurationStatement }}"
+            - "-c"
+            - "log_line_prefix={{ .Values.postgres.runtime.logLinePrefix }}"
+            {{- if .Values.postgres.runtime.sharedPreloadLibraries }}
+            - "-c"
+            - "shared_preload_libraries={{ .Values.postgres.runtime.sharedPreloadLibraries }}"
+            {{- end }}
           envFrom:
             - secretRef:
                 name: flashsales-postgres-auth
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           ports:
             - containerPort: {{ .Values.postgres.service.port }}
               name: postgres
