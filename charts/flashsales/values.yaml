@@ -172,7 +172,7 @@ orderService:
     userServiceUrl: http://flashsales-user-service:8001
     productServiceUrl: http://flashsales-product-service:8002
     dependencyTimeoutSeconds: "3"
-    maxInflightOrders: "32"
+    maxInflightOrders: "64"
     dbHost: ""
     dbPort: ""
     dbName: ""
