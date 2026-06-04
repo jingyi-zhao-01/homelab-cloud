@@ -31,7 +31,7 @@ def create_request_logging_middleware(
             service_name,
             request_id,
             request.method,
-            request.url.path,
+            request_path_label(request),
             response.status_code,
             duration_ms,
         )
@@ -39,3 +39,11 @@ def create_request_logging_middleware(
         return response
 
     return middleware
+
+
+def request_path_label(request: Request) -> str:
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", None)
+    if isinstance(route_path, str) and route_path:
+        return route_path
+    return request.url.path
