@@ -95,3 +95,27 @@ jobs:
             -e STEADY=${{ github.event.inputs.steady }} \
             -e RAMP_DOWN=${{ github.event.inputs.ramp_down }} \
             -e REPORT_INTERVAL_MS=${{ github.event.inputs.report_interval_ms }}
+
+  notify-discord:
+    name: Notify Discord
+    needs:
+      - perf-test
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        continue-on-error: true
+
+      - name: Send Discord notification
+        continue-on-error: true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          DISCORD_WEBHOOK_SSM_NAME: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
+          WORKFLOW_NAME: Manual Perf Test (k6)
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: bash .github/scripts/notify-discord.sh

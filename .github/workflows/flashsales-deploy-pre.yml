@@ -103,3 +103,30 @@ jobs:
         if: failure()
         run: |
           docker compose -f flashsale/docker-compose.yaml logs --no-color || true
+
+  notify-discord:
+    name: Notify Discord
+    needs:
+      - product-service-unit-gate
+      - order-service-unit-gate
+      - product-service-compose-integration-gate
+      - order-service-compose-integration-gate
+    if: ${{ always() && github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        continue-on-error: true
+
+      - name: Send Discord notification
+        continue-on-error: true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          DISCORD_WEBHOOK_SSM_NAME: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
+          WORKFLOW_NAME: Flashsales Deploy Pre
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: bash .github/scripts/notify-discord.sh

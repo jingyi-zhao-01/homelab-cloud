@@ -232,3 +232,30 @@ jobs:
         run: |
           set -euo pipefail
           KUBECONFIG_PATH="$HOME/.kube/config" NAMESPACE="$NAMESPACE" USE_K8S_PORT_FORWARD=true make concurrency-hotspot-10tps
+
+  notify-discord:
+    name: Notify Discord
+    needs:
+      - prepare
+      - smoke
+      - idempotency-lite
+      - hotspot-10tps
+    if: ${{ always() && github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        continue-on-error: true
+
+      - name: Send Discord notification
+        continue-on-error: true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          DISCORD_WEBHOOK_SSM_NAME: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
+          WORKFLOW_NAME: Flashsales Perf Concurrency Suite
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: bash .github/scripts/notify-discord.sh
