@@ -33,15 +33,15 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "P50 Endpoint Latency (ms)",
+      "title": "product-service-reserve-p50-latency-ms",
       "description": "为什么重要：P50 代表系统的日常基线，最适合看是不是所有请求都整体变慢。怎么看：如果 P50 都明显抬升，通常不是个别尖刺，而是主路径本身更重了。",
       "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
       "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
       "targets": [
         {
           "refId": "A",
-          "expr": "quantile_over_time(0.50, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path)",
-          "legendFormat": "{{service}} {{method}} {{path}}",
+          "expr": "quantile_over_time(0.50, {namespace=\"$namespace\"} |= \"event=product_service_reserve_finished\" | logfmt | __error__=\"\" | unwrap elapsed_ms [5m])",
+          "legendFormat": "product-service /products/{product_id}/reserve",
           "queryType": "range"
         }
       ],
@@ -50,15 +50,15 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "P95 Endpoint Latency (ms)",
-      "description": "为什么重要：P95 最适合看负载开始逼近瓶颈时的退化。怎么看：如果 P95 抬升但 P50 还平稳，说明大多数请求还好，但尾部开始排队或竞争锁。",
+      "title": "product-service-reserve-p95-latency-ms",
+      "description": "为什么重要：这是你要先看的 reserve 热点耗时。怎么看：如果 10 TPS 下它已经抬升，问题不是资源打满，而是 reserve 链路里某一步开始阻塞了。",
       "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
       "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
       "targets": [
         {
           "refId": "A",
-          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path)",
-          "legendFormat": "{{service}} {{method}} {{path}}",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=product_service_reserve_finished\" | logfmt | __error__=\"\" | unwrap elapsed_ms [5m])",
+          "legendFormat": "product-service /products/{product_id}/reserve",
           "queryType": "range"
         }
       ],
@@ -67,15 +67,15 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "P99 Endpoint Latency (ms)",
-      "description": "为什么重要：P99 是 perf test 最容易先炸的地方，通常最早反映排队、锁争用、超时重试。怎么看：如果 P99 出现尖刺并逐步放大，后面大概率会跟 request timeout 或 queue backlog 上升一起出现。",
+      "title": "product-service-lock-wait-p95-ms",
+      "description": "为什么重要：如果 timeout 是 DB 行锁等待导致的，这张图会先抬头。怎么看：它和 reserve p95 一起涨时，说明慢点就在 `SELECT ... FOR UPDATE` 或库存更新附近。",
       "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
       "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
       "targets": [
         {
           "refId": "A",
-          "expr": "quantile_over_time(0.99, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path)",
-          "legendFormat": "{{service}} {{method}} {{path}}",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=product_service_lock_wait\" | logfmt | __error__=\"\" | unwrap wait_ms [5m]) by (lock_mode)",
+          "legendFormat": "product-service {{lock_mode}}",
           "queryType": "range"
         }
       ],
@@ -84,15 +84,15 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Top Endpoints By P95",
-      "description": "为什么重要：当 endpoint 太多时，这张图帮你快速锁定最慢的热点路径。怎么看：先看榜首是谁，再对照同时间窗口里的吞吐、错误和 queue 图判断它是 CPU/DB 热点还是下游依赖热点。",
+      "title": "product-service-lock-wait-slow-events",
+      "description": "为什么重要：这是 lock wait 真的进入异常区间的次数。怎么看：如果这条线开始有持续脉冲，而不是零星点状，说明锁等待已经从偶发变成系统性问题。",
       "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
       "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
       "targets": [
         {
           "refId": "A",
-          "expr": "topk(10, quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=request\" | logfmt | __error__=\"\" | service=~\"$service\" | unwrap duration_ms [5m]) by (service, method, path))",
-          "legendFormat": "{{service}} {{method}} {{path}}",
+          "expr": "sum by (lock_mode) (count_over_time({namespace=\"$namespace\"} |= \"event=lock_wait_slow\" | logfmt | __error__=\"\" [5m]))",
+          "legendFormat": "product-service {{lock_mode}}",
           "queryType": "range"
         }
       ],

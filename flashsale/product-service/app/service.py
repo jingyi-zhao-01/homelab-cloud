@@ -1,4 +1,5 @@
 import logging
+import time
 
 from fastapi import HTTPException
 
@@ -79,15 +80,19 @@ class ProductService:
     def reserve_product(
         self, product_id: int, payload: ReserveRequest
     ) -> ReservationOut:
+        start = time.perf_counter()
+        result = "unknown"
         try:
             reservation = self._repository.reserve_product(product_id, payload.quantity)
             if not reservation:
+                result = "missing"
                 self._logger.info(
                     "event=product_not_found product_id=%s storage=%s",
                     product_id,
                     self._storage,
                 )
                 raise HTTPException(status_code=404, detail=PRODUCT_NOT_FOUND_MESSAGE)
+            result = "reserved"
             self._logger.info(
                 "event=product_reserved product_id=%s quantity=%s storage=%s",
                 product_id,
@@ -96,6 +101,7 @@ class ProductService:
             )
             return reservation
         except ValueError as exc:
+            result = "insufficient_stock"
             self._logger.warning(
                 "event=product_reserve_conflict product_id=%s quantity=%s storage=%s",
                 product_id,
@@ -106,6 +112,7 @@ class ProductService:
         except HTTPException:
             raise
         except Exception as exc:
+            result = "error"
             self._logger.exception(
                 "event=product_reserve_error storage=%s product_id=%s quantity=%s",
                 self._storage,
@@ -115,6 +122,16 @@ class ProductService:
             raise HTTPException(
                 status_code=503, detail=DATABASE_UNAVAILABLE_MESSAGE
             ) from exc
+        finally:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            self._logger.info(
+                "event=product_service_reserve_finished product_id=%s quantity=%s elapsed_ms=%.2f result=%s storage=%s",
+                product_id,
+                payload.quantity,
+                elapsed_ms,
+                result,
+                self._storage,
+            )
 
     def confirm_reservation(self, reservation_id: int) -> ReservationOut:
         try:

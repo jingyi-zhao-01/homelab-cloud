@@ -31,6 +31,7 @@ else:
 
 product_service = ProductService(repository=repository, logger=logger, storage=storage)
 probe_limiter = anyio.CapacityLimiter(8)
+app.state.repository = repository
 
 
 @app.on_event("startup")
@@ -46,26 +47,40 @@ def startup() -> None:
 async def _repository_is_healthy() -> bool:
     try:
         return await anyio.to_thread.run_sync(
-            repository.is_healthy,
+            app.state.repository.is_healthy,
             limiter=probe_limiter,
         )
     except Exception:
-        logger.warning("event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True)
+        logger.warning(
+            "event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True
+        )
         return False
 
 
 @app.get(
     "/health",
     summary="Service health check",
-    description="Returns readiness for product-service, including database reachability.",
+    description="Returns basic process health for product-service without touching dependencies.",
     tags=["system"],
 )
 async def health() -> HealthResponse:
+    return HealthResponse(status="ok", service=SERVICE_NAME)
+
+
+@app.get(
+    "/ready",
+    summary="Service readiness check",
+    description="Returns dependency readiness for product-service, including database reachability.",
+    tags=["system"],
+)
+async def ready() -> HealthResponse:
     healthy = await _repository_is_healthy()
     if not healthy:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content=HealthResponse(status="database-unavailable", service=SERVICE_NAME).model_dump(),
+            content=HealthResponse(
+                status="database-unavailable", service=SERVICE_NAME
+            ).model_dump(),
         )
     return HealthResponse(status="ok", service=SERVICE_NAME)
 

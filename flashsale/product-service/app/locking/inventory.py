@@ -46,6 +46,13 @@ class InventoryReserveEngine:
                     )
                     row = cur.fetchone()
                     lock_wait_ms = (time.perf_counter() - lock_start) * 1000
+                    lock_logger.info(
+                        "event=product_service_lock_wait lock_mode=pessimistic product_id=%s quantity=%s wait_ms=%.2f threshold_ms=%.2f",
+                        product_id,
+                        quantity,
+                        lock_wait_ms,
+                        self._slow_ms_threshold,
+                    )
                     if lock_wait_ms >= self._slow_ms_threshold:
                         lock_logger.warning(
                             "event=lock_wait_slow lock_mode=pessimistic product_id=%s quantity=%s wait_ms=%.2f threshold_ms=%.2f",
@@ -97,6 +104,13 @@ class InventoryReserveEngine:
             raise
         finally:
             tx_elapsed_ms = (time.perf_counter() - tx_start) * 1000
+            lock_logger.info(
+                "event=product_service_reserve_transaction lock_mode=pessimistic product_id=%s quantity=%s elapsed_ms=%.2f threshold_ms=%.2f",
+                product_id,
+                quantity,
+                tx_elapsed_ms,
+                self._slow_ms_threshold,
+            )
             if tx_elapsed_ms >= self._slow_ms_threshold:
                 lock_logger.warning(
                     "event=transaction_slow lock_mode=pessimistic product_id=%s quantity=%s elapsed_ms=%.2f threshold_ms=%.2f",
@@ -184,3 +198,12 @@ class InventoryReserveEngine:
                 quantity,
             )
             raise
+        finally:
+            elapsed_ms = (time.perf_counter() - reserve_start) * 1000
+            lock_logger.info(
+                "event=product_service_reserve_transaction lock_mode=optimistic product_id=%s quantity=%s elapsed_ms=%.2f threshold_ms=%.2f",
+                product_id,
+                quantity,
+                elapsed_ms,
+                self._slow_ms_threshold,
+            )

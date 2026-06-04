@@ -64,7 +64,7 @@ spec:
             - containerPort: {{ .Values.userService.service.port }}
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready
               port: {{ .Values.userService.service.port }}
             initialDelaySeconds: 3
             periodSeconds: 5

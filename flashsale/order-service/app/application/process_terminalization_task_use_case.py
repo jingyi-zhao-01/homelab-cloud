@@ -1,8 +1,12 @@
 from datetime import datetime, timedelta, timezone
+import logging
+import time
 
 from app.application.results import ProcessTerminalizationTasksResult
 from app.ports.product_reservation_client import ProductReservationClient
 from app.ports.unit_of_work import UnitOfWork
+
+terminalization_logger = logging.getLogger("order-service.terminalization")
 
 
 class ProcessTerminalizationTaskUseCase:
@@ -25,7 +29,18 @@ class ProcessTerminalizationTaskUseCase:
         succeeded_count = 0
         retrying_count = 0
         for task in tasks:
+            started_at = time.perf_counter()
             ok, error = self._products.terminalize(task.reservation_id, task.action)
+            elapsed_ms = (time.perf_counter() - started_at) * 1000
+            terminalization_logger.info(
+                "event=order_service_terminalization_call order_id=%s reservation_id=%s action=%s elapsed_ms=%.2f result=%s attempt_count=%s",
+                task.order_id,
+                task.reservation_id,
+                task.action,
+                elapsed_ms,
+                "success" if ok else "retry",
+                task.attempt_count,
+            )
             if ok:
                 self._uow.tasks.mark_succeeded(task.task_id)
                 succeeded_count += 1

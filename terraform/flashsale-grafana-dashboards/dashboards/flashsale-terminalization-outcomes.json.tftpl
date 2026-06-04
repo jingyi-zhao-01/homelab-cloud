@@ -23,8 +23,8 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "Retry Events By Action",
-      "description": "为什么重要：retry 是依赖抖动、超时、竞争失败最直接的症状。怎么看：短小尖刺还能接受；如果 retry 和 backlog 一起连续抬升，说明 queue 只是把问题延后，没有把问题消化掉。",
+      "title": "order-service-terminalization-retry-events",
+      "description": "为什么重要：retry 是 confirm/cancel 下游抖动最直接的症状。怎么看：如果 retry 跟着 timeout 同时涨，说明 worker 虽然异步，但下游 confirm/cancel 仍然在卡住。",
       "datasource": { "type": "grafana-postgresql-datasource", "uid": "${neon_datasource_uid}" },
       "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
       "targets": [
@@ -39,8 +39,8 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "Success Events By Action",
-      "description": "为什么重要：这张图说明 queue 最终有没有把工作做完。怎么看：健康情况下 success 会跟着 processing 上升，并在压测结束后把 backlog 慢慢吃掉。",
+      "title": "order-service-terminalization-success-events",
+      "description": "为什么重要：这张图说明 worker 最终有没有把 confirm/cancel 做完。怎么看：如果 success 跟不上 retry 或 claim，说明异步路径本身也在堆积。",
       "datasource": { "type": "grafana-postgresql-datasource", "uid": "${neon_datasource_uid}" },
       "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
       "targets": [
@@ -55,16 +55,16 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "Worker Error Events",
-      "description": "为什么重要：这张图专门看 worker 抛异常，而不是普通 retry。怎么看：如果 error 线起了，优先看是代码错误、连接错误还是外部依赖不可达；它比 latency 更接近根因。",
+      "title": "order-service-terminalization-call-p95-ms",
+      "description": "为什么重要：这是 confirm/cancel 每次实际调用 product-service 的阻塞耗时。怎么看：如果这条线抬升，就说明虽然入口已经异步化，但 worker 线程本身还在被同步下游拖慢。",
       "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
       "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (action) (count_over_time({namespace=\"$namespace\"} |= \"event=terminalization_task_error\" | logfmt | __error__=\"\" [5m]))",
+          "expr": "quantile_over_time(0.95, {namespace=\"$namespace\"} |= \"event=order_service_terminalization_call\" | logfmt | __error__=\"\" | unwrap elapsed_ms [5m]) by (action)",
           "queryType": "range",
-          "legendFormat": "{{action}}"
+          "legendFormat": "order-service {{action}}"
         }
       ],
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
@@ -72,22 +72,16 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Retry vs Success From Worker Logs",
-      "description": "为什么重要：这是最实用的恢复力视图。怎么看：如果 success 长期压过 retry，系统虽有抖动但能自愈；如果 retry 长期接近或高于 success，说明用户面前迟早会变成 timeout 或积压。",
+      "title": "order-service-terminalization-worker-errors",
+      "description": "为什么重要：这张图专门看 worker 里的异常，而不是普通业务重试。怎么看：如果 error 和 call p95 同时上升，说明问题更像网络/依赖失败；如果只有 p95 高，说明更像慢阻塞而不是直接报错。",
       "datasource": { "type": "loki", "uid": "${loki_datasource_uid}" },
       "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (action) (count_over_time({namespace=\"$namespace\"} |= \"event=terminalization_task_retry\" | logfmt | __error__=\"\" [5m]))",
+          "expr": "sum by (action) (count_over_time({namespace=\"$namespace\"} |= \"event=terminalization_task_error\" | logfmt | __error__=\"\" [5m]))",
           "queryType": "range",
-          "legendFormat": "retry {{action}}"
-        },
-        {
-          "refId": "B",
-          "expr": "sum by (action) (count_over_time({namespace=\"$namespace\"} |= \"event=terminalization_task_succeeded\" | logfmt | __error__=\"\" [5m]))",
-          "queryType": "range",
-          "legendFormat": "success {{action}}"
+          "legendFormat": "order-service {{action}}"
         }
       ],
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } }

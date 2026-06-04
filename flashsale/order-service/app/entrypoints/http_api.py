@@ -21,7 +21,10 @@ from app.models import (
     PaymentWebhookRequest,
     ProcessTerminalizationTasksResult,
 )
-from app.observability import configure_service_logger, create_request_logging_middleware
+from app.observability import (
+    configure_service_logger,
+    create_request_logging_middleware,
+)
 
 SERVICE_NAME = "order-service"
 
@@ -31,7 +34,9 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
     app = FastAPI(title=SERVICE_NAME, version="0.1.0")
     app.middleware("http")(create_request_logging_middleware(logger, SERVICE_NAME))
 
-    uow = OrderPostgresUnitOfWork(db_url()) if use_postgres() else OrderMemoryUnitOfWork()
+    uow = (
+        OrderPostgresUnitOfWork(db_url()) if use_postgres() else OrderMemoryUnitOfWork()
+    )
     runtime = OrderRuntime(
         uow=uow,
         users=UserHttpClient(lambda: httpx.Client()),
@@ -40,6 +45,7 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
     worker = TerminalizationWorkerLoop(runtime.process_tasks.process)
     probe_limiter = anyio.CapacityLimiter(8)
     repository = uow
+    app.state.repository = repository
 
     @app.on_event("startup")
     def startup() -> None:
@@ -55,18 +61,32 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
 
     async def _repository_is_healthy() -> bool:
         try:
-            return await anyio.to_thread.run_sync(repository.is_healthy, limiter=probe_limiter)
+            return await anyio.to_thread.run_sync(
+                app.state.repository.is_healthy,
+                limiter=probe_limiter,
+            )
         except Exception:
-            logger.warning("event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True)
+            logger.warning(
+                "event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True
+            )
             return False
 
     @app.get(
         "/health",
         summary="Service health check",
-        description="Returns readiness for order-service, including database reachability.",
+        description="Returns basic process health for order-service without touching dependencies.",
         tags=["system"],
     )
     async def health() -> HealthResponse:
+        return HealthResponse(status="ok", service=SERVICE_NAME)
+
+    @app.get(
+        "/ready",
+        summary="Service readiness check",
+        description="Returns dependency readiness for order-service, including database reachability.",
+        tags=["system"],
+    )
+    async def ready() -> HealthResponse:
         if not await _repository_is_healthy():
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -96,7 +116,10 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
             400: {"model": ErrorResponse, "description": "Order items cannot be empty"},
             404: {"model": ErrorResponse, "description": "User or product not found"},
             409: {"model": ErrorResponse, "description": "Insufficient product stock"},
-            502: {"model": ErrorResponse, "description": "Dependent service unavailable"},
+            502: {
+                "model": ErrorResponse,
+                "description": "Dependent service unavailable",
+            },
             503: {"model": ErrorResponse, "description": "Database unavailable"},
         },
     )
@@ -128,7 +151,9 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
         summary="List orders",
         description="Returns all persisted orders visible to the service storage backend.",
         tags=["orders"],
-        responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
+        responses={
+            503: {"model": ErrorResponse, "description": "Database unavailable"}
+        },
     )
     def list_orders() -> list[OrderOut]:
         return [to_api_order(order) for order in runtime.queries.list_orders()]
@@ -158,7 +183,9 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
         summary="Reset order storage",
         description="Clears order-service backing storage for local and integration test workflows.",
         tags=["admin"],
-        responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
+        responses={
+            503: {"model": ErrorResponse, "description": "Database unavailable"}
+        },
     )
     def admin_reset() -> Response:
         uow.reset()
@@ -169,7 +196,9 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
         summary="Expire pending orders",
         description="Marks elapsed pending orders as expired and releases their reservations.",
         tags=["admin"],
-        responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
+        responses={
+            503: {"model": ErrorResponse, "description": "Database unavailable"}
+        },
     )
     def admin_expire_orders() -> ExpireOrdersResult:
         result = runtime.create_orders.expire_orders()
@@ -180,7 +209,9 @@ def build_http_api() -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimit
         summary="Process terminalization tasks",
         description="Runs one pass of the reservation confirm/cancel worker for diagnostics and tests.",
         tags=["admin"],
-        responses={503: {"model": ErrorResponse, "description": "Database unavailable"}},
+        responses={
+            503: {"model": ErrorResponse, "description": "Database unavailable"}
+        },
     )
     def admin_process_terminalizations() -> ProcessTerminalizationTasksResult:
         result = runtime.process_tasks.process()
