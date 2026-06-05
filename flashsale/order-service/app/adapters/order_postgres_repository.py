@@ -16,8 +16,8 @@ from app.config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, DB_POOL_TIMEOUT_SECON
 from app.domain.order import Order, OrderItem
 from app.domain.state_machines import transition_order
 from app.domain.statuses import OrderStatus, PaymentStatus
-from app.db_pool import DatabasePool
-from app.observability import start_span
+from flashsale_shared.db_pool import DatabasePool
+from flashsale_shared.observability import start_span
 
 ROW_FACTORY = cast(Any, dict_row)
 db_logger = logging.getLogger("order-service.db")

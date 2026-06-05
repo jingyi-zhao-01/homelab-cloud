@@ -8,7 +8,7 @@ from app.application.commands import CreateOrderCommand, PaymentWebhookCommand
 from app.application.results import ExpireOrdersResult
 from app.config import DATABASE_UNAVAILABLE_MESSAGE, ORDER_PENDING_TTL_SECONDS
 from app.domain.order import Order, OrderItem
-from app.observability import start_span
+from flashsale_shared.observability import start_span
 from app.ports.product_reservation_client import ProductReservationClient
 from app.ports.unit_of_work import UnitOfWork
 from app.ports.user_directory_client import UserDirectoryClient

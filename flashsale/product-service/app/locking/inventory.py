@@ -11,8 +11,8 @@ except ImportError:  # pragma: no cover - exercised only when pool dep is absent
     PoolClosed = PoolTimeout = TooManyRequests = None
 
 from app.config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, DB_POOL_TIMEOUT_SECONDS
-from app.db_pool import DatabasePool
-from app.observability import start_span
+from flashsale_shared.db_pool import DatabasePool
+from flashsale_shared.observability import start_span
 
 lock_logger = logging.getLogger("product-service.locking")
 POOL_ERRORS = tuple(

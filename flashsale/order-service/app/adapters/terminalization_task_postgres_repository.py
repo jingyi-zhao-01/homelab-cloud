@@ -8,8 +8,8 @@ from app.adapters.order_postgres_rows import to_task
 from app.config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, DB_POOL_TIMEOUT_SECONDS
 from app.domain.reservation_terminalization_task import ReservationTerminalizationTask
 from app.domain.statuses import TerminalizationAction, TerminalizationEventType
-from app.db_pool import DatabasePool
-from app.observability import start_span
+from flashsale_shared.db_pool import DatabasePool
+from flashsale_shared.observability import start_span
 
 ROW_FACTORY = cast(Any, dict_row)
 

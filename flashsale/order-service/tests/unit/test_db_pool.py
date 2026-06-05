@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from app.db_pool import DatabasePool
+from flashsale_shared.db_pool import DatabasePool
 
 
 class _FakeConnection:
@@ -35,7 +35,7 @@ class _FakeConnectionPool:
 
 class DatabasePoolTest(unittest.TestCase):
     def test_connection_does_not_override_row_factory_when_not_requested(self) -> None:
-        with patch("app.db_pool.ConnectionPool", _FakeConnectionPool):
+        with patch("flashsale_shared.db_pool.ConnectionPool", _FakeConnectionPool):
             pool = DatabasePool(
                 database_url="postgresql://example",
                 min_size=1,
@@ -51,7 +51,7 @@ class DatabasePoolTest(unittest.TestCase):
     def test_connection_sets_row_factory_when_requested(self) -> None:
         sentinel = object()
 
-        with patch("app.db_pool.ConnectionPool", _FakeConnectionPool):
+        with patch("flashsale_shared.db_pool.ConnectionPool", _FakeConnectionPool):
             pool = DatabasePool(
                 database_url="postgresql://example",
                 min_size=1,

@@ -25,8 +25,8 @@ from app.domain.statuses import (
     PaymentStatus,
     TerminalizationAction,
 )
-from app.db_pool import DatabasePool
-from app.observability import start_span
+from flashsale_shared.db_pool import DatabasePool
+from flashsale_shared.observability import start_span
 
 ROW_FACTORY = cast(Any, dict_row)
 db_logger = logging.getLogger("order-service.db")
