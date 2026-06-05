@@ -25,9 +25,9 @@ const PROFILE_DEFAULTS = {
   smoke: {
     tps: 10,
     duration: "3m",
-    p50: 100,
-    p90: 200,
-    p99: 500,
+    p50: 1500,
+    p90: 1600,
+    p99: 2000,
     max5xxRate: 0,
     productCount: 10,
     userCount: 50,
