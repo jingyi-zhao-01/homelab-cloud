@@ -1,0 +1,89 @@
+name: Observability Agent – Dispatch
+
+on:
+  workflow_run:
+    workflows:
+      - "Flashsales Perf Concurrency Suite"
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Workflow run ID to analyze (defaults to the triggering run)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch-to-agent:
+    name: Dispatch failure to Observability Agent
+    runs-on: ubuntu-latest
+
+    # Only run when the perf suite completed with failure, or on manual dispatch.
+    if: |
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'failure')
+
+    steps:
+      - name: Build payload
+        id: payload
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RUN_ID="${{ github.event.workflow_run.id }}"
+            RUN_NAME="${{ github.event.workflow_run.name }}"
+            RUN_URL="${{ github.event.workflow_run.html_url }}"
+            CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+          else
+            RUN_ID="${{ github.event.inputs.run_id }}"
+            RUN_NAME="manual-dispatch"
+            RUN_URL=""
+            CONCLUSION="failure"
+          fi
+
+          echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "run_name=${RUN_NAME}" >> "$GITHUB_OUTPUT"
+          echo "run_url=${RUN_URL}" >> "$GITHUB_OUTPUT"
+          echo "conclusion=${CONCLUSION}" >> "$GITHUB_OUTPUT"
+
+      - name: POST to Observability Agent
+        env:
+          AGENT_URL: ${{ vars.OBSERVABILITY_AGENT_URL }}
+          AGENT_TOKEN: ${{ secrets.OBSERVABILITY_AGENT_TOKEN }}
+        run: |
+          if [ -z "${AGENT_URL:-}" ]; then
+            echo "OBSERVABILITY_AGENT_URL is not set – skipping dispatch"
+            exit 0
+          fi
+
+          PAYLOAD=$(jq -nc '{
+            run_id: ($run_id | tonumber),
+            run_name: $run_name,
+            run_url: $run_url,
+            conclusion: $conclusion
+          }' \
+            --arg run_id "${{ steps.payload.outputs.run_id }}" \
+            --arg run_name "${{ steps.payload.outputs.run_name }}" \
+            --arg run_url "${{ steps.payload.outputs.run_url }}" \
+            --arg conclusion "${{ steps.payload.outputs.conclusion }}")
+
+          echo "Dispatching to ${AGENT_URL}/analyze"
+          echo "Payload: ${PAYLOAD}"
+
+          RESPONSE=$(curl -s -w '\n%{http_code}' \
+            -X POST "${AGENT_URL}/analyze" \
+            -H "Content-Type: application/json" \
+            -H "X-Agent-Token: ${AGENT_TOKEN}" \
+            -d "${PAYLOAD}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP ${HTTP_CODE}: ${BODY}"
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "Agent returned error – check agent logs"
+            exit 1
+          fi

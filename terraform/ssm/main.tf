@@ -59,3 +59,23 @@ resource "aws_ssm_parameter" "database_url" {
 
   tags = var.tags
 }
+
+resource "aws_ssm_parameter" "grafana_service_account_token" {
+  name        = "${local.prefix}/grafana-service-account-token"
+  description = "Grafana service account token for observability agent"
+  type        = "SecureString"
+  value       = var.grafana_service_account_token
+  key_id      = var.kms_key_id
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "llm_api_key" {
+  name        = "${local.prefix}/llm-api-key"
+  description = "OpenRouter (or compatible) LLM API key for observability agent"
+  type        = "SecureString"
+  value       = var.llm_api_key
+  key_id      = var.kms_key_id
+
+  tags = var.tags
+}

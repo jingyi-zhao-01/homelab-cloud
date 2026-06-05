@@ -21,6 +21,7 @@ This platform gives me a centralized layer where services can converge. The serv
 - Performance experiments and smoke tests live under `flashsale/perf/` and `flashsale/scripts/`.
 - Terraform in `terraform/` provisions Neon, AWS SSM-backed secrets, and a self-healing AWS spot-backed k3s worker.
 - Secret material is kept under `secrets/` and is treated as environment-specific.
+- **Observability Agent** (`observability-agent/observability_agent.py`): HTTP server deployed in its own namespace. Receives perf test failure events from GitHub Actions via POST and autonomously scaffolds analysis, Grafana queries, and PR creation.
 
 ## Conventions
 
