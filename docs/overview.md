@@ -17,7 +17,7 @@ This platform gives me a centralized layer where services can converge. The serv
 ## Shared Shape
 
 - Helm charts live under `charts/` and are deployed independently per namespace.
-- FastAPI service source for the flashsales workload lives under `flashsale/`.
+- FastAPI service source for the flashsales workload lives under the `flashsale/` git submodule.
 - Performance experiments and smoke tests live under `flashsale/perf/` and `flashsale/scripts/`.
 - Terraform in `terraform/` provisions Neon, AWS SSM-backed secrets, and a self-healing AWS spot-backed k3s worker.
 - Secret material is kept under `secrets/` and is treated as environment-specific.

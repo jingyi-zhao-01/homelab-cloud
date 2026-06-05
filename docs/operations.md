@@ -6,7 +6,7 @@ This page collects the operational commands and workflow details that used to be
 
 | Workflow | Trigger | Scope |
 | --- | --- | --- |
-| `flashsales-deploy-pre.yml` | Pushes to `flashsale/**` or `charts/flashsales/**` | Flashsales pre-deploy gates |
+| `flashsales-deploy-pre.yml` | Pushes to `flashsale`, `flashsale/**`, `.gitmodules`, or `charts/flashsales/**` | Flashsales pre-deploy gates |
 | `flashsales-deploy.yml` | After a successful `flashsales-deploy-pre.yml` or manual dispatch | Flashsales deploy |
 | `flashsales-deploy-post.yml` | After a successful `flashsales-deploy.yml` or manual dispatch | Flashsales post-deploy runtime consistency and perf |
 | `deploy-strategy-tester.yml` | Pushes to `strategy-tester/**` or `charts/strategy-tester/**` | Strategy tester |
@@ -47,6 +47,7 @@ bash ./flashsale/perf/scripts/loadtest-k6.sh -e RAMP_UP=30s -e STEADY=180s -e TA
 ## Developer Setup
 
 ```bash
+git submodule update --init --recursive
 cd flashsale
 uv sync --extra dev
 uv run pre-commit install

@@ -6,7 +6,7 @@ This repository is a homelab/cloud infrastructure and workload repo.
 
 Primary workloads:
 
-* `flashsale/`: FastAPI microservices for concurrency/system-design practice.
+* `flashsale/`: Git submodule that contains the standalone FastAPI microservice repo for concurrency/system-design practice.
 * `charts/flashsales/`: Helm chart for the flashsale workload.
 * `terraform/`: Infrastructure provisioning for Neon, AWS SSM, Grafana dashboards, k3s spot workers, and related cloud resources.
 * `.github/workflows/`: CI/CD, deploy, post-deploy validation, k6 performance tests, and Terraform automation.
@@ -146,6 +146,7 @@ Changes to one workload should not trigger unrelated workload deploys.
 For flashsale development:
 
 ```bash
+git submodule update --init --recursive
 cd flashsale
 uv sync --extra dev
 uv run pre-commit install
