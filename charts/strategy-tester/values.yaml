@@ -54,13 +54,14 @@ optionIngestor:
     LOG_LEVEL: INFO
     INGEST_CONCURRENCY_LIMIT: "100"
     INGEST_DB_CONCURRENCY_LIMIT: "100"
+    INGEST_OPTION_BATCH_SIZE: "500"
   cronJob:
     enabled: true
     schedule: "*/10 * * * *"
-    parallelism: 2
-    completions: 2
+    parallelism: 1
+    completions: 1
     restartPolicy: OnFailure
-    backoffLimit: 3
+    backoffLimit: 1
 
 snapshotIngestor:
   replicaCount: 1
@@ -87,10 +88,12 @@ snapshotIngestor:
     LOG_LEVEL: INFO
     INGEST_CONCURRENCY_LIMIT: "100"
     INGEST_DB_CONCURRENCY_LIMIT: "100"
+    INGEST_OPTION_BATCH_SIZE: "500"
+    SNAPSHOT_FETCH_CONCURRENCY: "300"
   cronJob:
     enabled: true
     schedule: "*/10 * * * *"
-    parallelism: 2
-    completions: 2
+    parallelism: 1
+    completions: 1
     restartPolicy: OnFailure
-    backoffLimit: 3
+    backoffLimit: 1

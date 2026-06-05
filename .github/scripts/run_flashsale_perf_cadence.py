@@ -6,6 +6,8 @@ import json
 import subprocess
 import time
 
+FLASHSALE_APP_DIR = "application/flashsale"
+
 
 def _require_str(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
@@ -25,7 +27,7 @@ def _parse_lanes(payload: str) -> list[dict[str, object]]:
 
 def _run_invocation(invocation_type: str, invocation_value: str) -> None:
     if invocation_type == "make":
-        command = ["make", "-C", "flashsale", invocation_value]
+        command = ["make", "-C", FLASHSALE_APP_DIR, invocation_value]
     elif invocation_type == "python":
         command = ["python3", invocation_value]
     else:
