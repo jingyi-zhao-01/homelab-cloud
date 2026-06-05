@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from .config import db_url, use_postgres
 from .models import HealthResponse, UserCreate, UserOut
-from .observability import (
+from flashsale_shared.observability import (
     configure_service_logger,
     create_request_logging_middleware,
     initialize_tracing,

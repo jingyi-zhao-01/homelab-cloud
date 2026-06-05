@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from opentelemetry.trace import SpanKind
 
 from app.config import USER_SERVICE_TIMEOUT_SECONDS, USER_SERVICE_URL
-from app.observability import inject_trace_headers, start_span
+from flashsale_shared.observability import inject_trace_headers, start_span
 
 
 class UserHttpClient:

@@ -4,7 +4,7 @@ import time
 
 from app.application.results import ProcessTerminalizationTasksResult
 from app.domain.statuses import PaymentStatus, OrderStatus, TerminalizationAction
-from app.observability import start_span
+from flashsale_shared.observability import start_span
 from app.ports.product_reservation_client import ProductReservationClient
 from app.ports.unit_of_work import UnitOfWork
 

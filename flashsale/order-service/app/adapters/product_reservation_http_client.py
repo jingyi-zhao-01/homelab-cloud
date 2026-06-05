@@ -11,7 +11,7 @@ from app.config import (
     PRODUCT_TERMINALIZE_TIMEOUT_SECONDS,
 )
 from app.domain.statuses import TerminalizationAction
-from app.observability import inject_trace_headers, start_span
+from flashsale_shared.observability import inject_trace_headers, start_span
 
 
 class ProductReservationHttpClient:
