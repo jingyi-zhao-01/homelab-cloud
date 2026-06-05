@@ -75,7 +75,7 @@ spec:
             - containerPort: {{ .Values.orderService.service.port }}
           readinessProbe:
             httpGet:
-              path: /ready
+              path: /health
               port: {{ .Values.orderService.service.port }}
             initialDelaySeconds: {{ .Values.orderService.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.orderService.readinessProbe.periodSeconds }}

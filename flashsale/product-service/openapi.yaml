@@ -23,8 +23,8 @@ paths:
       tags:
       - system
       summary: Service readiness check
-      description: Returns dependency readiness for product-service, including database
-        reachability.
+      description: Returns process readiness for product-service without touching
+        dependencies.
       operationId: ready_ready_get
       responses:
         '200':

@@ -1,6 +1,4 @@
-import anyio
-from fastapi import FastAPI, status
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 
 from .config import db_url, use_postgres
 from .models import HealthResponse, UserCreate, UserOut
@@ -27,7 +25,6 @@ else:
     storage = "memory"
 
 user_service = UserService(repository=repository, logger=logger, storage=storage)
-probe_limiter = anyio.CapacityLimiter(8)
 app.state.repository = repository
 
 
@@ -41,19 +38,6 @@ def startup() -> None:
         pass
 
 
-async def _repository_is_healthy() -> bool:
-    try:
-        return await anyio.to_thread.run_sync(
-            app.state.repository.is_healthy,
-            limiter=probe_limiter,
-        )
-    except Exception:
-        logger.warning(
-            "event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True
-        )
-        return False
-
-
 @app.get("/health")
 async def health() -> HealthResponse:
     return HealthResponse(status="ok", service=SERVICE_NAME)
@@ -61,14 +45,6 @@ async def health() -> HealthResponse:
 
 @app.get("/ready")
 async def ready() -> HealthResponse:
-    healthy = await _repository_is_healthy()
-    if not healthy:
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content=HealthResponse(
-                status="database-unavailable", service=SERVICE_NAME
-            ).model_dump(),
-        )
     return HealthResponse(status="ok", service=SERVICE_NAME)
 
 

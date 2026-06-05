@@ -1,7 +1,6 @@
 import anyio
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Response, status
-from fastapi.responses import JSONResponse
 
 from app.adapters.order_mapping import to_api_order
 from app.adapters.order_postgres_unit_of_work import OrderPostgresUnitOfWork
@@ -32,7 +31,7 @@ SERVICE_NAME = "order-service"
 
 def build_http_api(
     run_background_worker: bool = True,
-) -> tuple[FastAPI, object, OrderRuntime, anyio.CapacityLimiter]:
+) -> tuple[FastAPI, object, OrderRuntime]:
     initialize_tracing(SERVICE_NAME)
     logger = configure_service_logger(SERVICE_NAME)
     app = FastAPI(title=SERVICE_NAME, version="0.1.0")
@@ -45,7 +44,6 @@ def build_http_api(
         products=ProductReservationHttpClient(lambda: httpx.Client()),
     )
     worker = TerminalizationWorkerLoop(runtime.process_tasks.process)
-    probe_limiter = anyio.CapacityLimiter(8)
     orders_limiter = anyio.CapacityLimiter(ORDER_CREATE_MAX_IN_FLIGHT)
     repository = uow
     app.state.repository = repository
@@ -63,18 +61,6 @@ def build_http_api(
     def shutdown() -> None:
         if run_background_worker:
             worker.stop()
-
-    async def _repository_is_healthy() -> bool:
-        try:
-            return await anyio.to_thread.run_sync(
-                app.state.repository.is_healthy,
-                limiter=probe_limiter,
-            )
-        except Exception:
-            logger.warning(
-                "event=healthcheck_failed service=%s", SERVICE_NAME, exc_info=True
-            )
-            return False
 
     async def order_capacity_guard() -> None:
         try:
@@ -105,18 +91,10 @@ def build_http_api(
     @app.get(
         "/ready",
         summary="Service readiness check",
-        description="Returns dependency readiness for order-service, including database reachability.",
+        description="Returns process readiness for order-service without touching dependencies.",
         tags=["system"],
     )
     async def ready() -> HealthResponse:
-        if not await _repository_is_healthy():
-            return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content=HealthResponse(
-                    status="database-unavailable",
-                    service=SERVICE_NAME,
-                ).model_dump(),
-            )
         return HealthResponse(status="ok", service=SERVICE_NAME)
 
     @app.get(
@@ -248,4 +226,4 @@ def build_http_api(
         result = runtime.process_tasks.process()
         return ProcessTerminalizationTasksResult(**result.__dict__)
 
-    return app, repository, runtime, probe_limiter
+    return app, repository, runtime

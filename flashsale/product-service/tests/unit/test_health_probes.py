@@ -3,7 +3,6 @@ import types
 import unittest
 from inspect import iscoroutinefunction
 from unittest.mock import patch
-
 from fastapi.testclient import TestClient
 
 psycopg_stub = types.ModuleType("psycopg")
@@ -39,14 +38,14 @@ class ProductServiceHealthProbeTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
 
-    def test_ready_returns_503_when_database_check_fails(self) -> None:
+    def test_ready_ignores_repository_health(self) -> None:
         with patch.object(
             app.state.repository, "is_healthy", side_effect=RuntimeError("db down")
         ):
             response = self.client.get("/ready")
 
-        self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["status"], "database-unavailable")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ok")
 
     def test_probe_routes_are_async(self) -> None:
         health_route = next(route for route in app.routes if route.path == "/health")
