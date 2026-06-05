@@ -6,8 +6,8 @@ This page collects the operational commands and workflow details that used to be
 
 | Workflow | Trigger | Scope |
 | --- | --- | --- |
-| `flashsales-deploy-pre.yml` | Pushes to `flashsale`, `flashsale/**`, `.gitmodules`, or `charts/flashsales/**` | Flashsales pre-deploy gates |
-| `flashsales-deploy.yml` | After a successful `flashsales-deploy-pre.yml` or manual dispatch | Flashsales deploy |
+| `flashsale/.github/workflows/flashsales-deploy-pre.yml` | Pushes or PRs in the standalone `flashsale` repo | Flashsales pre-deploy gates |
+| `flashsales-deploy.yml` | Pushes to `flashsale`, `.gitmodules`, or `charts/flashsales/**`, or manual dispatch | Flashsales deploy |
 | `flashsales-deploy-post.yml` | After a successful `flashsales-deploy.yml` or manual dispatch | Flashsales post-deploy runtime consistency and perf |
 | `deploy-strategy-tester.yml` | Pushes to `strategy-tester/**` or `charts/strategy-tester/**` | Strategy tester |
 | `deploy-leetcode-intelligence.yml` | Pushes to `charts/leetcode-intelligence/**` | LeetCode intelligence |

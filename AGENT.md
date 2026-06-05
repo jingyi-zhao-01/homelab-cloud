@@ -130,7 +130,7 @@ python3 ./flashsale/perf/python/consistency_harness.py
 
 Respect the existing gate separation:
 
-* `flashsales-deploy-pre.yml`: pre-deploy unit, Docker Compose integration, contract, lifecycle, timeout-race, DB migration compatibility gates.
+* `flashsale/.github/workflows/flashsales-deploy-pre.yml`: app-owned pre-deploy unit, Docker Compose integration, contract, lifecycle, timeout-race, DB migration compatibility gates.
 * `flashsales-deploy.yml`: k3s deploy after pre-deploy succeeds.
 * `flashsales-deploy-post.yml`: runtime consistency and perf validation after deploy.
 * `flashsales-consistency.yml`: reusable runtime consistency workflow.
