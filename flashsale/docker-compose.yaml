@@ -37,7 +37,7 @@ services:
 
   user-service:
     build:
-      context: ..
+      context: .
       dockerfile: user-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://test:test@user-db:5432/user_test
@@ -49,7 +49,7 @@ services:
 
   product-service:
     build:
-      context: ..
+      context: .
       dockerfile: product-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://test:test@product-db:5432/product_test
@@ -61,7 +61,7 @@ services:
 
   order-service:
     build:
-      context: ..
+      context: .
       dockerfile: order-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://test:test@order-db:5432/order_test
