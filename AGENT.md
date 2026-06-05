@@ -32,6 +32,10 @@ The flashsale workload is deployed to a VPS-backed k3s cluster, not a local-only
 * For flashsale changes, record the change in `docs/wiki` in the same turn whenever feasible.
 * If you add or modify an ADR, mirror the reader-facing copy in `docs/wiki/adrs` and keep the repo ADR as the engineering source of truth.
 * Treat `docs/wiki` as the operational narrative for what changed, why it changed, and how to verify it.
+* Treat git submodules as externally owned repos by default.
+* Do not modify a submodule unless the task explicitly targets that service or repo.
+* If a task targets platform or infrastructure behavior, prefer editing `charts/`, `terraform/`, `.github/workflows/`, repo-level docs, and values files before touching any submodule.
+* If a submodule lives under `services/`, assume it is an external service repo unless the task explicitly says to change that service.
 
 ### Safety Rules
 
