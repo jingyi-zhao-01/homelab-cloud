@@ -136,7 +136,7 @@ productService:
     dbPoolMinSize: "1"
     dbPoolMaxSize: "16"
     dbPoolTimeoutSeconds: "5"
-    inventoryLockMode: pessimistic
+    inventoryLockMode: optimistic
     optimisticRetryLimit: "5"
 
 orderService:
@@ -193,7 +193,7 @@ orderService:
     dbPoolTimeoutSeconds: "5"
     redisUrl: redis://:redis-pass@flashsales-redis:6379/0
     rabbitmqUrl: amqp://flashsales:mq-pass@flashsales-rabbitmq:5672/
-    inventoryLockMode: pessimistic
+    inventoryLockMode: optimistic
     optimisticRetryLimit: "5"
   worker:
     resources:

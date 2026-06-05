@@ -29,6 +29,9 @@ The flashsale workload is deployed to a VPS-backed k3s cluster, not a local-only
 * Before making a broad refactor, identify the exact files that need to change and explain why.
 * Do not scan the whole repo by default. Start from the smallest relevant directory.
 * Preserve existing Make targets, workflow entrypoints, and documented operational commands.
+* For flashsale changes, record the change in `docs/wiki` in the same turn whenever feasible.
+* If you add or modify an ADR, mirror the reader-facing copy in `docs/wiki/adrs` and keep the repo ADR as the engineering source of truth.
+* Treat `docs/wiki` as the operational narrative for what changed, why it changed, and how to verify it.
 
 ### Safety Rules
 
