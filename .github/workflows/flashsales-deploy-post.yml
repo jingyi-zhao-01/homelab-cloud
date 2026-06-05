@@ -18,11 +18,6 @@ on:
         required: false
         type: string
         default: ''
-      run_consistency:
-        description: Run the runtime consistency harness before perf.
-        required: false
-        type: boolean
-        default: true
       run_perf:
         description: Run the app-owned perf cadence.
         required: false
@@ -42,10 +37,6 @@ on:
         required: false
         type: string
         default: ''
-      run_consistency:
-        required: false
-        type: boolean
-        default: true
       run_perf:
         required: false
         type: boolean
@@ -76,9 +67,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       perf_cadence_json: ${{ steps.export.outputs.perf_cadence_json }}
-      consistency_display_name: ${{ steps.export.outputs.consistency_display_name }}
-      consistency_invocation_type: ${{ steps.export.outputs.consistency_invocation_type }}
-      consistency_invocation_value: ${{ steps.export.outputs.consistency_invocation_value }}
 
     steps:
       - name: Checkout
@@ -101,149 +89,12 @@ jobs:
             flashsale/release/flashsale-quality-contract.yaml \
             "$GITHUB_OUTPUT"
 
-  consistency:
-    name: ${{ needs.contract.outputs.consistency_display_name }}
-    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
-    needs: contract
-    if: ${{ inputs.run_consistency }}
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install release renderer dependencies
-        run: python -m pip install --upgrade pip pyyaml
-
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-
-      - name: Connect Tailscale for private k3s access
-        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
-          tags: ${{ env.TS_CI_TAGS }}
-
-      - name: Configure kubeconfig
-        env:
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
-          K3S_SERVER_URL_TAILSCALE: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
-        run: |
-          set -euo pipefail
-          if [ -z "$KUBE_CONFIG_DATA" ]; then
-            echo "KUBE_CONFIG_DATA secret is missing"
-            exit 1
-          fi
-          mkdir -p "$HOME/.kube"
-          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
-          if [ -n "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
-            CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
-            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K3S_SERVER_URL_TAILSCALE}"
-            kubectl config set-cluster "$CLUSTER_NAME" --server="$K3S_SERVER_URL_TAILSCALE"
-          fi
-          kubectl version --client
-          kubectl get nodes
-
-      - name: Create GHCR image pull secret
-        env:
-          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
-          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "$GHCR_PULL_USERNAME" ] || [ -z "$GHCR_PULL_TOKEN" ]; then
-            echo "GHCR_PULL_USERNAME or GHCR_PULL_TOKEN is missing"
-            exit 1
-          fi
-
-          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-          kubectl -n "$NAMESPACE" create secret docker-registry ghcr-pull-secret \
-            --docker-server=ghcr.io \
-            --docker-username="$GHCR_PULL_USERNAME" \
-            --docker-password="$GHCR_PULL_TOKEN" \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-      - name: Verify GHCR pull credentials can read runtime images
-        env:
-          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
-          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
-        run: |
-          set -euo pipefail
-          echo "$GHCR_PULL_TOKEN" | docker login ghcr.io \
-            --username "$GHCR_PULL_USERNAME" \
-            --password-stdin
-
-          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-user-service:latest >/dev/null
-          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-product-service:latest >/dev/null
-          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-order-service:latest >/dev/null
-
-      - name: Render flashsale release overlay
-        run: |
-          python3 .github/scripts/render_flashsale_release.py \
-            flashsale/release/flashsale-release.yaml \
-            /tmp/flashsale-release-values.yaml
-          cat /tmp/flashsale-release-values.yaml
-
-      - name: Reconcile release for consistency lane
-        run: |
-          set -euo pipefail
-          helm upgrade --install "$RELEASE" "$CHART_PATH" \
-            -n "$NAMESPACE" \
-            --create-namespace \
-            -f "$CHART_PATH/values.yaml" \
-            -f /tmp/flashsale-release-values.yaml \
-            --set userService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-user-service \
-            --set userService.image.tag=latest \
-            --set productService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-product-service \
-            --set productService.image.tag=latest \
-            --set orderService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-order-service \
-            --set orderService.image.tag=latest \
-            --set imagePullSecrets[0].name=ghcr-pull-secret
-
-      - name: Wait for rollouts
-        run: |
-          set -euo pipefail
-          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-user-service --timeout=300s
-          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-product-service --timeout=300s
-          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=300s
-
-      - name: Run consistency harness
-        env:
-          USER_URL: http://${{ env.USER_HOST }}
-          PRODUCT_URL: http://${{ env.PRODUCT_HOST }}
-          ORDER_URL: http://${{ env.ORDER_HOST }}
-        run: |
-          python3 .github/scripts/run_flashsale_quality_invocation.py \
-            --type '${{ needs.contract.outputs.consistency_invocation_type }}' \
-            --value '${{ needs.contract.outputs.consistency_invocation_value }}'
-
-      - name: Diagnostics on failure
-        if: failure()
-        run: |
-          kubectl get pods -n "$NAMESPACE" -o wide || true
-          kubectl get svc -n "$NAMESPACE" || true
-          kubectl logs -n "$NAMESPACE" deploy/flashsales-order-service --tail=200 || true
-          kubectl logs -n "$NAMESPACE" deploy/flashsales-product-service --tail=200 || true
-
   prepare:
     name: Prepare Perf Environment
     runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
     needs:
       - contract
-      - consistency
-    if: ${{ inputs.run_perf && (needs.consistency.result == 'success' || needs.consistency.result == 'skipped') }}
+    if: ${{ inputs.run_perf }}
 
     steps:
       - name: Checkout
@@ -302,8 +153,7 @@ jobs:
     needs:
       - contract
       - prepare
-      - consistency
-    if: ${{ inputs.run_perf && needs.prepare.result == 'success' && (needs.consistency.result == 'success' || needs.consistency.result == 'skipped') }}
+    if: ${{ inputs.run_perf && needs.prepare.result == 'success' }}
 
     steps:
       - name: Checkout

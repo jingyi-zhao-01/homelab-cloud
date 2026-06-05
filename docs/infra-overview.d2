@@ -16,7 +16,7 @@ style: {
 }
 
 infra_overview: {
-  label: "homelab-cloud infrastructure overview"
+  label: "homelab-cloud control-plane overview"
   style: {
     fill: "#191d31"
     stroke: "#c39bff"
@@ -38,7 +38,7 @@ infra_overview: {
   }
 
   edge_and_delivery: {
-    label: "edge and delivery"
+    label: "deploy orchestration"
     style: {
       fill: "#23273d"
       stroke: "#c39bff"
@@ -48,7 +48,7 @@ infra_overview: {
     }
 
     github: {
-      label: "github actions"
+      label: "github actions scheduler"
       shape: hexagon
       style: {
         stroke: "#c39bff"
@@ -76,7 +76,7 @@ infra_overview: {
   }
 
   platform_network: {
-    label: "platform network"
+    label: "runtime and allocated resources"
     style: {
       fill: "#4c5065"
       opacity: 0.72
@@ -88,7 +88,7 @@ infra_overview: {
     }
 
     cluster_runtime: {
-      label: "cluster runtime"
+      label: "k3s runtime"
       style: {
         fill: "#555a73"
         opacity: 0.64
@@ -106,7 +106,7 @@ infra_overview: {
       }
 
       workload_namespaces: {
-        label: "workload namespaces"
+        label: "workload runtime"
         style: {
           stroke: "#c39bff"
           fill: "#2d3147"
@@ -123,7 +123,7 @@ infra_overview: {
       }
 
       observability: {
-        label: "metrics logs debug"
+        label: "metrics logs runtime debug"
         shape: cylinder
         style: {
           stroke: "#c39bff"
@@ -133,7 +133,7 @@ infra_overview: {
     }
 
     cloud_dependencies: {
-      label: "cloud dependencies"
+      label: "allocated backing resources"
       style: {
         fill: "#555a73"
         opacity: 0.64
@@ -170,7 +170,7 @@ infra_overview: {
       }
 
       spot_worker: {
-        label: "aws spot worker and vpc"
+        label: "aws spot worker capacity and vpc"
         style: {
           stroke: "#c39bff"
           fill: "#2d3147"
@@ -180,7 +180,7 @@ infra_overview: {
   }
 
   control_and_state: {
-    label: "platform control plane"
+    label: "control plane state and allocators"
     style: {
       fill: "#23273d"
       stroke: "#c39bff"
@@ -190,7 +190,7 @@ infra_overview: {
     }
 
     scripts: {
-      label: "local make scripts"
+      label: "operator scripts and make targets"
       shape: document
       style: {
         stroke: "#c39bff"
@@ -199,7 +199,7 @@ infra_overview: {
     }
 
     helm: {
-      label: "helm charts"
+      label: "helm release definitions"
       style: {
         stroke: "#c39bff"
         fill: "#2a2f47"
@@ -207,7 +207,7 @@ infra_overview: {
     }
 
     terraform: {
-      label: "terraform"
+      label: "terraform allocators"
       shape: hexagon
       style: {
         stroke: "#c39bff"
@@ -226,7 +226,7 @@ infra_overview: {
   }
 
   repo_feedback: {
-    label: "repo feedback loop"
+    label: "runtime feedback loop"
     style: {
       fill: "#23273d"
       stroke: "#c39bff"
@@ -236,7 +236,7 @@ infra_overview: {
     }
 
     docs_and_logs: {
-      label: "docs workflows logs"
+      label: "docs workflow logs notifications"
       shape: document
       style: {
         stroke: "#c39bff"
@@ -246,7 +246,7 @@ infra_overview: {
     }
   }
 
-  user -> edge_and_delivery.github: "push" {
+  user -> edge_and_delivery.github: "1. trigger deploy or gate" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -254,7 +254,7 @@ infra_overview: {
       border-radius: 0
     }
   }
-  user -> edge_and_delivery.ingress: "access" {
+  user -> edge_and_delivery.ingress: "8. inspect live runtime" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -264,7 +264,7 @@ infra_overview: {
     }
   }
 
-  edge_and_delivery.github -> edge_and_delivery.ghcr: "build publish" {
+  edge_and_delivery.github -> edge_and_delivery.ghcr: "2. build and publish images" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -272,7 +272,7 @@ infra_overview: {
       border-radius: 0
     }
   }
-  edge_and_delivery.github -> control_and_state.terraform: "infra workflow" {
+  edge_and_delivery.github -> control_and_state.terraform: "3. run allocation workflows" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -280,7 +280,7 @@ infra_overview: {
       border-radius: 0
     }
   }
-  edge_and_delivery.github -> control_and_state.helm: "deploy workflow" {
+  edge_and_delivery.github -> control_and_state.helm: "4. execute deploy workflow" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -288,7 +288,7 @@ infra_overview: {
       border-radius: 0
     }
   }
-  edge_and_delivery.github -> repo_feedback.docs_and_logs: "review logs" {
+  edge_and_delivery.github -> repo_feedback.docs_and_logs: "7. emit logs and workflow results" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -297,7 +297,7 @@ infra_overview: {
     }
   }
 
-  control_and_state.scripts -> control_and_state.terraform: "plan apply" {
+  control_and_state.scripts -> control_and_state.terraform: "plan and apply allocation" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -305,7 +305,7 @@ infra_overview: {
       border-radius: 0
     }
   }
-  control_and_state.scripts -> control_and_state.helm: "deploy status" {
+  control_and_state.scripts -> control_and_state.helm: "deploy and runtime status" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -322,7 +322,7 @@ infra_overview: {
     }
   }
 
-  control_and_state.terraform -> platform_network.cloud_dependencies.ssm: "sync secrets" {
+  control_and_state.terraform -> platform_network.cloud_dependencies.ssm: "allocate secret distribution" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -330,7 +330,7 @@ infra_overview: {
       border-radius: 0
     }
   }
-  control_and_state.terraform -> platform_network.cloud_dependencies.neon: "provision db" {
+  control_and_state.terraform -> platform_network.cloud_dependencies.neon: "allocate database runtime" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -338,7 +338,7 @@ infra_overview: {
       border-radius: 0
     }
   }
-  control_and_state.terraform -> platform_network.cloud_dependencies.spot_worker: "provision worker" {
+  control_and_state.terraform -> platform_network.cloud_dependencies.spot_worker: "allocate worker capacity" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -346,7 +346,7 @@ infra_overview: {
       border-radius: 0
     }
   }
-  control_and_state.helm -> platform_network.cluster_runtime.control_plane: "release" {
+  control_and_state.helm -> platform_network.cluster_runtime.control_plane: "5. reconcile release" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -363,7 +363,7 @@ infra_overview: {
       border-radius: 0
     }
   }
-  platform_network.cloud_dependencies.spot_worker -> platform_network.cluster_runtime.control_plane: "join cluster" {
+  platform_network.cloud_dependencies.spot_worker -> platform_network.cluster_runtime.control_plane: "join cluster capacity" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -372,7 +372,7 @@ infra_overview: {
     }
   }
 
-  edge_and_delivery.ghcr -> platform_network.cluster_runtime.workload_namespaces: "pull images" {
+  edge_and_delivery.ghcr -> platform_network.cluster_runtime.workload_namespaces: "6. pull release images" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -397,7 +397,7 @@ infra_overview: {
       border-radius: 0
     }
   }
-  platform_network.cluster_runtime.control_plane -> platform_network.cluster_runtime.workload_namespaces: "schedule" {
+  platform_network.cluster_runtime.control_plane -> platform_network.cluster_runtime.workload_namespaces: "schedule runtime workloads" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"
@@ -405,7 +405,7 @@ infra_overview: {
       border-radius: 0
     }
   }
-  platform_network.cluster_runtime.control_plane -> platform_network.cluster_runtime.observability: "signals" {
+  platform_network.cluster_runtime.control_plane -> platform_network.cluster_runtime.observability: "runtime signals" {
     style: {
       stroke: "#c39bff"
       font-color: "#b8b0ca"

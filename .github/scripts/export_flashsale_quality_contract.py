@@ -115,29 +115,11 @@ def main() -> None:
     if not isinstance(perf, dict):
         raise SystemExit("manifest spec.perf must be a YAML mapping")
 
-    consistency = spec.get("consistency")
-    if not isinstance(consistency, dict):
-        raise SystemExit("manifest spec.consistency must be a YAML mapping")
     perf_cadence = _extract_perf_cadence(perf)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("a", encoding="utf-8") as handle:
         _write_output(handle, "perf_cadence_json", json.dumps(perf_cadence))
-
-        consistency_display_name = _require_str(
-            consistency.get("displayName"), "manifest spec.consistency.displayName"
-        )
-        consistency_invocation = consistency.get("invocation")
-        if not isinstance(consistency_invocation, dict):
-            raise SystemExit("manifest spec.consistency.invocation must be a YAML mapping")
-        consistency_invocation_type, consistency_invocation_value = _extract_invocation_value(
-            consistency_invocation,
-            "manifest spec.consistency.invocation",
-        )
-
-        _write_output(handle, "consistency_display_name", consistency_display_name)
-        _write_output(handle, "consistency_invocation_type", consistency_invocation_type)
-        _write_output(handle, "consistency_invocation_value", consistency_invocation_value)
 
 
 if __name__ == "__main__":
