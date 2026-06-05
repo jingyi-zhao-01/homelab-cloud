@@ -113,32 +113,15 @@ jobs:
       - name: Install k6
         uses: grafana/setup-k6-action@v1
 
-      - name: Connect Tailscale for private k3s access
-        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
-        uses: tailscale/github-action@v4
+      - name: Configure private k3s access
+        uses: ./.github/actions/setup-private-k3s-access
         with:
-          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
-          tags: ${{ env.TS_CI_TAGS }}
-
-      - name: Configure kubeconfig
-        env:
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
-          K3S_SERVER_URL_TAILSCALE: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
-        run: |
-          set -euo pipefail
-          if [ -z "$KUBE_CONFIG_DATA" ]; then
-            echo "KUBE_CONFIG_DATA secret is missing"
-            exit 1
-          fi
-          mkdir -p "$HOME/.kube"
-          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
-          if [ -n "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
-            CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
-            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K3S_SERVER_URL_TAILSCALE}"
-            kubectl config set-cluster "$CLUSTER_NAME" --server="$K3S_SERVER_URL_TAILSCALE"
-          fi
+          kube_config_data: ${{ secrets.KUBE_CONFIG_DATA }}
+          k3s_server_url_tailscale: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+          ts_oauth_client_id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          ts_oauth_secret: ${{ env.TS_OAUTH_SECRET }}
+          ts_ci_tags: ${{ env.TS_CI_TAGS }}
+          verify_sleep_seconds: "5"
 
       - name: Verify target services
         run: |
@@ -172,32 +155,15 @@ jobs:
       - name: Install k6
         uses: grafana/setup-k6-action@v1
 
-      - name: Connect Tailscale for private k3s access
-        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
-        uses: tailscale/github-action@v4
+      - name: Configure private k3s access
+        uses: ./.github/actions/setup-private-k3s-access
         with:
-          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
-          tags: ${{ env.TS_CI_TAGS }}
-
-      - name: Configure kubeconfig
-        env:
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
-          K3S_SERVER_URL_TAILSCALE: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
-        run: |
-          set -euo pipefail
-          if [ -z "$KUBE_CONFIG_DATA" ]; then
-            echo "KUBE_CONFIG_DATA secret is missing"
-            exit 1
-          fi
-          mkdir -p "$HOME/.kube"
-          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
-          if [ -n "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
-            CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
-            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K3S_SERVER_URL_TAILSCALE}"
-            kubectl config set-cluster "$CLUSTER_NAME" --server="$K3S_SERVER_URL_TAILSCALE"
-          fi
+          kube_config_data: ${{ secrets.KUBE_CONFIG_DATA }}
+          k3s_server_url_tailscale: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+          ts_oauth_client_id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          ts_oauth_secret: ${{ env.TS_OAUTH_SECRET }}
+          ts_ci_tags: ${{ env.TS_CI_TAGS }}
+          verify_sleep_seconds: "5"
 
       - name: Run flashsale-owned perf cadence
         run: |

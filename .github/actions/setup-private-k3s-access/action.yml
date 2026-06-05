@@ -1,0 +1,113 @@
+name: Setup Private k3s Access
+description: Connect Tailscale when configured and rewrite kubeconfig to the private k3s API endpoint.
+
+inputs:
+  kube_config_data:
+    description: Base64-encoded kubeconfig content.
+    required: true
+  k3s_server_url_tailscale:
+    description: Optional Tailscale API server URL override.
+    required: false
+    default: ""
+  ts_oauth_client_id:
+    description: Tailscale OAuth client ID.
+    required: false
+    default: ""
+  ts_oauth_secret:
+    description: Tailscale OAuth secret.
+    required: false
+    default: ""
+  ts_ci_tags:
+    description: Tailscale tags for the CI node.
+    required: false
+    default: ""
+  verify_cluster:
+    description: Whether to verify Kubernetes API reachability.
+    required: false
+    default: "true"
+  verify_retries:
+    description: Number of reachability retries.
+    required: false
+    default: "5"
+  verify_sleep_seconds:
+    description: Sleep interval between retries.
+    required: false
+    default: "15"
+
+runs:
+  using: composite
+  steps:
+    - name: Connect Tailscale for private k3s access
+      if: ${{ inputs.ts_oauth_client_id != '' && inputs.ts_oauth_secret != '' && inputs.ts_ci_tags != '' }}
+      uses: tailscale/github-action@v4
+      with:
+        oauth-client-id: ${{ inputs.ts_oauth_client_id }}
+        oauth-secret: ${{ inputs.ts_oauth_secret }}
+        tags: ${{ inputs.ts_ci_tags }}
+
+    - name: Configure kubeconfig and verify reachability
+      shell: bash
+      env:
+        KUBE_CONFIG_DATA: ${{ inputs.kube_config_data }}
+        K3S_SERVER_URL_TAILSCALE: ${{ inputs.k3s_server_url_tailscale }}
+        VERIFY_CLUSTER: ${{ inputs.verify_cluster }}
+        VERIFY_RETRIES: ${{ inputs.verify_retries }}
+        VERIFY_SLEEP_SECONDS: ${{ inputs.verify_sleep_seconds }}
+      run: |
+        set -euo pipefail
+
+        if [ -z "$KUBE_CONFIG_DATA" ]; then
+          echo "KUBE_CONFIG_DATA secret is missing"
+          exit 1
+        fi
+
+        mkdir -p "$HOME/.kube"
+        echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+        chmod 600 "$HOME/.kube/config"
+        kubectl version --client
+
+        if [ -n "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
+          CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
+          echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K3S_SERVER_URL_TAILSCALE}"
+          kubectl config set-cluster "$CLUSTER_NAME" --server="$K3S_SERVER_URL_TAILSCALE"
+        fi
+
+        API_SERVER="$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
+        echo "Target API server: $API_SERVER"
+
+        if [ "${VERIFY_CLUSTER}" != "true" ]; then
+          exit 0
+        fi
+
+        API_HOSTPORT="${API_SERVER#https://}"
+        API_HOSTPORT="${API_HOSTPORT#http://}"
+        API_HOST="${API_HOSTPORT%%/*}"
+        API_HOST="${API_HOST%%:*}"
+        API_PORT="${API_HOSTPORT##*:}"
+        if [ "$API_PORT" = "$API_HOSTPORT" ]; then
+          API_PORT="443"
+        fi
+
+        echo "Resolved API host: $API_HOST"
+        echo "Resolved API port: $API_PORT"
+
+        for attempt in $(seq 1 "$VERIFY_RETRIES"); do
+          echo "Checking Kubernetes API reachability (attempt ${attempt}/${VERIFY_RETRIES})"
+          if kubectl --request-timeout=20s get nodes; then
+            echo "Kubernetes API is reachable"
+            exit 0
+          fi
+
+          if [ "$attempt" -eq "$VERIFY_RETRIES" ]; then
+            echo "Kubernetes API remained unreachable after ${VERIFY_RETRIES} attempts"
+            echo "Capturing final network diagnostics for ${API_HOST}:${API_PORT}"
+            getent ahostsv4 "$API_HOST" || true
+            getent ahostsv6 "$API_HOST" || true
+            curl -vk --connect-timeout 10 --max-time 20 "${API_SERVER}/version" || true
+            exit 1
+          fi
+
+          echo "kubectl get nodes failed; retrying in ${VERIFY_SLEEP_SECONDS} seconds"
+          curl -sk --connect-timeout 5 --max-time 10 "${API_SERVER}/version" >/dev/null || true
+          sleep "$VERIFY_SLEEP_SECONDS"
+        done

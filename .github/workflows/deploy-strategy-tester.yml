@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'charts/strategy-tester/**'
+      - '.github/actions/setup-private-k3s-access/**'
       - '.github/workflows/deploy-strategy-tester.yml'
   workflow_dispatch:
 
@@ -18,6 +19,9 @@ permissions:
 
 env:
   NAMESPACE: strategy-tester
+  TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
+  TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+  TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
 
 jobs:
   deploy:
@@ -34,19 +38,14 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
 
-      - name: Configure kubeconfig
-        env:
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
-        run: |
-          if [ -z "$KUBE_CONFIG_DATA" ]; then
-            echo "KUBE_CONFIG_DATA secret is missing"
-            exit 1
-          fi
-          mkdir -p "$HOME/.kube"
-          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
-          kubectl version --client
-          kubectl get nodes
+      - name: Configure private k3s access
+        uses: ./.github/actions/setup-private-k3s-access
+        with:
+          kube_config_data: ${{ secrets.KUBE_CONFIG_DATA }}
+          k3s_server_url_tailscale: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+          ts_oauth_client_id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          ts_oauth_secret: ${{ env.TS_OAUTH_SECRET }}
+          ts_ci_tags: ${{ env.TS_CI_TAGS }}
 
       - name: Create namespace and image pull secret
         env:
