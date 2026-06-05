@@ -38,6 +38,20 @@ spec:
                 - name: {{ $key }}
                   value: {{ $value | quote }}
                 {{- end }}
+                - name: OTEL_EXPORTER_OTLP_PROTOCOL
+                  value: {{ $.Values.observability.tracing.otlpProtocol | default "http/protobuf" | quote }}
+                - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                  value: {{ $.Values.observability.tracing.otlpHttpEndpoint | default "" | quote }}
+                {{- if $.Values.observability.tracing.existingSecretName }}
+                - name: OTEL_EXPORTER_OTLP_HEADERS
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $.Values.observability.tracing.existingSecretName }}
+                      key: {{ $.Values.observability.tracing.existingSecretKey }}
+                {{- else if $.Values.observability.tracing.otlpHeaders }}
+                - name: OTEL_EXPORTER_OTLP_HEADERS
+                  value: {{ $.Values.observability.tracing.otlpHeaders | quote }}
+                {{- end }}
               {{- end }}
               {{- if .Values.externalSecrets.enabled }}
               envFrom:

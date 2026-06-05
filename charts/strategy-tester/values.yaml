@@ -3,6 +3,16 @@ namespaceOverride: ""
 imagePullSecrets:
   - name: ghcr-pull-secret
 
+observability:
+  tracing:
+    otlpProtocol: "http/protobuf"
+    otlpHttpEndpoint: "https://otlp-gateway-prod-us-west-0.grafana.net/otlp/v1/traces"
+    otlpHeaders: "Authorization=Basic MTMyNzEyMDpnbGNfZXlKdklqb2lNVFE1TVRRNE5pSXNJbTRpT2lKemRHRmpheTB4TXpJM01USXdMVzkwYkhBdGQzSnBkR1V0YUc5dFpXeGhZaUlzSW1zaU9pSnZkRWd6T1ZoMk9URmtOMGhKU0hjM016RmlObkUzUm1raUxDSnRJanA3SW5JaU9pSndjbTlrTFhWekxYZGxjM1F0TUNKOWZRPT0="
+    externalSecretEnabled: false
+    externalSecretKey: "OTEL_EXPORTER_OTLP_HEADERS"
+    existingSecretName: ""
+    existingSecretKey: "OTEL_EXPORTER_OTLP_HEADERS"
+
 externalSecrets:
   enabled: true
   refreshInterval: 1h
@@ -42,6 +52,8 @@ optionIngestor:
     port: 8001
   env:
     LOG_LEVEL: INFO
+    INGEST_CONCURRENCY_LIMIT: "100"
+    INGEST_DB_CONCURRENCY_LIMIT: "100"
   cronJob:
     enabled: true
     schedule: "*/10 * * * *"
@@ -73,6 +85,8 @@ snapshotIngestor:
     port: 8002
   env:
     LOG_LEVEL: INFO
+    INGEST_CONCURRENCY_LIMIT: "100"
+    INGEST_DB_CONCURRENCY_LIMIT: "100"
   cronJob:
     enabled: true
     schedule: "*/10 * * * *"
