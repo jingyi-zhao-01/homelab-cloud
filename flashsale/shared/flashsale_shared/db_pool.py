@@ -10,6 +10,13 @@ except ImportError:  # pragma: no cover - exercised only when dependency is abse
 
 
 class DatabasePool:
+    """Thread-safe PostgreSQL connection pool with single-connection fallback.
+
+    Uses psycopg_pool.ConnectionPool when available and a database URL is
+    configured.  Falls back to a plain psycopg.connect() per call when the
+    pool library is absent or the URL is empty (e.g. in-memory mode).
+    """
+
     def __init__(
         self,
         database_url: str,

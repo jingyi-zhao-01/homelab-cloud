@@ -13,7 +13,7 @@ from .config import (
     OPTIMISTIC_RETRY_LIMIT,
     RESERVE_SQL_LOG_SLOW_MS,
 )
-from .db_pool import DatabasePool
+from flashsale_shared.db_pool import DatabasePool
 from .in_memory_repository import InMemoryProductRepository, RESERVATION_TTL_SECONDS, seed_items
 from .locking import InventoryReserveEngine
 from .models import ProductCreate, ProductOut, ReservationOut

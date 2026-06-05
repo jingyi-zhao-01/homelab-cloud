@@ -12,7 +12,7 @@ from .models import (
     ReservationOut,
     ReserveRequest,
 )
-from .observability import start_span
+from flashsale_shared.observability import start_span
 from .repositories import ProductRepository
 
 

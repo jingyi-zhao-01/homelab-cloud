@@ -20,7 +20,7 @@ from app.models import (
     PaymentWebhookRequest,
     ProcessTerminalizationTasksResult,
 )
-from app.observability import (
+from flashsale_shared.observability import (
     configure_service_logger,
     create_request_logging_middleware,
     initialize_tracing,
