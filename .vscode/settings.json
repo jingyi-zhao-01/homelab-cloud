@@ -1,14 +1,14 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/flashsale/.venv/bin/python",
+  "python.defaultInterpreterPath": "${workspaceFolder}/application/flashsale/.venv/bin/python",
   "python.analysis.extraPaths": [
-    "${workspaceFolder}/flashsale/user-service",
-    "${workspaceFolder}/flashsale/product-service",
-    "${workspaceFolder}/flashsale/order-service"
+    "${workspaceFolder}/application/flashsale/user-service",
+    "${workspaceFolder}/application/flashsale/product-service",
+    "${workspaceFolder}/application/flashsale/order-service"
   ],
   "python.testing.unittestArgs": [
     "-v",
     "-s",
-    "./flashsale",
+    "./application/flashsale",
     "-p",
     "test*.py"
   ],
