@@ -59,7 +59,6 @@ env:
   NAMESPACE: ${{ vars.K8S_NAMESPACE || 'flashsales' }}
   RELEASE: ${{ vars.HELM_RELEASE || 'flashsales' }}
   CHART_PATH: ${{ vars.HELM_CHART_PATH || 'charts/flashsales' }}
-  FLASHSALE_APP_REPO: ${{ vars.FLASHSALE_APP_REPO || format('{0}/flashsale', github.repository_owner) }}
   USER_HOST: homelab-user-service.jzhao62.com
   PRODUCT_HOST: homelab-product-service.jzhao62.com
   ORDER_HOST: homelab-order-service.jzhao62.com
@@ -418,64 +417,6 @@ jobs:
           python3 .github/scripts/run_flashsale_perf_cadence.py \
             --lanes-json '${{ needs.contract.outputs.perf_cadence_json }}'
 
-  report-perf-to-flashsale:
-    name: Report Perf Run Back To Flashsale Repo
-    needs:
-      - contract
-      - consistency
-      - prepare
-      - perf-cadence
-    if: ${{ always() && inputs.run_perf && needs['perf-cadence'].result != 'skipped' && secrets.FLASHSALE_REPO_ISSUE_TOKEN != '' }}
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Create flashsale issue with perf run link
-        uses: actions/github-script@v7
-        env:
-          FLASHSALE_SOURCE_REF: ${{ inputs.flashsale_source_ref }}
-          FLASHSALE_SOURCE_SHA: ${{ inputs.flashsale_source_sha }}
-          FLASHSALE_IMAGE_TAG: ${{ inputs.flashsale_image_tag }}
-          FLASHSALE_APP_REPO: ${{ env.FLASHSALE_APP_REPO }}
-          PERF_RESULT: ${{ needs['perf-cadence'].result }}
-          CONSISTENCY_RESULT: ${{ needs.consistency.result }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        with:
-          github-token: ${{ secrets.FLASHSALE_REPO_ISSUE_TOKEN }}
-          script: |
-            const repoSlug = process.env.FLASHSALE_APP_REPO;
-            const [owner, repo] = repoSlug.split("/");
-            if (!owner || !repo) {
-              core.setFailed(`Invalid FLASHSALE_APP_REPO value: ${repoSlug}`);
-              return;
-            }
-
-            const sourceSha = process.env.FLASHSALE_SOURCE_SHA || "unknown-sha";
-            const shortSha = sourceSha.slice(0, 12);
-            const sourceRef = process.env.FLASHSALE_SOURCE_REF || "unknown-ref";
-            const imageTag = process.env.FLASHSALE_IMAGE_TAG || "latest";
-            const perfResult = process.env.PERF_RESULT || "unknown";
-            const consistencyResult = process.env.CONSISTENCY_RESULT || "skipped";
-            const runUrl = process.env.RUN_URL;
-
-            const title = `Post-deploy perf result: ${perfResult} for ${shortSha}`;
-            const body = [
-              "Automated post-deploy quality report from `homelab-cloud`.",
-              "",
-              `- Flashsale ref: \`${sourceRef}\``,
-              `- Flashsale sha: \`${sourceSha}\``,
-              `- Deployed image tag: \`${imageTag}\``,
-              `- Runtime consistency result: \`${consistencyResult}\``,
-              `- Perf cadence result: \`${perfResult}\``,
-              `- Workflow run: ${runUrl}`,
-            ].join("\n");
-
-            await github.rest.issues.create({
-              owner,
-              repo,
-              title,
-              body,
-            });
-
   notify-discord:
     name: Notify Discord
     needs:
@@ -483,7 +424,6 @@ jobs:
       - consistency
       - prepare
       - perf-cadence
-      - report-perf-to-flashsale
     if: ${{ always() && github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     continue-on-error: true

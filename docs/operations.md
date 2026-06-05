@@ -26,12 +26,9 @@ GHCR_PULL_USERNAME
 GHCR_PULL_TOKEN
 AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
-FLASHSALE_REPO_ISSUE_TOKEN
 ```
 
 `GHCR_PULL_TOKEN` must be able to read private packages in GHCR. In practice that means a classic PAT with `read:packages`, or an equivalent fine-grained token scoped to the repository packages that back the flashsales images.
-
-`FLASHSALE_REPO_ISSUE_TOKEN` is used by `flashsales-deploy-post.yml` to create a follow-up issue in the standalone `flashsale` repo after the perf cadence completes. It should have permission to create issues in `jingyi-zhao-01/flashsale`, or in whatever repository is configured via `FLASHSALE_APP_REPO`.
 
 ## Performance Testing
 
