@@ -5,3 +5,6 @@
 	path = application/flashsale
 	url = https://github.com/jingyi-zhao-01/flashsale.git
 	branch = main
+[submodule "application/strategy-tester"]
+	path = application/strategy-tester
+	url = https://github.com/jingyi-zhao-01/strategy-tester.git
