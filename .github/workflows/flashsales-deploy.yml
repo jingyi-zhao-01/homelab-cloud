@@ -2,6 +2,9 @@ name: Flashsales Deploy
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types:
+      - flashsale-release-ready
   push:
     branches:
       - main
@@ -23,6 +26,8 @@ env:
   NAMESPACE: ${{ vars.K8S_NAMESPACE || 'flashsales' }}
   RELEASE: ${{ vars.HELM_RELEASE || 'flashsales' }}
   CHART_PATH: ${{ vars.HELM_CHART_PATH || 'charts/flashsales' }}
+  FLASHSALE_SOURCE_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_sha || github.sha }}
+  FLASHSALE_SOURCE_REF: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_ref || github.ref_name }}
   TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
   TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
   TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
@@ -50,11 +55,31 @@ jobs:
           ref: ${{ github.sha }}
           submodules: recursive
 
+      - name: Resolve flashsale submodule to dispatched revision
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        env:
+          FLASHSALE_SHA: ${{ github.event.client_payload.flashsale_sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FLASHSALE_SHA:-}" ]; then
+            echo "repository_dispatch did not include flashsale_sha"
+            exit 1
+          fi
+
+          git -C flashsale fetch --depth=1 origin "$FLASHSALE_SHA"
+          git -C flashsale checkout --detach "$FLASHSALE_SHA"
+
+      - name: Show flashsale source metadata
+        run: |
+          echo "Flashsale source ref: $FLASHSALE_SOURCE_REF"
+          echo "Flashsale source sha: $FLASHSALE_SOURCE_SHA"
+          git -C flashsale rev-parse HEAD
+
       - name: Decide whether to build images
         shell: bash
         run: |
           set -euo pipefail
-          echo "Building flashsales image for ${{ matrix.service }} at ${GITHUB_SHA}"
+          echo "Building flashsales image for ${{ matrix.service }} at ${FLASHSALE_SOURCE_SHA}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -73,7 +98,7 @@ jobs:
           file: flashsale/${{ matrix.service }}/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/flashsales-${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/flashsales-${{ matrix.service }}:${{ env.FLASHSALE_SOURCE_SHA }}
             ghcr.io/${{ github.repository_owner }}/flashsales-${{ matrix.service }}:latest
 
   deploy:
@@ -88,6 +113,26 @@ jobs:
         with:
           ref: ${{ github.sha }}
           submodules: recursive
+
+      - name: Resolve flashsale submodule to dispatched revision
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        env:
+          FLASHSALE_SHA: ${{ github.event.client_payload.flashsale_sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FLASHSALE_SHA:-}" ]; then
+            echo "repository_dispatch did not include flashsale_sha"
+            exit 1
+          fi
+
+          git -C flashsale fetch --depth=1 origin "$FLASHSALE_SHA"
+          git -C flashsale checkout --detach "$FLASHSALE_SHA"
+
+      - name: Show flashsale source metadata
+        run: |
+          echo "Flashsale source ref: $FLASHSALE_SOURCE_REF"
+          echo "Flashsale source sha: $FLASHSALE_SOURCE_SHA"
+          git -C flashsale rev-parse HEAD
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
@@ -200,7 +245,7 @@ jobs:
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
         run: |
           set -euo pipefail
-          IMAGE_TAG="${{ github.sha }}"
+          IMAGE_TAG="${FLASHSALE_SOURCE_SHA}"
 
           echo "$GHCR_PULL_TOKEN" | docker login ghcr.io \
             --username "$GHCR_PULL_USERNAME" \
@@ -213,7 +258,7 @@ jobs:
       - name: Deploy Helm release
         run: |
           set -euo pipefail
-          IMAGE_TAG="${{ github.sha }}"
+          IMAGE_TAG="${FLASHSALE_SOURCE_SHA}"
           helm upgrade --install "$RELEASE" "$CHART_PATH" \
             -n "$NAMESPACE" \
             --create-namespace \
