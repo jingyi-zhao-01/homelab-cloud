@@ -9,7 +9,9 @@ import yaml
 from jsonschema import Draft202012Validator
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SCHEMA_PATH = REPO_ROOT / "flashsale/release/schemas/flashsale-quality-contract.schema.json"
+DEFAULT_SCHEMA_PATH = (
+    REPO_ROOT / "application/flashsale/release/schemas/flashsale-quality-contract.schema.json"
+)
 
 def _require_str(value: object, label: str) -> str:
     if not isinstance(value, str) or not value.strip():

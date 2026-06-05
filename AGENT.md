@@ -6,16 +6,16 @@ This repository is a homelab/cloud infrastructure and workload repo.
 
 Primary workloads:
 
-* `flashsale/`: Git submodule that contains the standalone FastAPI microservice repo for concurrency/system-design practice.
+* `application/flashsale/`: Git submodule that contains the standalone FastAPI microservice repo for concurrency/system-design practice.
 * `charts/flashsales/`: Helm chart for the flashsale workload.
 * `terraform/`: Infrastructure provisioning for Neon, AWS SSM, Grafana dashboards, k3s spot workers, and related cloud resources.
 * `.github/workflows/`: CI/CD, deploy, post-deploy validation, k6 performance tests, and Terraform automation.
 
 Flashsale services:
 
-* `flashsale/user-service`: user persistence and lookup.
-* `flashsale/product-service`: product catalog, stock management, and reservation lifecycle.
-* `flashsale/order-service`: order creation, user validation, reserve orchestration, and order persistence.
+* `application/flashsale/user-service`: user persistence and lookup.
+* `application/flashsale/product-service`: product catalog, stock management, and reservation lifecycle.
+* `application/flashsale/order-service`: order creation, user validation, reserve orchestration, and order persistence.
 
 The flashsale workload is deployed to a VPS-backed k3s cluster, not a local-only environment.
 
@@ -117,7 +117,7 @@ For correctness-sensitive changes, use the consistency harness in addition to pe
 Preferred verification after flashsale changes:
 
 ```bash
-bash ./flashsale/scripts/e2e-smoke.sh
+bash ./application/flashsale/scripts/e2e-smoke.sh
 make concurrency-smoke
 make concurrency-hotspot-10tps
 make concurrency-baseline
@@ -127,14 +127,14 @@ make concurrency-hotspot
 For correctness-sensitive changes:
 
 ```bash
-python3 ./flashsale/perf/python/consistency_harness.py
+python3 ./application/flashsale/perf/python/consistency_harness.py
 ```
 
 ## CI/CD Rules
 
 Respect the existing gate separation:
 
-* `flashsale/.github/workflows/flashsales-deploy-pre.yml`: app-owned pre-deploy unit, Docker Compose integration, contract, lifecycle, timeout-race, DB migration compatibility gates.
+* `application/flashsale/.github/workflows/flashsales-deploy-pre.yml`: app-owned pre-deploy unit, Docker Compose integration, contract, lifecycle, timeout-race, DB migration compatibility gates.
 * `flashsales-deploy.yml`: k3s deploy after pre-deploy succeeds.
 * `flashsales-deploy-post.yml`: unified post-deploy quality workflow. It runs runtime consistency first, then the app-owned perf cadence.
 * `terraform-provision.yml`: Neon and SSM provisioning.
@@ -149,7 +149,7 @@ For flashsale development:
 
 ```bash
 git submodule update --init --recursive
-cd flashsale
+cd application/flashsale
 uv sync --extra dev
 uv run pre-commit install
 ```
@@ -230,9 +230,9 @@ For performance/debugging issues, investigate in this order:
 
 When changing architecture or behavior, update the relevant doc:
 
-* `flashsale/docs/flashsales.md`
-* `flashsale/docs/flashsales-harness-engineering.md`
-* `flashsale/docs/adrs/`
+* `application/flashsale/docs/flashsales.md`
+* `application/flashsale/docs/flashsales-harness-engineering.md`
+* `application/flashsale/docs/adrs/`
 * `docs/operations.md`
 * `docs/infrastructure.md`
 * related Terraform module README files

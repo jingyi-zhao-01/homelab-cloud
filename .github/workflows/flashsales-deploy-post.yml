@@ -86,7 +86,7 @@ jobs:
         id: export
         run: |
           python3 .github/scripts/export_flashsale_quality_contract.py \
-            flashsale/release/flashsale-quality-contract.yaml \
+            application/flashsale/release/flashsale-quality-contract.yaml \
             "$GITHUB_OUTPUT"
 
   prepare:

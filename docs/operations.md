@@ -6,7 +6,7 @@ This page collects the operational commands and workflow details that used to be
 
 | Workflow | Trigger | Scope |
 | --- | --- | --- |
-| `flashsale/.github/workflows/flashsales-deploy-pre.yml` | Pushes or PRs in the standalone `flashsale` repo | Flashsales pre-deploy gates |
+| `application/flashsale/.github/workflows/flashsales-deploy-pre.yml` | Pushes or PRs in the standalone `flashsale` repo | Flashsales pre-deploy gates |
 | `flashsales-deploy.yml` | Pushes to `flashsale`, `.gitmodules`, or `charts/flashsales/**`, or manual dispatch | Flashsales deploy |
 | `flashsales-deploy-post.yml` | After a successful `flashsales-deploy.yml` or manual dispatch | Unified flashsales post-deploy quality gate |
 | `deploy-strategy-tester.yml` | Pushes to `strategy-tester/**` or `charts/strategy-tester/**` | Strategy tester |
@@ -32,22 +32,22 @@ AWS_SECRET_ACCESS_KEY
 
 ## Performance Testing
 
-Perf runs currently execute the ordered cadence declared by `flashsale/release/flashsale-quality-contract.yaml`; the platform workflow provides runner, kubeconfig, and cluster access, but does not hardcode the lane order.
+Perf runs currently execute the ordered cadence declared by `application/flashsale/release/flashsale-quality-contract.yaml`; the platform workflow provides runner, kubeconfig, and cluster access, but does not hardcode the lane order.
 
-For the current interpretation limits and correctness caveats of the flashsales perf harness, use [Flashsales harness engineering](../flashsale/docs/flashsales-harness-engineering.md) as the source of truth.
+For the current interpretation limits and correctness caveats of the flashsales perf harness, use [Flashsales harness engineering](../application/flashsale/docs/flashsales-harness-engineering.md) as the source of truth.
 
 ```bash
 make concurrency-baseline KUBECONFIG_PATH=secrets/.kube-config
 make concurrency-smoke KUBECONFIG_PATH=secrets/.kube-config
 make concurrency-hotspot-10tps KUBECONFIG_PATH=secrets/.kube-config
-bash ./flashsale/perf/scripts/loadtest-k6.sh -e RAMP_UP=30s -e STEADY=180s -e TARGET_VUS=50
+bash ./application/flashsale/perf/scripts/loadtest-k6.sh -e RAMP_UP=30s -e STEADY=180s -e TARGET_VUS=50
 ```
 
 ## Developer Setup
 
 ```bash
 git submodule update --init --recursive
-cd flashsale
+cd application/flashsale
 uv sync --extra dev
 uv run pre-commit install
 ```
@@ -190,7 +190,7 @@ Local state is not a supported operating mode. Use the GitHub workflows or pass 
 
 - [Repository overview](overview.md)
 - [Infrastructure](infrastructure.md)
-- [Flashsales workload](../flashsale/docs/flashsales.md)
+- [Flashsales workload](../application/flashsale/docs/flashsales.md)
 - [Flashsale Grafana dashboards](../terraform/flashsale-grafana-dashboards/README.md)
 - [Strategy tester workload](strategy-tester.md)
 - [LeetCode intelligence workload](leetcode-intelligence.md)

@@ -12,7 +12,7 @@ Current dashboard set:
 - `Flashsale Terminalization Outcomes`
 - `Flashsale Distributed Traces`
 
-This dashboard exists to support [ADR 0002](../../flashsale/docs/adrs/0002-async-reservation-terminalization.md), which moves reservation `confirm/cancel` off the synchronous order path and requires queue-health style visibility.
+This dashboard exists to support [ADR 0002](../../application/flashsale/docs/adrs/0002-async-reservation-terminalization.md), which moves reservation `confirm/cancel` off the synchronous order path and requires queue-health style visibility.
 
 ## Datasource Model
 

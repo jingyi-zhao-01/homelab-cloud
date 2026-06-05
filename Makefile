@@ -51,10 +51,10 @@ help:
 >echo "  make k3s-spot-destroy      # tear down the AWS spot k3s worker stack"
 
 lint:
->cd flashsale && uv run pre-commit run --all-files
+>cd application/flashsale && uv run pre-commit run --all-files
 
 concurrency-smoke concurrency-idempotency-lite concurrency-hotspot-10tps concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot:
->$(MAKE) -C flashsale $@
+>$(MAKE) -C application/flashsale $@
 
 check-local:
 >API_SERVER=$$(KUBECONFIG=$(KUBECONFIG_PATH) kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'); \
@@ -78,12 +78,12 @@ undeploy:
 
 
 e2e: check-local
->KUBECONFIG_PATH=$(KUBECONFIG_PATH) NAMESPACE=$(NAMESPACE) bash ./flashsale/scripts/e2e-smoke.sh
+>KUBECONFIG_PATH=$(KUBECONFIG_PATH) NAMESPACE=$(NAMESPACE) bash ./application/flashsale/scripts/e2e-smoke.sh
 
 build-images:
->$(CONTAINER_CLI) build -t flashsales/user-service:$(IMAGE_TAG) flashsale/user-service
->$(CONTAINER_CLI) build -t flashsales/product-service:$(IMAGE_TAG) flashsale/product-service
->$(CONTAINER_CLI) build -t flashsales/order-service:$(IMAGE_TAG) flashsale/order-service
+>$(CONTAINER_CLI) build -t flashsales/user-service:$(IMAGE_TAG) application/flashsale/user-service
+>$(CONTAINER_CLI) build -t flashsales/product-service:$(IMAGE_TAG) application/flashsale/product-service
+>$(CONTAINER_CLI) build -t flashsales/order-service:$(IMAGE_TAG) application/flashsale/order-service
 
 import-images:
 >$(CONTAINER_CLI) save flashsales/user-service:$(IMAGE_TAG) | sudo k3s ctr images import -

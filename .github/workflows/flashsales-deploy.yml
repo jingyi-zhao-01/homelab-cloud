@@ -9,8 +9,8 @@ on:
     branches:
       - main
     paths:
-      - 'flashsale'
-      - 'flashsale/**'
+      - 'application/flashsale'
+      - 'application/flashsale/**'
       - '.gitmodules'
       - 'charts/flashsales/**'
       - '.github/workflows/flashsales-deploy.yml'
@@ -58,15 +58,15 @@ jobs:
             exit 1
           fi
 
-          git -C flashsale fetch --depth=1 origin "$FLASHSALE_SHA"
-          git -C flashsale checkout --detach "$FLASHSALE_SHA"
+          git -C application/flashsale fetch --depth=1 origin "$FLASHSALE_SHA"
+          git -C application/flashsale checkout --detach "$FLASHSALE_SHA"
 
       - name: Show flashsale source metadata
         run: |
           echo "Flashsale source ref: $FLASHSALE_SOURCE_REF"
           echo "Flashsale source sha: $FLASHSALE_SOURCE_SHA"
           echo "Flashsale image tag: $FLASHSALE_IMAGE_TAG"
-          git -C flashsale rev-parse HEAD
+          git -C application/flashsale rev-parse HEAD
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
@@ -85,7 +85,7 @@ jobs:
       - name: Render flashsale release overlay
         run: |
           python3 .github/scripts/render_flashsale_release.py \
-            flashsale/release/flashsale-release.yaml \
+            application/flashsale/release/flashsale-release.yaml \
             /tmp/flashsale-release-values.yaml
           cat /tmp/flashsale-release-values.yaml
 

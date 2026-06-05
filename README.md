@@ -38,9 +38,9 @@ This diagram is intentionally control-plane-first: it shows `homelab-cloud` as t
 | Page | What it covers |
 |---|---|
 | [Repository overview](docs/overview.md) | High-level architecture, layout, and shared conventions |
-| [Flashsales workload](flashsale/docs/flashsales.md) | App-owned release contract, k3s deploy path, and runtime perf cadence |
-| [Flashsales harness engineering](flashsale/docs/flashsales-harness-engineering.md) | Current flashsales correctness risks, perf harness interpretation, and priority backlog |
-| [Flashsales deploy pre](flashsale/.github/workflows/flashsales-deploy-pre.yml) | App-owned pre-deploy unit and Docker Compose integration gates |
+| [Flashsales workload](application/flashsale/docs/flashsales.md) | App-owned release contract, k3s deploy path, and runtime perf cadence |
+| [Flashsales harness engineering](application/flashsale/docs/flashsales-harness-engineering.md) | Current flashsales correctness risks, perf harness interpretation, and priority backlog |
+| [Flashsales deploy pre](application/flashsale/.github/workflows/flashsales-deploy-pre.yml) | App-owned pre-deploy unit and Docker Compose integration gates |
 | [Flashsales deploy](.github/workflows/flashsales-deploy.yml) | Platform-side deploy executor for the shared k3s runtime |
 | [Flashsales deploy post](.github/workflows/flashsales-deploy-post.yml) | Platform-side runtime consistency and perf provisioner after deploy |
 | [Strategy tester workload](docs/strategy-tester.md) | Scheduled ingestion app, cron jobs, and secret wiring |
@@ -75,7 +75,7 @@ These commands are operator entrypoints into the same control plane:
 ├── .github/workflows/      # Deploy, post-deploy runtime gates, and infra automation entrypoints
 ├── .github/scripts/        # Workflow-side orchestration helpers
 ├── charts/                 # Helm release definitions for platform-managed workloads
-├── flashsale/              # App submodule plus quality contract and perf harness inputs
+├── application/flashsale/              # App submodule plus quality contract and perf harness inputs
 ├── secrets/                # Local and shared secret material
 ├── terraform/              # Resource allocation for Neon, SSM, networking, and spot-backed capacity
 ├── docs/                   # Platform docs and control-plane diagrams
