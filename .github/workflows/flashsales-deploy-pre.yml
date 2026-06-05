@@ -28,6 +28,7 @@ jobs:
       - name: Install product-service dependencies
         run: |
           python -m pip install --upgrade pip
+          python -m pip install ./flashsale/shared
           python -m pip install -r flashsale/product-service/requirements.txt
 
       - name: Run product-service unit tests
@@ -51,6 +52,7 @@ jobs:
       - name: Install order-service dependencies
         run: |
           python -m pip install --upgrade pip
+          python -m pip install ./flashsale/shared
           python -m pip install -r flashsale/order-service/requirements.txt
 
       - name: Run order-service unit tests

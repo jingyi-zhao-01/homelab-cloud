@@ -7,6 +7,7 @@ dependencies = [
   "user-service",
   "product-service",
   "order-service",
+  "flashsale-shared",
 ]
 
 [project.optional-dependencies]
@@ -20,12 +21,14 @@ members = [
   "user-service",
   "product-service",
   "order-service",
+  "shared",
 ]
 
 [tool.uv.sources]
 user-service = { workspace = true }
 product-service = { workspace = true }
 order-service = { workspace = true }
+flashsale-shared = { workspace = true }
 
 [tool.pylint.format]
 max-module-lines = 600

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from fastapi import Request
 
-from app.observability import request_path_label
+from flashsale_shared.observability import request_path_label
 
 
 class UserServiceObservabilityTest(unittest.TestCase):

@@ -6,7 +6,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from .config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, DB_POOL_TIMEOUT_SECONDS
-from .db_pool import DatabasePool
+from flashsale_shared.db_pool import DatabasePool
 from .models import UserCreate, UserOut
 
 

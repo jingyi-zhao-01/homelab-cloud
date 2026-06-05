@@ -2,10 +2,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY shared /tmp/shared
+RUN pip install --no-cache-dir /tmp/shared
+
+COPY product-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+COPY product-service/app ./app
 
 EXPOSE 8002
 

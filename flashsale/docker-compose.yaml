@@ -37,7 +37,8 @@ services:
 
   user-service:
     build:
-      context: ./user-service
+      context: .
+      dockerfile: user-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://test:test@user-db:5432/user_test
     ports:
@@ -48,7 +49,8 @@ services:
 
   product-service:
     build:
-      context: ./product-service
+      context: .
+      dockerfile: product-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://test:test@product-db:5432/product_test
     ports:
@@ -59,7 +61,8 @@ services:
 
   order-service:
     build:
-      context: ./order-service
+      context: .
+      dockerfile: order-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://test:test@order-db:5432/order_test
       PRODUCT_SERVICE_URL: http://product-service:8002
