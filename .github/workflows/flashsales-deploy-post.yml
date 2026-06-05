@@ -211,7 +211,6 @@ jobs:
     name: Notify Discord
     needs:
       - contract
-      - consistency
       - prepare
       - perf-cadence
     if: ${{ always() && github.event_name == 'workflow_dispatch' }}
