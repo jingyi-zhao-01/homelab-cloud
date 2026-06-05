@@ -8,10 +8,9 @@ This page collects the operational commands and workflow details that used to be
 | --- | --- | --- |
 | `flashsale/.github/workflows/flashsales-deploy-pre.yml` | Pushes or PRs in the standalone `flashsale` repo | Flashsales pre-deploy gates |
 | `flashsales-deploy.yml` | Pushes to `flashsale`, `.gitmodules`, or `charts/flashsales/**`, or manual dispatch | Flashsales deploy |
-| `flashsales-deploy-post.yml` | After a successful `flashsales-deploy.yml` or manual dispatch | Flashsales post-deploy runtime consistency and perf |
+| `flashsales-deploy-post.yml` | After a successful `flashsales-deploy.yml` or manual dispatch | Unified flashsales post-deploy quality gate |
 | `deploy-strategy-tester.yml` | Pushes to `strategy-tester/**` or `charts/strategy-tester/**` | Strategy tester |
 | `deploy-leetcode-intelligence.yml` | Pushes to `charts/leetcode-intelligence/**` | LeetCode intelligence |
-| `flashsales-perf-concurrency-suite.yml` | Manual or reusable via `flashsales-deploy-post.yml` | Concurrency suite |
 | `flashsales-loadtest-manual.yml` | Manual `workflow_dispatch` | Performance testing |
 | `terraform-provision.yml` | Manual | Neon and SSM infrastructure provisioning |
 | `terraform-k3s-spot-network.yml` | Manual | Low-cost VPC and public subnets for the spot worker |
@@ -27,13 +26,16 @@ GHCR_PULL_USERNAME
 GHCR_PULL_TOKEN
 AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY
+FLASHSALE_REPO_ISSUE_TOKEN
 ```
 
 `GHCR_PULL_TOKEN` must be able to read private packages in GHCR. In practice that means a classic PAT with `read:packages`, or an equivalent fine-grained token scoped to the repository packages that back the flashsales images.
 
+`FLASHSALE_REPO_ISSUE_TOKEN` is used by `flashsales-deploy-post.yml` to create a follow-up issue in the standalone `flashsale` repo after the perf cadence completes. It should have permission to create issues in `jingyi-zhao-01/flashsale`, or in whatever repository is configured via `FLASHSALE_APP_REPO`.
+
 ## Performance Testing
 
-Perf runs currently provision an ephemeral Neon database through Terraform before the load test executes.
+Perf runs currently execute the ordered cadence declared by `flashsale/release/flashsale-quality-contract.yaml`; the platform workflow provides runner, kubeconfig, and cluster access, but does not hardcode the lane order.
 
 For the current interpretation limits and correctness caveats of the flashsales perf harness, use [Flashsales harness engineering](../flashsale/docs/flashsales-harness-engineering.md) as the source of truth.
 

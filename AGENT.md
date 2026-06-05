@@ -136,9 +136,7 @@ Respect the existing gate separation:
 
 * `flashsale/.github/workflows/flashsales-deploy-pre.yml`: app-owned pre-deploy unit, Docker Compose integration, contract, lifecycle, timeout-race, DB migration compatibility gates.
 * `flashsales-deploy.yml`: k3s deploy after pre-deploy succeeds.
-* `flashsales-deploy-post.yml`: runtime consistency and perf validation after deploy.
-* `flashsales-consistency.yml`: reusable runtime consistency workflow.
-* `flashsales-perf-concurrency-suite.yml`: reusable performance workflow.
+* `flashsales-deploy-post.yml`: unified post-deploy quality workflow. It runs runtime consistency first, then the app-owned perf cadence.
 * `terraform-provision.yml`: Neon and SSM provisioning.
 * `terraform-k3s-spot-network.yml`: low-cost VPC and subnet provisioning for spot worker.
 * `terraform-k3s-spot-node.yml`: one self-healing AWS spot k3s worker.

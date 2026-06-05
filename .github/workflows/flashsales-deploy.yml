@@ -15,8 +15,6 @@ on:
       - 'charts/flashsales/**'
       - '.github/workflows/flashsales-deploy.yml'
       - '.github/workflows/flashsales-deploy-post.yml'
-      - '.github/workflows/flashsales-consistency.yml'
-      - '.github/workflows/flashsales-perf-concurrency-suite.yml'
 
 concurrency:
   group: flashsales-deploy-${{ github.sha }}
@@ -237,6 +235,10 @@ jobs:
       - deploy
     if: ${{ needs.deploy.result == 'success' }}
     uses: ./.github/workflows/flashsales-deploy-post.yml
+    with:
+      flashsale_source_ref: ${{ env.FLASHSALE_SOURCE_REF }}
+      flashsale_source_sha: ${{ env.FLASHSALE_SOURCE_SHA }}
+      flashsale_image_tag: ${{ env.FLASHSALE_IMAGE_TAG }}
     secrets: inherit
 
   notify-discord:

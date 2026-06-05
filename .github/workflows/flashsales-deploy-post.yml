@@ -2,32 +2,488 @@ name: Flashsales Deploy Post
 
 on:
   workflow_dispatch:
+    inputs:
+      flashsale_source_ref:
+        description: Source flashsale ref for this deployed candidate.
+        required: false
+        type: string
+        default: ''
+      flashsale_source_sha:
+        description: Source flashsale sha for this deployed candidate.
+        required: false
+        type: string
+        default: ''
+      flashsale_image_tag:
+        description: Flashsale image tag deployed for this run.
+        required: false
+        type: string
+        default: ''
+      run_consistency:
+        description: Run the runtime consistency harness before perf.
+        required: false
+        type: boolean
+        default: true
+      run_perf:
+        description: Run the app-owned perf cadence.
+        required: false
+        type: boolean
+        default: true
   workflow_call:
+    inputs:
+      flashsale_source_ref:
+        required: false
+        type: string
+        default: ''
+      flashsale_source_sha:
+        required: false
+        type: string
+        default: ''
+      flashsale_image_tag:
+        required: false
+        type: string
+        default: ''
+      run_consistency:
+        required: false
+        type: boolean
+        default: true
+      run_perf:
+        required: false
+        type: boolean
+        default: true
 
 concurrency:
-  group: flashsales-deploy-post-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+  group: flashsales-deploy-post-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  NAMESPACE: ${{ vars.K8S_NAMESPACE || 'flashsales' }}
+  RELEASE: ${{ vars.HELM_RELEASE || 'flashsales' }}
+  CHART_PATH: ${{ vars.HELM_CHART_PATH || 'charts/flashsales' }}
+  FLASHSALE_APP_REPO: ${{ vars.FLASHSALE_APP_REPO || format('{0}/flashsale', github.repository_owner) }}
+  USER_HOST: homelab-user-service.jzhao62.com
+  PRODUCT_HOST: homelab-product-service.jzhao62.com
+  ORDER_HOST: homelab-order-service.jzhao62.com
+  DB_PROXY_SERVICE: flashsales-db-proxy
+  DB_PROXY_ADMIN_PORT: "8474"
+  DB_PROXY_NAME: flashsales-neon-db
+  TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
+  TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+  TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  # runtime-consistency:
-  #   uses: ./.github/workflows/flashsales-consistency.yml
-  #   secrets: inherit
+  contract:
+    name: Resolve Flashsale Quality Contract
+    runs-on: ubuntu-latest
+    outputs:
+      perf_cadence_json: ${{ steps.export.outputs.perf_cadence_json }}
+      consistency_display_name: ${{ steps.export.outputs.consistency_display_name }}
+      consistency_invocation_type: ${{ steps.export.outputs.consistency_invocation_type }}
+      consistency_invocation_value: ${{ steps.export.outputs.consistency_invocation_value }}
 
-  perf-concurrency-suite:
-    uses: ./.github/workflows/flashsales-perf-concurrency-suite.yml
-    secrets: inherit
-    # needs:
-    #   - runtime-consistency
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install contract parser dependencies
+        run: python -m pip install --upgrade pip pyyaml jsonschema
+
+      - name: Export flashsale quality contract
+        id: export
+        run: |
+          python3 .github/scripts/export_flashsale_quality_contract.py \
+            flashsale/release/flashsale-quality-contract.yaml \
+            "$GITHUB_OUTPUT"
+
+  consistency:
+    name: ${{ needs.contract.outputs.consistency_display_name }}
+    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
+    needs: contract
+    if: ${{ inputs.run_consistency }}
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Login to GHCR for helper image publishing
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install release renderer dependencies
+        run: python -m pip install --upgrade pip pyyaml
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Connect Tailscale for private k3s access
+        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
+          tags: ${{ env.TS_CI_TAGS }}
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+          K3S_SERVER_URL_TAILSCALE: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          if [ -n "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
+            CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
+            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K3S_SERVER_URL_TAILSCALE}"
+            kubectl config set-cluster "$CLUSTER_NAME" --server="$K3S_SERVER_URL_TAILSCALE"
+          fi
+          kubectl version --client
+          kubectl get nodes
+
+      - name: Create GHCR image pull secret
+        env:
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GHCR_PULL_USERNAME" ] || [ -z "$GHCR_PULL_TOKEN" ]; then
+            echo "GHCR_PULL_USERNAME or GHCR_PULL_TOKEN is missing"
+            exit 1
+          fi
+
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "$NAMESPACE" create secret docker-registry ghcr-pull-secret \
+            --docker-server=ghcr.io \
+            --docker-username="$GHCR_PULL_USERNAME" \
+            --docker-password="$GHCR_PULL_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Mirror db proxy helper images to GHCR
+        env:
+          TOXIPROXY_SOURCE: shopify/toxiproxy:2.12.0
+          TOXIPROXY_TARGET: ghcr.io/${{ github.repository_owner }}/flashsales-toxiproxy:2.12.0
+          BOOTSTRAP_SOURCE: curlimages/curl:8.8.0
+          BOOTSTRAP_TARGET: ghcr.io/${{ github.repository_owner }}/flashsales-db-proxy-bootstrap:8.8.0
+        run: |
+          set -euo pipefail
+          docker pull "$TOXIPROXY_SOURCE"
+          docker tag "$TOXIPROXY_SOURCE" "$TOXIPROXY_TARGET"
+          docker push "$TOXIPROXY_TARGET"
+
+          docker pull "$BOOTSTRAP_SOURCE"
+          docker tag "$BOOTSTRAP_SOURCE" "$BOOTSTRAP_TARGET"
+          docker push "$BOOTSTRAP_TARGET"
+
+      - name: Verify GHCR pull credentials can read runtime images
+        env:
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "$GHCR_PULL_TOKEN" | docker login ghcr.io \
+            --username "$GHCR_PULL_USERNAME" \
+            --password-stdin
+
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-user-service:latest >/dev/null
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-product-service:latest >/dev/null
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-order-service:latest >/dev/null
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-toxiproxy:2.12.0 >/dev/null
+          docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-db-proxy-bootstrap:8.8.0 >/dev/null
+
+      - name: Render flashsale release overlay
+        run: |
+          python3 .github/scripts/render_flashsale_release.py \
+            flashsale/release/flashsale-release.yaml \
+            /tmp/flashsale-release-values.yaml
+          cat /tmp/flashsale-release-values.yaml
+
+      - name: Enable db proxy deployment for consistency lane
+        run: |
+          set -euo pipefail
+          helm upgrade --install "$RELEASE" "$CHART_PATH" \
+            -n "$NAMESPACE" \
+            --create-namespace \
+            -f "$CHART_PATH/values.yaml" \
+            -f /tmp/flashsale-release-values.yaml \
+            --set dbProxy.enabled=true \
+            --set dbProxy.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-toxiproxy \
+            --set dbProxy.image.tag=2.12.0 \
+            --set dbProxy.bootstrapImage.repository=ghcr.io/${{ github.repository_owner }}/flashsales-db-proxy-bootstrap \
+            --set dbProxy.bootstrapImage.tag=8.8.0 \
+            --set userService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-user-service \
+            --set userService.image.tag=latest \
+            --set productService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-product-service \
+            --set productService.image.tag=latest \
+            --set orderService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-order-service \
+            --set orderService.image.tag=latest \
+            --set imagePullSecrets[0].name=ghcr-pull-secret
+
+      - name: Wait for rollouts
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-db-proxy --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-user-service --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-product-service --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=300s
+
+      - name: Start db proxy admin port-forward
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" port-forward svc/"$DB_PROXY_SERVICE" "$DB_PROXY_ADMIN_PORT:$DB_PROXY_ADMIN_PORT" >/tmp/flashsales-db-proxy-port-forward.log 2>&1 &
+          echo $! >/tmp/flashsales-db-proxy-port-forward.pid
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:${DB_PROXY_ADMIN_PORT}/version" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "db proxy admin port-forward did not become ready"
+          cat /tmp/flashsales-db-proxy-port-forward.log || true
+          exit 1
+
+      - name: Run consistency harness
+        env:
+          USER_URL: http://${{ env.USER_HOST }}
+          PRODUCT_URL: http://${{ env.PRODUCT_HOST }}
+          ORDER_URL: http://${{ env.ORDER_HOST }}
+          TOXIPROXY_URL: http://127.0.0.1:${{ env.DB_PROXY_ADMIN_PORT }}
+          DB_PROXY_NAME: ${{ env.DB_PROXY_NAME }}
+        run: |
+          python3 .github/scripts/run_flashsale_quality_invocation.py \
+            --type '${{ needs.contract.outputs.consistency_invocation_type }}' \
+            --value '${{ needs.contract.outputs.consistency_invocation_value }}'
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods -n "$NAMESPACE" -o wide || true
+          kubectl get svc -n "$NAMESPACE" || true
+          kubectl logs -n "$NAMESPACE" deploy/flashsales-db-proxy --all-containers=true --tail=200 || true
+          kubectl logs -n "$NAMESPACE" deploy/flashsales-order-service --tail=200 || true
+          kubectl logs -n "$NAMESPACE" deploy/flashsales-product-service --tail=200 || true
+          cat /tmp/flashsales-db-proxy-port-forward.log || true
+
+      - name: Stop db proxy admin port-forward
+        if: always()
+        run: |
+          if [ -f /tmp/flashsales-db-proxy-port-forward.pid ]; then
+            kill "$(cat /tmp/flashsales-db-proxy-port-forward.pid)" || true
+          fi
+
+  prepare:
+    name: Prepare Perf Environment
+    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
+    needs:
+      - contract
+      - consistency
+    if: ${{ inputs.run_perf && (needs.consistency.result == 'success' || needs.consistency.result == 'skipped') }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Connect Tailscale for private k3s access
+        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
+          tags: ${{ env.TS_CI_TAGS }}
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+          K3S_SERVER_URL_TAILSCALE: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          if [ -n "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
+            CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
+            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K3S_SERVER_URL_TAILSCALE}"
+            kubectl config set-cluster "$CLUSTER_NAME" --server="$K3S_SERVER_URL_TAILSCALE"
+          fi
+
+      - name: Verify target services
+        run: |
+          set -euo pipefail
+          kubectl -n "$NAMESPACE" get svc flashsales-user-service
+          kubectl -n "$NAMESPACE" get svc flashsales-product-service
+          kubectl -n "$NAMESPACE" get svc flashsales-order-service
+
+  perf-cadence:
+    name: Run Flashsale Perf Cadence
+    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
+    needs:
+      - contract
+      - prepare
+      - consistency
+    if: ${{ inputs.run_perf && needs.prepare.result == 'success' && (needs.consistency.result == 'success' || needs.consistency.result == 'skipped') }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Connect Tailscale for private k3s access
+        if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ env.TS_OAUTH_SECRET }}
+          tags: ${{ env.TS_CI_TAGS }}
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+          K3S_SERVER_URL_TAILSCALE: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KUBE_CONFIG_DATA" ]; then
+            echo "KUBE_CONFIG_DATA secret is missing"
+            exit 1
+          fi
+          mkdir -p "$HOME/.kube"
+          echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          if [ -n "${K3S_SERVER_URL_TAILSCALE:-}" ]; then
+            CLUSTER_NAME="$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')"
+            echo "Overriding kubeconfig server for cluster ${CLUSTER_NAME}: ${K3S_SERVER_URL_TAILSCALE}"
+            kubectl config set-cluster "$CLUSTER_NAME" --server="$K3S_SERVER_URL_TAILSCALE"
+          fi
+
+      - name: Run flashsale-owned perf cadence
+        run: |
+          set -euo pipefail
+          export KUBECONFIG_PATH="$HOME/.kube/config"
+          export USE_K8S_PORT_FORWARD="true"
+          python3 .github/scripts/run_flashsale_perf_cadence.py \
+            --lanes-json '${{ needs.contract.outputs.perf_cadence_json }}'
+
+  report-perf-to-flashsale:
+    name: Report Perf Run Back To Flashsale Repo
+    needs:
+      - contract
+      - consistency
+      - prepare
+      - perf-cadence
+    if: ${{ always() && inputs.run_perf && needs['perf-cadence'].result != 'skipped' && secrets.FLASHSALE_REPO_ISSUE_TOKEN != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create flashsale issue with perf run link
+        uses: actions/github-script@v7
+        env:
+          FLASHSALE_SOURCE_REF: ${{ inputs.flashsale_source_ref }}
+          FLASHSALE_SOURCE_SHA: ${{ inputs.flashsale_source_sha }}
+          FLASHSALE_IMAGE_TAG: ${{ inputs.flashsale_image_tag }}
+          FLASHSALE_APP_REPO: ${{ env.FLASHSALE_APP_REPO }}
+          PERF_RESULT: ${{ needs['perf-cadence'].result }}
+          CONSISTENCY_RESULT: ${{ needs.consistency.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          github-token: ${{ secrets.FLASHSALE_REPO_ISSUE_TOKEN }}
+          script: |
+            const repoSlug = process.env.FLASHSALE_APP_REPO;
+            const [owner, repo] = repoSlug.split("/");
+            if (!owner || !repo) {
+              core.setFailed(`Invalid FLASHSALE_APP_REPO value: ${repoSlug}`);
+              return;
+            }
+
+            const sourceSha = process.env.FLASHSALE_SOURCE_SHA || "unknown-sha";
+            const shortSha = sourceSha.slice(0, 12);
+            const sourceRef = process.env.FLASHSALE_SOURCE_REF || "unknown-ref";
+            const imageTag = process.env.FLASHSALE_IMAGE_TAG || "latest";
+            const perfResult = process.env.PERF_RESULT || "unknown";
+            const consistencyResult = process.env.CONSISTENCY_RESULT || "skipped";
+            const runUrl = process.env.RUN_URL;
+
+            const title = `Post-deploy perf result: ${perfResult} for ${shortSha}`;
+            const body = [
+              "Automated post-deploy quality report from `homelab-cloud`.",
+              "",
+              `- Flashsale ref: \`${sourceRef}\``,
+              `- Flashsale sha: \`${sourceSha}\``,
+              `- Deployed image tag: \`${imageTag}\``,
+              `- Runtime consistency result: \`${consistencyResult}\``,
+              `- Perf cadence result: \`${perfResult}\``,
+              `- Workflow run: ${runUrl}`,
+            ].join("\n");
+
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body,
+            });
 
   notify-discord:
     name: Notify Discord
     needs:
-      # - runtime-consistency
-      - perf-concurrency-suite
+      - contract
+      - consistency
+      - prepare
+      - perf-cadence
+      - report-perf-to-flashsale
     if: ${{ always() && github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     continue-on-error: true
