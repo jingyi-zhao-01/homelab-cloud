@@ -9,6 +9,9 @@ metadata:
     {{- include "strategy-tester.labels" . | nindent 4 }}
 spec:
   schedule: {{ .Values.optionIngestor.cronJob.schedule | quote }}
+  {{- if .Values.optionIngestor.cronJob.timeZone }}
+  timeZone: {{ .Values.optionIngestor.cronJob.timeZone | quote }}
+  {{- end }}
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3

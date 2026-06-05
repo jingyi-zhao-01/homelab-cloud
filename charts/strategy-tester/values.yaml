@@ -57,7 +57,8 @@ optionIngestor:
     INGEST_OPTION_BATCH_SIZE: "500"
   cronJob:
     enabled: true
-    schedule: "*/10 * * * *"
+    schedule: "0 22 * * 0-5"
+    timeZone: "America/New_York"
     parallelism: 1
     completions: 1
     restartPolicy: OnFailure
@@ -92,7 +93,8 @@ snapshotIngestor:
     SNAPSHOT_FETCH_CONCURRENCY: "300"
   cronJob:
     enabled: true
-    schedule: "*/10 * * * *"
+    schedule: "0 23 * * 0-5"
+    timeZone: "America/New_York"
     parallelism: 1
     completions: 1
     restartPolicy: OnFailure
