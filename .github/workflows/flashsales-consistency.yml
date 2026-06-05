@@ -50,6 +50,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install release renderer dependencies
+        run: python -m pip install --upgrade pip pyyaml
+
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
 
@@ -135,12 +138,21 @@ jobs:
           docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-toxiproxy:2.12.0 >/dev/null
           docker manifest inspect ghcr.io/${{ github.repository_owner }}/flashsales-db-proxy-bootstrap:8.8.0 >/dev/null
 
+      - name: Render flashsale release overlay
+        run: |
+          python3 .github/scripts/render_flashsale_release.py \
+            flashsale/release/flashsale-release.yaml \
+            /tmp/flashsale-release-values.yaml
+          cat /tmp/flashsale-release-values.yaml
+
       - name: Enable db proxy deployment for consistency lane
         run: |
           set -euo pipefail
           helm upgrade --install "$RELEASE" "$CHART_PATH" \
             -n "$NAMESPACE" \
             --create-namespace \
+            -f "$CHART_PATH/values.yaml" \
+            -f /tmp/flashsale-release-values.yaml \
             --set dbProxy.enabled=true \
             --set dbProxy.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-toxiproxy \
             --set dbProxy.image.tag=2.12.0 \

@@ -95,6 +95,21 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install release renderer dependencies
+        run: python -m pip install --upgrade pip pyyaml
+
+      - name: Render flashsale release overlay
+        run: |
+          python3 .github/scripts/render_flashsale_release.py \
+            flashsale/release/flashsale-release.yaml \
+            /tmp/flashsale-release-values.yaml
+          cat /tmp/flashsale-release-values.yaml
+
       - name: Connect Tailscale for private k3s access
         if: ${{ env.TS_OAUTH_CLIENT_ID != '' && env.TS_OAUTH_SECRET != '' && env.TS_CI_TAGS != '' }}
         uses: tailscale/github-action@v4
@@ -202,6 +217,8 @@ jobs:
           helm upgrade --install "$RELEASE" "$CHART_PATH" \
             -n "$NAMESPACE" \
             --create-namespace \
+            -f "$CHART_PATH/values.yaml" \
+            -f /tmp/flashsale-release-values.yaml \
             --set imagePullSecrets[0].name=ghcr-pull-secret \
             --set userService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-user-service \
             --set userService.image.tag="$IMAGE_TAG" \
