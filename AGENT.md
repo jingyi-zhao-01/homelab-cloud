@@ -15,6 +15,7 @@ Start from the smallest relevant area instead of scanning the whole repo.
 * `.github/scripts/`: workflow-side orchestration helpers.
 * `terraform/`: cloud resource provisioning, secret plumbing, networking, and worker capacity.
 * `docs/`: platform-level documentation and operational runbooks.
+* `wiki/`: root entrypoint to the repo wiki content.
 * `application/flashsale/`: workload-owned app repo as a git submodule.
 * `application/strategy-tester/`: workload-owned app repo as a git submodule.
 
@@ -26,6 +27,7 @@ This repo contains submodules, but they should not be treated as automatically i
 * Prefer platform-layer changes first when the issue is about deploy behavior, env wiring, schedules, secrets, workflows, or cluster operations.
 * If a change requires both platform and workload edits, inspect only the targeted workload submodule, not every submodule.
 * Do not carry unrelated flashsale business logic into root-level decisions unless the current task explicitly depends on it.
+* When entering a workload submodule, look for a local `AGENT.md` before inferring workload-specific rules.
 
 ## Source Of Truth
 
@@ -35,8 +37,9 @@ Use the closest source of truth for the task:
 * platform layout and conventions: [docs/overview.md](/home/jingyi/PycharmProjects/homelab-cloud/docs/overview.md)
 * infrastructure provisioning: [docs/infrastructure.md](/home/jingyi/PycharmProjects/homelab-cloud/docs/infrastructure.md)
 * workflow and runtime operations: [docs/operations.md](/home/jingyi/PycharmProjects/homelab-cloud/docs/operations.md)
+* repo wiki and mirrored ADRs: [wiki/Home.md](/home/jingyi/PycharmProjects/homelab-cloud/wiki/Home.md)
 * strategy-tester platform notes: [docs/strategy-tester.md](/home/jingyi/PycharmProjects/homelab-cloud/docs/strategy-tester.md)
-* flashsale workload internals: `application/flashsale/docs/`
+* flashsale workload internals: [application/flashsale/AGENT.md](/home/jingyi/PycharmProjects/homelab-cloud/application/flashsale/AGENT.md)
 
 Keep root guidance short. Push workload-specific business rules down into workload-owned docs.
 
@@ -47,6 +50,7 @@ Keep root guidance short. Push workload-specific business rules down into worklo
 * Do not rewrite unrelated files while fixing a narrow issue.
 * Preserve existing operator entrypoints when possible.
 * If platform behavior changes, update the nearest relevant doc in `docs/`.
+* If the change affects a durable workload decision or investigation trail, update `wiki/` as well.
 * Treat submodules as externally owned repos by default and modify them only when the task explicitly targets them.
 
 ## Safety Rules
