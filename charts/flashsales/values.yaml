@@ -138,6 +138,7 @@ productService:
     dbPoolTimeoutSeconds: "5"
     inventoryLockMode: optimistic
     optimisticRetryLimit: "5"
+    reservationTtlSeconds: "300"
 
 orderService:
   replicaCount: 1

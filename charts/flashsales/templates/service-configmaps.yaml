@@ -36,6 +36,7 @@ data:
   DB_POOL_TIMEOUT_SECONDS: {{ .Values.productService.env.dbPoolTimeoutSeconds | quote }}
   INVENTORY_LOCK_MODE: {{ .Values.productService.env.inventoryLockMode | default "pessimistic" | quote }}
   OPTIMISTIC_RETRY_LIMIT: {{ .Values.productService.env.optimisticRetryLimit | default "5" | quote }}
+  RESERVATION_TTL_SECONDS: {{ .Values.productService.env.reservationTtlSeconds | default "300" | quote }}
   OTEL_EXPORTER_OTLP_PROTOCOL: {{ .Values.observability.tracing.otlpProtocol | default "http/protobuf" | quote }}
   OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.observability.tracing.otlpHttpEndpoint | default "" | quote }}
   {{- if not .Values.observability.tracing.existingSecretName }}
