@@ -179,6 +179,17 @@ jobs:
           echo "Importing existing Neon project ${PROJECT_NAME} with id ${existing_project_id}"
           terraform import -input=false module.neon.neon_project.flashsales "$existing_project_id"
 
+      - name: Import existing Grafana folder into Terraform state
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
+        run: |
+          if terraform state show module.grafana_dashboards.grafana_folder.flashsale >/dev/null 2>&1; then
+            echo "module.grafana_dashboards.grafana_folder.flashsale already managed by Terraform"
+            exit 0
+          fi
+
+          echo "Importing existing Grafana folder ${TF_VAR_grafana_folder_uid}"
+          terraform import -input=false module.grafana_dashboards.grafana_folder.flashsale "${TF_VAR_grafana_folder_uid}"
+
       - name: Terraform Validate
         run: terraform validate
 

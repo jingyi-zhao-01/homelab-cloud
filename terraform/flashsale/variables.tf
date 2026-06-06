@@ -125,9 +125,9 @@ variable "upstash_redis_database_name" {
 }
 
 variable "upstash_redis_region" {
-  description = "Upstash Redis region. Use global if you want a multi-region database."
+  description = "Upstash Redis topology selector. Upstash now expects global databases; pair this with primary_region."
   type        = string
-  default     = "us-west-1"
+  default     = "global"
 }
 
 variable "upstash_redis_primary_region" {

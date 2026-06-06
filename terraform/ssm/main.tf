@@ -26,6 +26,7 @@ resource "aws_ssm_parameter" "postgres_user" {
   type        = "SecureString"
   value       = var.postgres_user
   key_id      = var.kms_key_id
+  overwrite   = true
 
   tags = var.tags
 }
@@ -36,6 +37,7 @@ resource "aws_ssm_parameter" "postgres_password" {
   type        = "SecureString"
   value       = var.postgres_password
   key_id      = var.kms_key_id
+  overwrite   = true
 
   tags = var.tags
 }
@@ -46,6 +48,7 @@ resource "aws_ssm_parameter" "postgres_db" {
   type        = "SecureString"
   value       = var.postgres_db
   key_id      = var.kms_key_id
+  overwrite   = true
 
   tags = var.tags
 }
@@ -56,6 +59,7 @@ resource "aws_ssm_parameter" "database_url" {
   type        = "SecureString"
   value       = var.database_url
   key_id      = var.kms_key_id
+  overwrite   = true
 
   tags = var.tags
 }
@@ -68,6 +72,7 @@ resource "aws_ssm_parameter" "redis_url" {
   type        = "SecureString"
   value       = var.redis_url
   key_id      = var.kms_key_id
+  overwrite   = true
 
   tags = var.tags
 }
@@ -80,6 +85,7 @@ resource "aws_ssm_parameter" "upstash_redis_endpoint" {
   type        = "SecureString"
   value       = var.upstash_redis_endpoint
   key_id      = var.kms_key_id
+  overwrite   = true
 
   tags = var.tags
 }
@@ -92,6 +98,7 @@ resource "aws_ssm_parameter" "upstash_redis_port" {
   type        = "SecureString"
   value       = var.upstash_redis_port
   key_id      = var.kms_key_id
+  overwrite   = true
 
   tags = var.tags
 }
@@ -104,6 +111,7 @@ resource "aws_ssm_parameter" "upstash_redis_password" {
   type        = "SecureString"
   value       = var.upstash_redis_password
   key_id      = var.kms_key_id
+  overwrite   = true
 
   tags = var.tags
 }
@@ -116,6 +124,7 @@ resource "aws_ssm_parameter" "upstash_redis_rest_token" {
   type        = "SecureString"
   value       = var.upstash_redis_rest_token
   key_id      = var.kms_key_id
+  overwrite   = true
 
   tags = var.tags
 }
@@ -128,6 +137,7 @@ resource "aws_ssm_parameter" "upstash_redis_read_only_rest_token" {
   type        = "SecureString"
   value       = var.upstash_redis_read_only_rest_token
   key_id      = var.kms_key_id
+  overwrite   = true
 
   tags = var.tags
 }
