@@ -53,9 +53,11 @@ env:
   USER_HOST: homelab-user-service.jzhao62.com
   PRODUCT_HOST: homelab-product-service.jzhao62.com
   ORDER_HOST: homelab-order-service.jzhao62.com
+  PERF_RESULTS_ROOT: ${{ github.workspace }}/flashsale-perf-results
   TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
   TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
   TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+  FLASHSALE_RESULTS_PR_TOKEN: ${{ secrets.HOMELAB_CLOUD_REPO_DISPATCH_TOKEN }}
 
 permissions:
   contents: read
@@ -171,7 +173,77 @@ jobs:
           export KUBECONFIG_PATH="$HOME/.kube/config"
           export USE_K8S_PORT_FORWARD="true"
           python3 .github/scripts/run_flashsale_perf_cadence.py \
-            --lanes-json '${{ needs.contract.outputs.perf_cadence_json }}'
+            --lanes-json '${{ needs.contract.outputs.perf_cadence_json }}' \
+            --results-root "$PERF_RESULTS_ROOT"
+
+      - name: Upload perf results artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: flashsale-perf-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.PERF_RESULTS_ROOT }}
+          if-no-files-found: ignore
+
+      - name: Materialize perf results into flashsale repo
+        if: ${{ always() && env.FLASHSALE_RESULTS_PR_TOKEN != '' }}
+        id: materialize_results
+        run: |
+          set -euo pipefail
+          if [ ! -f "$PERF_RESULTS_ROOT/manifest.json" ]; then
+            echo "No perf results manifest found; skipping flashsale PR creation"
+            echo "results_relative_dir=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          results_relative_dir="$(python3 .github/scripts/materialize_flashsale_perf_results.py \
+            --results-dir "$PERF_RESULTS_ROOT" \
+            --flashsale-dir application/flashsale \
+            --workflow-name "Flashsales Deploy Post" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --source-ref "${{ inputs.flashsale_source_ref }}" \
+            --source-sha "${{ inputs.flashsale_source_sha }}" \
+            --image-tag "${{ inputs.flashsale_image_tag }}")"
+          echo "results_relative_dir=$results_relative_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Create flashsale perf results PR
+        if: ${{ always() && env.FLASHSALE_RESULTS_PR_TOKEN != '' && steps.materialize_results.outputs.results_relative_dir != '' }}
+        env:
+          GH_TOKEN: ${{ env.FLASHSALE_RESULTS_PR_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch_name="perf-results/run-${{ github.run_id }}-attempt-${{ github.run_attempt }}"
+          pr_title="perf: record run ${{ github.run_id }} attempt ${{ github.run_attempt }}"
+          pr_body="$(mktemp)"
+
+          cat > "$pr_body" <<EOF
+          Record flashsale perf results from GitHub Actions.
+
+          - Workflow: Flashsales Deploy Post
+          - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - Attempt: ${{ github.run_attempt }}
+          - Flashsale ref: ${{ inputs.flashsale_source_ref }}
+          - Flashsale sha: ${{ inputs.flashsale_source_sha }}
+          - Image tag: ${{ inputs.flashsale_image_tag }}
+          - Results path: \`${{ steps.materialize_results.outputs.results_relative_dir }}\`
+          EOF
+
+          git -C application/flashsale config user.name "github-actions[bot]"
+          git -C application/flashsale config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C application/flashsale remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/jingyi-zhao-01/flashsale.git"
+          git -C application/flashsale checkout -B "$branch_name"
+          git -C application/flashsale add "${{ steps.materialize_results.outputs.results_relative_dir }}"
+          git -C application/flashsale commit -m "$pr_title" || {
+            echo "No perf result changes to commit; skipping PR creation"
+            exit 0
+          }
+          git -C application/flashsale push --force-with-lease origin "$branch_name"
+          gh pr create \
+            --repo jingyi-zhao-01/flashsale \
+            --base main \
+            --head "$branch_name" \
+            --title "$pr_title" \
+            --body-file "$pr_body"
 
   notify-discord:
     name: Notify Discord

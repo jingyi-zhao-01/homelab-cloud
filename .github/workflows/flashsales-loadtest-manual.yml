@@ -27,6 +27,10 @@ on:
 permissions:
   contents: read
 
+env:
+  PERF_RESULTS_ROOT: ${{ github.workspace }}/flashsale-perf-results
+  FLASHSALE_RESULTS_PR_TOKEN: ${{ secrets.HOMELAB_CLOUD_REPO_DISPATCH_TOKEN }}
+
 jobs:
   perf-test:
     name: Run k6 Perf Test
@@ -91,12 +95,105 @@ jobs:
 
       - name: Run perf test
         run: |
+          set -euo pipefail
+          export PERF_RESULTS_DIR="$PERF_RESULTS_ROOT/manual"
           KUBECONFIG_PATH="$HOME/.kube/config" bash ./application/flashsale/perf/scripts/loadtest-k6.sh \
             -e TARGET_VUS=${{ github.event.inputs.target_vus }} \
             -e RAMP_UP=${{ github.event.inputs.ramp_up }} \
             -e STEADY=${{ github.event.inputs.steady }} \
             -e RAMP_DOWN=${{ github.event.inputs.ramp_down }} \
             -e REPORT_INTERVAL_MS=${{ github.event.inputs.report_interval_ms }}
+
+      - name: Write perf result manifest
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$PERF_RESULTS_ROOT/manual"
+          cat > "$PERF_RESULTS_ROOT/manifest.json" <<EOF
+          {
+            "generated_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "workflow": "Manual Perf Test (k6)",
+            "lanes": [
+              {
+                "id": "manual",
+                "name": "manual",
+                "scenario": "manual-dispatch",
+                "status": "${{ job.status }}",
+                "results_dir": "manual",
+                "started_at": null,
+                "finished_at": null
+              }
+            ]
+          }
+          EOF
+
+      - name: Upload perf results artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: flashsale-perf-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.PERF_RESULTS_ROOT }}
+          if-no-files-found: ignore
+
+      - name: Materialize perf results into flashsale repo
+        if: ${{ always() && env.FLASHSALE_RESULTS_PR_TOKEN != '' }}
+        id: materialize_results
+        run: |
+          set -euo pipefail
+          if [ ! -f "$PERF_RESULTS_ROOT/manifest.json" ]; then
+            echo "No perf results manifest found; skipping flashsale PR creation"
+            echo "results_relative_dir=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          results_relative_dir="$(python3 .github/scripts/materialize_flashsale_perf_results.py \
+            --results-dir "$PERF_RESULTS_ROOT" \
+            --flashsale-dir application/flashsale \
+            --workflow-name "Manual Perf Test (k6)" \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --source-ref "${{ github.ref_name }}" \
+            --source-sha "${{ github.sha }}" \
+            --image-tag "")"
+          echo "results_relative_dir=$results_relative_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Create flashsale perf results PR
+        if: ${{ always() && env.FLASHSALE_RESULTS_PR_TOKEN != '' && steps.materialize_results.outputs.results_relative_dir != '' }}
+        env:
+          GH_TOKEN: ${{ env.FLASHSALE_RESULTS_PR_TOKEN }}
+        run: |
+          set -euo pipefail
+          branch_name="perf-results/run-${{ github.run_id }}-attempt-${{ github.run_attempt }}"
+          pr_title="perf: record run ${{ github.run_id }} attempt ${{ github.run_attempt }}"
+          pr_body="$(mktemp)"
+
+          cat > "$pr_body" <<EOF
+          Record flashsale perf results from GitHub Actions.
+
+          - Workflow: Manual Perf Test (k6)
+          - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - Attempt: ${{ github.run_attempt }}
+          - Flashsale ref: ${{ github.ref_name }}
+          - Flashsale sha: ${{ github.sha }}
+          - Results path: \`${{ steps.materialize_results.outputs.results_relative_dir }}\`
+          EOF
+
+          git -C application/flashsale config user.name "github-actions[bot]"
+          git -C application/flashsale config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C application/flashsale remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/jingyi-zhao-01/flashsale.git"
+          git -C application/flashsale checkout -B "$branch_name"
+          git -C application/flashsale add "${{ steps.materialize_results.outputs.results_relative_dir }}"
+          git -C application/flashsale commit -m "$pr_title" || {
+            echo "No perf result changes to commit; skipping PR creation"
+            exit 0
+          }
+          git -C application/flashsale push --force-with-lease origin "$branch_name"
+          gh pr create \
+            --repo jingyi-zhao-01/flashsale \
+            --base main \
+            --head "$branch_name" \
+            --title "$pr_title" \
+            --body-file "$pr_body"
 
   notify-discord:
     name: Notify Discord
