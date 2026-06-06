@@ -143,6 +143,8 @@ orderService:
     productReleaseTimeoutSeconds: "5"
     productTerminalizeTimeoutSeconds: "8"
     maxInflightOrders: "64"
+    reserveAdmissionMaxInflight: "2"
+    reserveAdmissionPermitTtlSeconds: "15"
     dbHost: ""
     dbPort: ""
     dbName: ""
