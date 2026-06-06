@@ -118,6 +118,18 @@ jobs:
             --docker-password="$GHCR_PULL_TOKEN" \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Detect External Secrets Operator CRDs
+        run: |
+          set -euo pipefail
+
+          if kubectl get crd externalsecrets.external-secrets.io clustersecretstores.external-secrets.io >/dev/null 2>&1; then
+            echo "External Secrets Operator CRDs detected; keeping externalSecrets enabled"
+            echo "HELM_EXTERNAL_SECRETS_ARGS=" >> "$GITHUB_ENV"
+          else
+            echo "External Secrets Operator CRDs not detected; disabling ExternalSecret resources for this deploy"
+            echo "HELM_EXTERNAL_SECRETS_ARGS=--set externalSecrets.enabled=false --set externalSecrets.store.create=false" >> "$GITHUB_ENV"
+          fi
+
       - name: Verify GHCR pull credentials can read deployed images
         env:
           GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
@@ -152,7 +164,8 @@ jobs:
             --set productService.image.pullPolicy=IfNotPresent \
             --set orderService.image.repository=ghcr.io/${{ github.repository_owner }}/flashsales-order-service \
             --set orderService.image.tag="$IMAGE_TAG" \
-            --set orderService.image.pullPolicy=IfNotPresent
+            --set orderService.image.pullPolicy=IfNotPresent \
+            ${HELM_EXTERNAL_SECRETS_ARGS:-}
 
       - name: Wait for rollouts
         run: |
