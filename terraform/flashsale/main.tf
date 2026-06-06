@@ -83,6 +83,7 @@ locals {
 module "ssm" {
   source = "../ssm"
 
+  include_upstash_runtime            = true
   aws_region                         = var.aws_region
   ssm_path_prefix                    = var.ssm_path_prefix
   kms_key_id                         = var.kms_key_id

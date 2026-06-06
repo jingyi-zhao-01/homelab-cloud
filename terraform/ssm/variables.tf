@@ -47,6 +47,12 @@ variable "redis_url" {
   default     = ""
 }
 
+variable "include_upstash_runtime" {
+  description = "Whether to create Upstash-derived SSM parameters for this stack."
+  type        = bool
+  default     = false
+}
+
 variable "upstash_redis_endpoint" {
   description = "Upstash Redis endpoint hostname"
   type        = string

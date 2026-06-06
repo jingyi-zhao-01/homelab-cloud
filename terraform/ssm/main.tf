@@ -61,7 +61,7 @@ resource "aws_ssm_parameter" "database_url" {
 }
 
 resource "aws_ssm_parameter" "redis_url" {
-  count = var.redis_url != "" ? 1 : 0
+  count = var.include_upstash_runtime ? 1 : 0
 
   name        = "${local.prefix}/REDIS_URL"
   description = "Full Upstash REDIS_URL for ${var.ssm_path_prefix}"
@@ -73,7 +73,7 @@ resource "aws_ssm_parameter" "redis_url" {
 }
 
 resource "aws_ssm_parameter" "upstash_redis_endpoint" {
-  count = var.upstash_redis_endpoint != "" ? 1 : 0
+  count = var.include_upstash_runtime ? 1 : 0
 
   name        = "${local.prefix}/UPSTASH_REDIS_ENDPOINT"
   description = "Upstash Redis endpoint hostname for ${var.ssm_path_prefix}"
@@ -85,7 +85,7 @@ resource "aws_ssm_parameter" "upstash_redis_endpoint" {
 }
 
 resource "aws_ssm_parameter" "upstash_redis_port" {
-  count = var.upstash_redis_port != "" ? 1 : 0
+  count = var.include_upstash_runtime ? 1 : 0
 
   name        = "${local.prefix}/UPSTASH_REDIS_PORT"
   description = "Upstash Redis port for ${var.ssm_path_prefix}"
@@ -97,7 +97,7 @@ resource "aws_ssm_parameter" "upstash_redis_port" {
 }
 
 resource "aws_ssm_parameter" "upstash_redis_password" {
-  count = var.upstash_redis_password != "" ? 1 : 0
+  count = var.include_upstash_runtime ? 1 : 0
 
   name        = "${local.prefix}/UPSTASH_REDIS_PASSWORD"
   description = "Upstash Redis password for ${var.ssm_path_prefix}"
@@ -109,7 +109,7 @@ resource "aws_ssm_parameter" "upstash_redis_password" {
 }
 
 resource "aws_ssm_parameter" "upstash_redis_rest_token" {
-  count = var.upstash_redis_rest_token != "" ? 1 : 0
+  count = var.include_upstash_runtime ? 1 : 0
 
   name        = "${local.prefix}/UPSTASH_REDIS_REST_TOKEN"
   description = "Upstash Redis REST token for ${var.ssm_path_prefix}"
@@ -121,7 +121,7 @@ resource "aws_ssm_parameter" "upstash_redis_rest_token" {
 }
 
 resource "aws_ssm_parameter" "upstash_redis_read_only_rest_token" {
-  count = var.upstash_redis_read_only_rest_token != "" ? 1 : 0
+  count = var.include_upstash_runtime ? 1 : 0
 
   name        = "${local.prefix}/UPSTASH_REDIS_READ_ONLY_REST_TOKEN"
   description = "Upstash Redis read-only REST token for ${var.ssm_path_prefix}"
