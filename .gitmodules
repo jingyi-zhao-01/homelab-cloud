@@ -1,5 +1,5 @@
-[submodule "docs/wiki"]
-	path = docs/wiki
+[submodule "wiki"]
+	path = wiki
 	url = https://github.com/jingyi-zhao-01/homelab-cloud.wiki.git
 [submodule "flashsale"]
 	path = application/flashsale
