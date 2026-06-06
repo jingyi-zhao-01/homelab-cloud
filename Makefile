@@ -12,10 +12,13 @@ SSH_PORT ?= 22
 REMOTE_K3S_CMD ?= k3s ctr images import -
 SSH ?= ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
 
-.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-plan neon-apply neon-destroy k3s-spot-plan k3s-spot-apply k3s-spot-destroy db-format db-validate db-generate db-migrate-status db-migrate-all concurrency-smoke concurrency-idempotency-lite concurrency-hotspot-100tps concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot require-tf-remote-state
+.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-plan neon-apply neon-destroy k3s-spot-plan k3s-spot-apply k3s-spot-destroy db-format db-validate db-generate db-migrate-status db-migrate-all concurrency-smoke concurrency-idempotency-lite concurrency-hotspot-100tps concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot require-tf-remote-state prometheus-local-install prometheus-local-status prometheus-local-uninstall
 
 TAIL ?= 200
 SINCE ?= 10m
+MONITORING_NAMESPACE ?= monitoring
+PROM_RELEASE ?= prometheus-local
+PROM_VALUES_FILE ?= deploy/monitoring/prometheus-selfhosted-values.yaml.tmpl
 
 help:
 >echo "Targets:"
@@ -54,6 +57,9 @@ help:
 >echo "  make k3s-spot-plan         # terraform plan for the AWS spot k3s worker stack using remote S3 state"
 >echo "  make k3s-spot-apply        # create or reconcile one self-healing AWS spot worker"
 >echo "  make k3s-spot-destroy      # tear down the AWS spot k3s worker stack"
+>echo "  make prometheus-local-install # Install self-hosted Prometheus on the control-plane"
+>echo "  make prometheus-local-status  # Show self-hosted Prometheus resources"
+>echo "  make prometheus-local-uninstall # Remove self-hosted Prometheus"
 
 lint:
 >cd application/flashsale && uv run pre-commit run --all-files
@@ -116,6 +122,19 @@ deploy-remote:
 >KUBECONFIG=$(KUBECONFIG_PATH) kubectl get pods -n $(NAMESPACE)
 
 fix-images-remote: build-images import-images-remote restart-apps status
+
+prometheus-local-install:
+>KUBECONFIG=$(KUBECONFIG_PATH) kubectl create namespace $(MONITORING_NAMESPACE) --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG_PATH) kubectl apply -f -
+>KUBECONFIG=$(KUBECONFIG_PATH) helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+>KUBECONFIG=$(KUBECONFIG_PATH) helm repo update
+>KUBECONFIG=$(KUBECONFIG_PATH) helm upgrade --install $(PROM_RELEASE) prometheus-community/prometheus -n $(MONITORING_NAMESPACE) -f $(PROM_VALUES_FILE)
+>KUBECONFIG=$(KUBECONFIG_PATH) kubectl get pods,svc,pvc -n $(MONITORING_NAMESPACE)
+
+prometheus-local-status:
+>KUBECONFIG=$(KUBECONFIG_PATH) kubectl get pods,svc,pvc,ingress -n $(MONITORING_NAMESPACE)
+
+prometheus-local-uninstall:
+>KUBECONFIG=$(KUBECONFIG_PATH) helm uninstall $(PROM_RELEASE) -n $(MONITORING_NAMESPACE) || true
 
 logs-user:
 >KUBECONFIG=$(KUBECONFIG_PATH) kubectl logs -n $(NAMESPACE) deploy/flashsales-user-service -f --tail=$(TAIL)

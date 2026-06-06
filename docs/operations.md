@@ -114,6 +114,39 @@ After a successful spot-node `apply`, the top-level workflow can also reconcile 
 
 Use the `reconcile_grafana_monitoring` workflow input if you need to disable that post-apply reconcile for a specific run.
 
+## Self-Hosted Metrics
+
+The shortest path away from Grafana Cloud metrics ingestion is a single self-hosted Prometheus server on the control-plane node with a 72-hour retention window.
+
+Repo entrypoints:
+
+- values template: [deploy/monitoring/prometheus-selfhosted-values.yaml.tmpl](../deploy/monitoring/prometheus-selfhosted-values.yaml.tmpl)
+- install target: `make prometheus-local-install KUBECONFIG_PATH=secrets/.kube-config`
+- status target: `make prometheus-local-status KUBECONFIG_PATH=secrets/.kube-config`
+- uninstall target: `make prometheus-local-uninstall KUBECONFIG_PATH=secrets/.kube-config`
+
+What this template does:
+
+- runs the Prometheus server on the control-plane node through node affinity plus control-plane tolerations
+- keeps only 72 hours of data
+- persists to a small PVC instead of writing back to Grafana Cloud
+- keeps `node-exporter` and `kube-state-metrics` enabled so newly joined nodes are scraped automatically
+
+Important Grafana Cloud constraint:
+
+- Grafana Cloud dashboards can only query this Prometheus if Grafana can reach it over HTTP(S)
+- a cluster-internal `ClusterIP` alone is not enough for Grafana Cloud
+- the fastest route is to enable ingress on the Prometheus server and point a Grafana `Prometheus` datasource at that URL
+
+Recommended operator flow:
+
+1. Install Prometheus with the provided Helm target.
+2. If Grafana Cloud must query it directly, turn on `server.ingress.enabled` in the values file and set a real hostname/TLS config.
+3. In Grafana Cloud, add a new `Prometheus` datasource pointing at that ingress URL.
+4. Set that datasource as the default Prometheus datasource, or retarget copied dashboards to it.
+
+If you are retiring Grafana Cloud metrics ingestion, remember that Grafana dashboard panels with a hardcoded old datasource UID will not switch automatically. Built-in or imported dashboards may need a datasource swap after the new datasource is added.
+
 ## Spot Worker Tailscale Bootstrap
 
 The spot-worker workflow can bootstrap each new worker directly into your Tailscale network before k3s starts. This is the recommended path when the control-plane already lives on Tailscale and the worker would otherwise join across a mixed public/private network boundary.
