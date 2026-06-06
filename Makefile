@@ -12,7 +12,7 @@ SSH_PORT ?= 22
 REMOTE_K3S_CMD ?= k3s ctr images import -
 SSH ?= ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
 
-.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-plan neon-apply neon-destroy k3s-spot-plan k3s-spot-apply k3s-spot-destroy db-format db-validate db-generate db-migrate-status db-migrate-all concurrency-smoke concurrency-idempotency-lite concurrency-hotspot-10tps concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot require-tf-remote-state
+.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-plan neon-apply neon-destroy k3s-spot-plan k3s-spot-apply k3s-spot-destroy db-format db-validate db-generate db-migrate-status db-migrate-all concurrency-smoke concurrency-idempotency-lite concurrency-hotspot-100tps concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot require-tf-remote-state
 
 TAIL ?= 200
 SINCE ?= 10m
@@ -43,7 +43,7 @@ help:
 >echo "  make db-migrate-all        # Apply Prisma migrations to the shared flashsale DB"
 >echo "  make concurrency-smoke     # 10 TPS non-hotspot smoke"
 >echo "  make concurrency-idempotency-lite # Replay duplicate orders and verify dedupe"
->echo "  make concurrency-hotspot-10tps # 10 TPS single-product hotspot lane"
+>echo "  make concurrency-hotspot-100tps # 100 TPS single-product hotspot lane"
 >echo "  make concurrency-baseline  # 50 TPS sustained baseline"
 >echo "  make concurrency-stress100 # 100 TPS stress stage"
 >echo "  make concurrency-stress200 # 200 TPS stress stage"
@@ -58,7 +58,7 @@ help:
 lint:
 >cd application/flashsale && uv run pre-commit run --all-files
 
-concurrency-smoke concurrency-idempotency-lite concurrency-hotspot-10tps concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot:
+concurrency-smoke concurrency-idempotency-lite concurrency-hotspot-100tps concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot:
 >$(MAKE) -C application/flashsale $@
 
 db-format db-validate db-generate db-migrate-status db-migrate-all:
