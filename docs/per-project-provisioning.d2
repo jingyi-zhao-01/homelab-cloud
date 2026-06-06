@@ -1,0 +1,200 @@
+direction: right
+
+vars: {
+  d2-config: {
+    layout-engine: elk
+    theme-id: 300
+    pad: 32
+    sketch: false
+  }
+}
+
+style: {
+  fill: "#0b1024"
+  stroke: "#1f2440"
+  stroke-width: 0
+}
+
+provisioning_flow: {
+  label: "per-project terraform provisioning and secret sync"
+  style: {
+    fill: "#191d31"
+    stroke: "#c39bff"
+    stroke-width: 2
+    double-border: true
+    font-color: "#efe7ff"
+    fill-pattern: dots
+  }
+
+  trigger_lane: {
+    label: "trigger and orchestration"
+    style: {
+      fill: "#23273d"
+      stroke: "#c39bff"
+      stroke-width: 2
+      font-color: "#efe7ff"
+    }
+
+    project_change: {
+      label: "project change\nor manual infra run"
+      shape: person
+      style: {
+        stroke: "#c39bff"
+        fill: "#7f839b"
+        stroke-width: 2
+      }
+    }
+
+    github_actions: {
+      label: "github actions\ninfra workflow"
+      shape: hexagon
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+      }
+    }
+
+    helm_workflow: {
+      label: "helm deploy\nworkflow"
+      shape: hexagon
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+      }
+    }
+  }
+
+  terraform_lane: {
+    label: "project terraform control"
+    style: {
+      fill: "#23273d"
+      stroke: "#c39bff"
+      stroke-width: 2
+      font-color: "#efe7ff"
+    }
+
+    terraform_root: {
+      label: "project terraform root\nterraform/flashsale\nor workload-specific stack"
+      shape: hexagon
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+      }
+    }
+
+    tf_state: {
+      label: "s3 remote state"
+      shape: cylinder
+      style: {
+        stroke: "#c39bff"
+        fill: "#2a2f47"
+      }
+    }
+  }
+
+  resource_lane: {
+    label: "project-scoped allocated resources"
+    style: {
+      fill: "#4c5065"
+      opacity: 0.72
+      stroke: "#c39bff"
+      stroke-width: 2
+      font-color: "#efe7ff"
+      double-border: true
+    }
+
+    neon: {
+      label: "neon postgres\nshared db runtime"
+      shape: cylinder
+      style: {
+        stroke: "#c39bff"
+        fill: "#2d3147"
+      }
+    }
+
+    upstash: {
+      label: "upstash redis\ncache and coordination"
+      shape: cylinder
+      style: {
+        stroke: "#c39bff"
+        fill: "#2d3147"
+      }
+    }
+
+    grafana: {
+      label: "grafana dashboards\nproject observability"
+      shape: document
+      style: {
+        stroke: "#c39bff"
+        fill: "#2d3147"
+      }
+    }
+
+    ssm: {
+      label: "aws ssm parameter store\n/project/env/*"
+      shape: cylinder
+      style: {
+        stroke: "#c39bff"
+        fill: "#2d3147"
+      }
+    }
+  }
+
+  cluster_lane: {
+    label: "k3s secret delivery and runtime"
+    style: {
+      fill: "#4c5065"
+      opacity: 0.72
+      stroke: "#c39bff"
+      stroke-width: 2
+      font-color: "#efe7ff"
+      double-border: true
+    }
+
+    external_secrets: {
+      label: "external secrets\noperator"
+      shape: hexagon
+      style: {
+        stroke: "#c39bff"
+        fill: "#2d3147"
+      }
+    }
+
+    k8s_secret: {
+      label: "kubernetes secret\nper project namespace"
+      shape: cylinder
+      style: {
+        stroke: "#c39bff"
+        fill: "#2d3147"
+      }
+    }
+
+    workload: {
+      label: "helm-managed workload\npods and jobs on k3s"
+      style: {
+        stroke: "#c39bff"
+        fill: "#2d3147"
+      }
+    }
+  }
+}
+
+provisioning_flow.trigger_lane.project_change -> provisioning_flow.trigger_lane.github_actions: "trigger infra pipeline"
+provisioning_flow.trigger_lane.github_actions -> provisioning_flow.terraform_lane.terraform_root: "plan and apply"
+provisioning_flow.terraform_lane.terraform_root -> provisioning_flow.terraform_lane.tf_state: "persist desired state"
+provisioning_flow.terraform_lane.terraform_root -> provisioning_flow.resource_lane.neon: "provision db"
+provisioning_flow.terraform_lane.terraform_root -> provisioning_flow.resource_lane.upstash: "provision redis"
+provisioning_flow.terraform_lane.terraform_root -> provisioning_flow.resource_lane.grafana: "provision dashboards"
+provisioning_flow.terraform_lane.terraform_root -> provisioning_flow.resource_lane.ssm: "write runtime secrets"
+provisioning_flow.resource_lane.neon -> provisioning_flow.resource_lane.ssm: "DATABASE_URL POSTGRES_*"
+provisioning_flow.resource_lane.upstash -> provisioning_flow.resource_lane.ssm: "REDIS_URL tokens"
+provisioning_flow.trigger_lane.github_actions -> provisioning_flow.trigger_lane.helm_workflow: "start deploy"
+provisioning_flow.trigger_lane.helm_workflow -> provisioning_flow.cluster_lane.workload: "helm release"
+provisioning_flow.resource_lane.ssm -> provisioning_flow.cluster_lane.external_secrets: "read project path"
+provisioning_flow.cluster_lane.external_secrets -> provisioning_flow.cluster_lane.k8s_secret: "materialize namespaced secret"
+provisioning_flow.cluster_lane.k8s_secret -> provisioning_flow.cluster_lane.workload: "inject env and credentials"
+provisioning_flow.resource_lane.grafana -> provisioning_flow.cluster_lane.workload: "operator dashboards" {
+  style: {
+    stroke-dash: 6
+  }
+}

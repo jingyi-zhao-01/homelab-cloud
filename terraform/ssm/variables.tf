@@ -40,6 +40,47 @@ variable "database_url" {
   sensitive   = true
 }
 
+variable "redis_url" {
+  description = "Full REDIS_URL connection string (sourced from Upstash outputs)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "upstash_redis_endpoint" {
+  description = "Upstash Redis endpoint hostname"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "upstash_redis_port" {
+  description = "Upstash Redis port"
+  type        = string
+  default     = ""
+}
+
+variable "upstash_redis_password" {
+  description = "Upstash Redis password"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "upstash_redis_rest_token" {
+  description = "Upstash Redis REST token"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "upstash_redis_read_only_rest_token" {
+  description = "Upstash Redis read-only REST token"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags applied to all SSM parameters"
   type        = map(string)

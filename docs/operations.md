@@ -66,10 +66,11 @@ The repo uses pre-commit hooks for whitespace, end-of-file, YAML checks, Helm li
 
 The current k3s setup relies on Terraform-provisioned AWS SSM parameters for secrets delivery, Terraform can also maintain one AWS spot-backed k3s worker, and Terraform state is stored in an S3 bucket configured at init time.
 
-For the Neon and secrets workflow details, see [Infrastructure](infrastructure.md).
+For the unified flashsale infrastructure entrypoint and the Neon/secrets workflow details, see [Infrastructure](infrastructure.md).
 
 For Grafana provisioning related to the flashsale async reservation path, use:
 
+- [terraform/flashsale](../terraform/flashsale/README.md)
 - [terraform/flashsale-grafana-dashboards](../terraform/flashsale-grafana-dashboards/README.md)
 
 Automatic provisioning entrypoint:
@@ -90,6 +91,11 @@ Required GitHub configuration for auto-apply:
 - Variable: `FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID`
 
 The workflow auto-applies on pushes to `main` when files under `terraform/flashsale-grafana-dashboards/**` change.
+
+If flashsale is configured to read Redis credentials from AWS SSM through External Secrets, enable both of these Helm values:
+
+- `externalSecrets.enabled=true`
+- `externalSecrets.includeUpstashRedis=true`
 
 For remote spot workers, do not stop at `k3s_server_url` and `k3s_token`. Make sure the worker Terraform inputs also include `trusted_cluster_cidrs` so the control-plane, VPN, or other trusted cluster paths can actually reach the node for cross-node networking and monitoring.
 

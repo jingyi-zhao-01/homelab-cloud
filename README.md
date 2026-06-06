@@ -24,6 +24,26 @@ This repository is that shared platform layer. App repos can stay focused on vib
 
 This diagram is intentionally control-plane-first: it shows `homelab-cloud` as the orchestration layer that owns deploy execution, runtime resource allocation, and perf-test environment provisioning. The source lives in [docs/infra-overview.d2](docs/infra-overview.d2).
 
+## Per-Project Provisioning Flow
+
+![per-project terraform provisioning flow](docs/per-project-provisioning.svg)
+
+This D2 diagram is intentionally control-flow-first rather than runtime-topology-first: the key question is how one project-specific Terraform entrypoint provisions cloud resources, persists state, and then syncs runtime secrets into AWS SSM for Kubernetes consumption.
+
+Read it left to right:
+
+- each workload gets a project-owned Terraform entrypoint, such as `terraform/flashsale/`
+- Terraform provisions only the cloud resources that belong to that project
+- Terraform keeps desired state in the shared S3 backend, but writes runtime credentials into `AWS SSM Parameter Store`
+- Kubernetes does not read Terraform state directly; `External Secrets Operator` reads the project SSM path and materializes a namespaced Secret
+- the Helm release consumes that Secret at deploy time, so apps get `DATABASE_URL`, `REDIS_URL`, tokens, and other sensitive values without committing them to `values.yaml`
+
+For flashsale specifically, the current aggregate stack is:
+
+- `terraform/flashsale` provisions Neon, Upstash Redis, Grafana dashboards, and SSM parameters
+- the default SSM path is `/flashsales/prod/*`
+- the `charts/flashsales` chart can read those values through `ExternalSecret`
+
 ## What This Repo Schedules
 
 | Control-plane responsibility | What it means here |

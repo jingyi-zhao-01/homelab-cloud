@@ -59,3 +59,75 @@ resource "aws_ssm_parameter" "database_url" {
 
   tags = var.tags
 }
+
+resource "aws_ssm_parameter" "redis_url" {
+  count = var.redis_url != "" ? 1 : 0
+
+  name        = "${local.prefix}/REDIS_URL"
+  description = "Full Upstash REDIS_URL for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.redis_url
+  key_id      = var.kms_key_id
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "upstash_redis_endpoint" {
+  count = var.upstash_redis_endpoint != "" ? 1 : 0
+
+  name        = "${local.prefix}/UPSTASH_REDIS_ENDPOINT"
+  description = "Upstash Redis endpoint hostname for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.upstash_redis_endpoint
+  key_id      = var.kms_key_id
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "upstash_redis_port" {
+  count = var.upstash_redis_port != "" ? 1 : 0
+
+  name        = "${local.prefix}/UPSTASH_REDIS_PORT"
+  description = "Upstash Redis port for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.upstash_redis_port
+  key_id      = var.kms_key_id
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "upstash_redis_password" {
+  count = var.upstash_redis_password != "" ? 1 : 0
+
+  name        = "${local.prefix}/UPSTASH_REDIS_PASSWORD"
+  description = "Upstash Redis password for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.upstash_redis_password
+  key_id      = var.kms_key_id
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "upstash_redis_rest_token" {
+  count = var.upstash_redis_rest_token != "" ? 1 : 0
+
+  name        = "${local.prefix}/UPSTASH_REDIS_REST_TOKEN"
+  description = "Upstash Redis REST token for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.upstash_redis_rest_token
+  key_id      = var.kms_key_id
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "upstash_redis_read_only_rest_token" {
+  count = var.upstash_redis_read_only_rest_token != "" ? 1 : 0
+
+  name        = "${local.prefix}/UPSTASH_REDIS_READ_ONLY_REST_TOKEN"
+  description = "Upstash Redis read-only REST token for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.upstash_redis_read_only_rest_token
+  key_id      = var.kms_key_id
+
+  tags = var.tags
+}

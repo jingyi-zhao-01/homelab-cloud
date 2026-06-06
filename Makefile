@@ -143,6 +143,7 @@ logs-since:
 >KUBECONFIG=$(KUBECONFIG_PATH) kubectl logs -n $(NAMESPACE) deploy/flashsales-order-service --since=$(SINCE) --tail=$(TAIL)
 
 TERRAFORM_NEON_DIR ?= terraform/neon
+TERRAFORM_FLASHSALE_DIR ?= terraform/flashsale
 TERRAFORM_K3S_NETWORK_DIR ?= terraform/k3s-spot-network
 TERRAFORM_K3S_SPOT_DIR ?= terraform/k3s-spot-node
 AWS_REGION ?=
@@ -174,6 +175,15 @@ neon-apply: require-tf-remote-state
 
 neon-destroy: require-tf-remote-state
 >cd $(TERRAFORM_NEON_DIR) && $(call terraform_init_remote,flashsales/neon/terraform.tfstate) && terraform destroy
+
+flashsale-plan: require-tf-remote-state
+>cd $(TERRAFORM_FLASHSALE_DIR) && $(call terraform_init_remote,flashsales/terraform.tfstate) && terraform plan
+
+flashsale-apply: require-tf-remote-state
+>cd $(TERRAFORM_FLASHSALE_DIR) && $(call terraform_init_remote,flashsales/terraform.tfstate) && terraform apply
+
+flashsale-destroy: require-tf-remote-state
+>cd $(TERRAFORM_FLASHSALE_DIR) && $(call terraform_init_remote,flashsales/terraform.tfstate) && terraform destroy
 
 k3s-network-plan: require-tf-remote-state
 >cd $(TERRAFORM_K3S_NETWORK_DIR) && $(call terraform_init_remote,k3s/spot-network/terraform.tfstate) && terraform plan

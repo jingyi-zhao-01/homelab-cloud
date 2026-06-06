@@ -70,6 +70,12 @@ spec:
                   key: DATABASE_URL
                   optional: true
             {{- end }}
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: REDIS_URL
+                  optional: true
             {{- if .Values.observability.tracing.existingSecretName }}
             - name: OTEL_EXPORTER_OTLP_HEADERS
               valueFrom:

@@ -66,8 +66,6 @@ data:
   DB_POOL_MIN_SIZE: {{ .Values.orderService.env.dbPoolMinSize | quote }}
   DB_POOL_MAX_SIZE: {{ .Values.orderService.env.dbPoolMaxSize | quote }}
   DB_POOL_TIMEOUT_SECONDS: {{ .Values.orderService.env.dbPoolTimeoutSeconds | quote }}
-  REDIS_URL: {{ .Values.orderService.env.redisUrl | quote }}
-  RABBITMQ_URL: {{ .Values.orderService.env.rabbitmqUrl | quote }}
   INVENTORY_LOCK_MODE: {{ .Values.orderService.env.inventoryLockMode | default "pessimistic" | quote }}
   OPTIMISTIC_RETRY_LIMIT: {{ .Values.orderService.env.optimisticRetryLimit | default "5" | quote }}
   OTEL_EXPORTER_OTLP_PROTOCOL: {{ .Values.observability.tracing.otlpProtocol | default "http/protobuf" | quote }}

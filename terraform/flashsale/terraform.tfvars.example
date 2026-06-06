@@ -1,0 +1,21 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
+
+neon_api_key = "your-neon-api-key-here"
+neon_region  = "aws-us-east-1"
+aws_region   = "us-west-1"
+
+grafana_url          = "https://grafana.example.com"
+grafana_auth         = "YOUR_GRAFANA_API_TOKEN"
+neon_datasource_uid  = "flashsale-neon"
+loki_datasource_uid  = "loki"
+tempo_datasource_uid = "tempo"
+
+# Optional direct overrides. If left empty, Terraform reads provider bootstrap
+# credentials from SSM:
+#   /upstash/email
+#   /upstash/api_key
+# upstash_email         = "you@example.com"
+# upstash_api_key       = "YOUR_UPSTASH_API_KEY"
+upstash_redis_region = "us-west-1"
+upstash_redis_tls    = true

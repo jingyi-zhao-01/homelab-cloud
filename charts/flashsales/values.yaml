@@ -10,49 +10,6 @@ observability:
     existingSecretName: ""
     existingSecretKey: "OTEL_EXPORTER_OTLP_HEADERS"
 
-redis:
-  enabled: false
-  image:
-    repository: redis
-    tag: "7-alpine"
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: "100m"
-    limits:
-      cpu: "250m"
-      memory: "128Mi"
-  service:
-    type: ClusterIP
-    port: 6379
-  auth:
-    password: redis-pass
-  storage:
-    size: 2Gi
-    className: ""
-
-rabbitmq:
-  enabled: false
-  image:
-    repository: rabbitmq
-    tag: "3.13-management-alpine"
-    pullPolicy: IfNotPresent
-  resources:
-    limits:
-      cpu: "250m"
-      memory: "384Mi"
-  service:
-    type: ClusterIP
-    amqpPort: 5672
-    managementPort: 15672
-  auth:
-    username: flashsales
-    password: mq-pass
-    vhost: "/"
-  storage:
-    size: 5Gi
-    className: ""
-
 dbProxy:
   enabled: false
   proxyName: flashsales-neon-db
@@ -192,8 +149,6 @@ orderService:
     dbPoolMinSize: "2"
     dbPoolMaxSize: "16"
     dbPoolTimeoutSeconds: "5"
-    redisUrl: redis://:redis-pass@flashsales-redis:6379/0
-    rabbitmqUrl: amqp://flashsales:mq-pass@flashsales-rabbitmq:5672/
     inventoryLockMode: optimistic
     optimisticRetryLimit: "5"
   worker:
@@ -241,7 +196,8 @@ ingress:
   orderServiceHost: "homelab-order-service.jzhao62.com"
 
 externalSecrets:
-  enabled: false
+  enabled: true
+  includeUpstashRedis: true
   refreshInterval: 1h
   targetSecretName: flashsales-postgres-auth
   parameterPrefix: /flashsales/prod

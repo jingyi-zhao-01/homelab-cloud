@@ -18,11 +18,25 @@ It is intentionally the cheapest usable network shape for this repo: no NAT gate
 
 That keeps the network layer itself in the near-zero-cost bucket, but EC2 public IPv4 charges and normal data transfer charges still apply.
 
-## Neon Flow
+## Flashsale Infrastructure Flow
 
-The `terraform/neon` stack provisions the Neon project and writes the resulting credentials into the Kubernetes Secret expected by the flashsales chart.
+The preferred flashsale Terraform entrypoint is `terraform/flashsale`.
 
-The follow-up `terraform/ssm` stack syncs those same credentials into AWS SSM Parameter Store so both workloads can consume them through External Secrets Operator.
+That aggregate stack currently groups three flashsale-specific infrastructure surfaces:
+
+- Neon for the shared PostgreSQL database
+- Grafana dashboards for flashsale observability
+- Upstash Redis for flashsale runtime coordination
+
+The legacy `terraform/neon` stack still exists for backward compatibility and Neon-only workflows.
+
+The aggregate `terraform/flashsale` stack now also mirrors runtime secrets into AWS SSM Parameter Store so workloads can consume them through External Secrets Operator.
+
+That SSM surface includes:
+
+- Neon database credentials such as `DATABASE_URL` and `POSTGRES_*`
+- Upstash Redis connection material such as `REDIS_URL`
+- Upstash REST tokens for future worker or admin flows
 
 ## Spot Worker Flow
 

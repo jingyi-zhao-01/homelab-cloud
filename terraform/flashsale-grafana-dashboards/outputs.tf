@@ -22,3 +22,8 @@ output "flashsale_terminalization_outcomes_dashboard_url" {
   description = "Direct URL for the Flashsale Terminalization Outcomes dashboard."
   value       = grafana_dashboard.flashsale_terminalization_outcomes.url
 }
+
+output "flashsale_distributed_traces_dashboard_url" {
+  description = "Direct URL for the Flashsale Distributed Traces dashboard."
+  value       = grafana_dashboard.flashsale_distributed_traces.url
+}
