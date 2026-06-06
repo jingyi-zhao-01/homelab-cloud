@@ -122,11 +122,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          if kubectl get crd externalsecrets.external-secrets.io clustersecretstores.external-secrets.io >/dev/null 2>&1; then
-            echo "External Secrets Operator CRDs detected; keeping externalSecrets enabled"
-            echo "HELM_EXTERNAL_SECRETS_ARGS=" >> "$GITHUB_ENV"
+          if kubectl api-versions | grep -qx 'external-secrets.io/v1beta1'; then
+            echo "External Secrets Operator API external-secrets.io/v1beta1 detected"
+            echo "HELM_EXTERNAL_SECRETS_ARGS=--set externalSecrets.apiVersion=external-secrets.io/v1beta1" >> "$GITHUB_ENV"
+          elif kubectl api-versions | grep -qx 'external-secrets.io/v1'; then
+            echo "External Secrets Operator API external-secrets.io/v1 detected"
+            echo "HELM_EXTERNAL_SECRETS_ARGS=--set externalSecrets.apiVersion=external-secrets.io/v1" >> "$GITHUB_ENV"
           else
-            echo "External Secrets Operator CRDs not detected; disabling ExternalSecret resources for this deploy"
+            echo "External Secrets Operator API not detected; disabling ExternalSecret resources for this deploy"
             echo "HELM_EXTERNAL_SECRETS_ARGS=--set externalSecrets.enabled=false --set externalSecrets.store.create=false" >> "$GITHUB_ENV"
           fi
 

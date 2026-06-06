@@ -198,6 +198,7 @@ ingress:
   orderServiceHost: "homelab-order-service.jzhao62.com"
 
 externalSecrets:
+  apiVersion: external-secrets.io/v1beta1
   enabled: true
   includeUpstashRedis: true
   refreshInterval: 1h
