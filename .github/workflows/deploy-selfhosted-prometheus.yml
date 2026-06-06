@@ -1,0 +1,133 @@
+name: Deploy Self-Hosted Prometheus
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Helm action to run for the self-hosted Prometheus release"
+        required: true
+        default: install
+        type: choice
+        options:
+          - install
+          - upgrade
+          - uninstall
+      namespace:
+        description: "Namespace that owns the Prometheus release"
+        required: true
+        default: monitoring
+        type: string
+      release_name:
+        description: "Helm release name"
+        required: true
+        default: prometheus-local
+        type: string
+      values_file:
+        description: "Helm values file path in this repo"
+        required: true
+        default: deploy/monitoring/self-hosted/prometheus-values.yaml.tmpl
+        type: string
+
+concurrency:
+  group: deploy-selfhosted-prometheus
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
+  TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+  TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+
+jobs:
+  deploy:
+    name: ${{ github.event.inputs.action == 'uninstall' && 'Uninstall' || 'Deploy' }} self-hosted Prometheus
+    runs-on: ubuntu-latest
+    env:
+      NAMESPACE: ${{ github.event.inputs.namespace }}
+      RELEASE_NAME: ${{ github.event.inputs.release_name }}
+      VALUES_FILE: ${{ github.event.inputs.values_file }}
+
+    steps:
+      - name: Checkout homelab-cloud
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Configure private k3s access
+        uses: ./.github/actions/setup-private-k3s-access
+        with:
+          kube_config_data: ${{ secrets.KUBE_CONFIG_DATA }}
+          k3s_server_url_tailscale: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+          ts_oauth_client_id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          ts_oauth_secret: ${{ env.TS_OAUTH_SECRET }}
+          ts_ci_tags: ${{ env.TS_CI_TAGS }}
+
+      - name: Validate requested values file
+        run: |
+          set -euo pipefail
+          if [ ! -f "$VALUES_FILE" ]; then
+            echo "Values file not found: $VALUES_FILE"
+            exit 1
+          fi
+
+      - name: Install or upgrade self-hosted Prometheus
+        if: ${{ github.event.inputs.action != 'uninstall' }}
+        run: |
+          set -euo pipefail
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+          helm upgrade --install "$RELEASE_NAME" prometheus-community/prometheus \
+            -n "$NAMESPACE" \
+            -f "$VALUES_FILE"
+
+      - name: Uninstall self-hosted Prometheus
+        if: ${{ github.event.inputs.action == 'uninstall' }}
+        run: |
+          set -euo pipefail
+          helm uninstall "$RELEASE_NAME" -n "$NAMESPACE" || true
+
+      - name: Show Prometheus status
+        if: ${{ github.event.inputs.action != 'uninstall' }}
+        run: |
+          kubectl get pods,svc,pvc,ingress -n "$NAMESPACE"
+          kubectl get certificate -n "$NAMESPACE" || true
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods -n "$NAMESPACE" -o wide || true
+          kubectl get ingress -n "$NAMESPACE" -o wide || true
+          kubectl get certificate -n "$NAMESPACE" || true
+          kubectl get events -n "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 50 || true
+          helm status "$RELEASE_NAME" -n "$NAMESPACE" || true
+
+  notify-discord:
+    name: Notify Discord
+    needs:
+      - deploy
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        continue-on-error: true
+
+      - name: Send Discord notification
+        continue-on-error: true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          DISCORD_WEBHOOK_SSM_NAME: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
+          WORKFLOW_NAME: Deploy Self-Hosted Prometheus
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: bash .github/scripts/notify-discord.sh
