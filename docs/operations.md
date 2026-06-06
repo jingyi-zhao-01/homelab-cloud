@@ -12,7 +12,7 @@ This page collects the operational commands and workflow details that used to be
 | `deploy-strategy-tester.yml` | Pushes to `strategy-tester/**` or `charts/strategy-tester/**` | Strategy tester |
 | `deploy-leetcode-intelligence.yml` | Pushes to `charts/leetcode-intelligence/**` | LeetCode intelligence |
 | `flashsales-loadtest-manual.yml` | Manual `workflow_dispatch` | Performance testing |
-| `terraform-provision.yml` | Manual | Neon and SSM infrastructure provisioning |
+| `terraform-provision.yml` | Manual | Flashsale-only Terraform provisioning for Neon, Upstash, Grafana, and SSM |
 | `terraform-k3s-spot-network.yml` | Manual | Low-cost VPC and public subnets for the spot worker |
 | `terraform-k3s-spot-node.yml` | Manual | One self-healing AWS spot k3s worker |
 
@@ -66,7 +66,7 @@ The repo uses pre-commit hooks for whitespace, end-of-file, YAML checks, Helm li
 
 The current k3s setup relies on Terraform-provisioned AWS SSM parameters for secrets delivery, Terraform can also maintain one AWS spot-backed k3s worker, and Terraform state is stored in an S3 bucket configured at init time.
 
-For the unified flashsale infrastructure entrypoint and the Neon/secrets workflow details, see [Infrastructure](infrastructure.md).
+For the unified flashsale infrastructure entrypoint and the flashsale-specific provisioning workflow details, see [Infrastructure](infrastructure.md).
 
 For Grafana provisioning related to the flashsale async reservation path, use:
 

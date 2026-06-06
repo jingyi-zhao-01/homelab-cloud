@@ -1,7 +1,7 @@
-name: Terraform Provision
+name: Terraform Provision Flashsale
 
-# This workflow provisions Neon
-# and syncs Neon credentials into AWS SSM Parameter Store.
+# This workflow provisions flashsale-specific infrastructure
+# and syncs flashsale runtime credentials into AWS SSM Parameter Store.
 # Design goal: idempotent apply with safe rollback when partial failures happen.
 on:
   workflow_dispatch:
@@ -27,6 +27,8 @@ on:
     secrets:
       NEON_API_KEY:
         required: true
+      GRAFANA_AUTH:
+        required: true
       AWS_ACCESS_KEY_ID:
         required: true
       AWS_SECRET_ACCESS_KEY:
@@ -38,13 +40,12 @@ on:
     branches:
       - main
     paths:
-      - 'terraform/neon/**'
-      - 'terraform/ssm/**'
+      - 'terraform/flashsale/**'
       - '.github/workflows/terraform-provision.yml'
 
 concurrency:
   # Serialize runs to avoid tfstate races between concurrent workflow executions.
-  group: neon-provision
+  group: flashsale-provision
   cancel-in-progress: false   # never cancel infra runs mid-flight
 
 permissions:
@@ -56,8 +57,17 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Export as TF_VAR_* so every terraform command (plan/apply/import/destroy)
-      # gets the Neon API key without repeating step-level env blocks.
+      # gets the provider credentials without repeating step-level env blocks.
       TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
+      TF_VAR_grafana_url: ${{ vars.GRAFANA_URL }}
+      TF_VAR_grafana_auth: ${{ secrets.GRAFANA_AUTH }}
+      TF_VAR_neon_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_NEON_DATASOURCE_UID }}
+      TF_VAR_loki_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID }}
+      TF_VAR_tempo_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_TEMPO_DATASOURCE_UID }}
+      TF_VAR_flashsale_namespace: ${{ vars.FLASHSALE_NAMESPACE || 'flashsales' }}
+      TF_VAR_processing_sla_minutes: ${{ vars.FLASHSALE_GRAFANA_PROCESSING_SLA_MINUTES || '5' }}
+      TF_VAR_grafana_folder_title: ${{ vars.FLASHSALE_GRAFANA_FOLDER_TITLE || 'Flashsale' }}
+      TF_VAR_grafana_folder_uid: ${{ vars.FLASHSALE_GRAFANA_FOLDER_UID || 'flashsale-folder' }}
       # AWS credentials are needed for the S3 backend.
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -65,7 +75,7 @@ jobs:
       TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
     defaults:
       run:
-        working-directory: terraform/neon
+        working-directory: terraform/flashsale
 
     steps:
       - name: Checkout
@@ -95,16 +105,45 @@ jobs:
         run: |
           terraform init \
             -backend-config="bucket=${TF_STATE_BUCKET}" \
-            -backend-config="key=flashsales/neon/terraform.tfstate" \
+            -backend-config="key=flashsales/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
 
-      - name: Remove retired Kubernetes secret from Terraform state
+      - name: Validate flashsale Terraform prerequisites
         run: |
-          if terraform state list | grep -qx 'kubernetes_secret_v1.neon_credentials'; then
-            terraform state rm kubernetes_secret_v1.neon_credentials
-          else
-            echo "kubernetes_secret_v1.neon_credentials is not present in Terraform state"
+          set -euo pipefail
+
+          if [ -z "${TF_VAR_neon_api_key:-}" ]; then
+            echo "NEON_API_KEY secret is missing"
+            exit 1
+          fi
+          if [ -z "${TF_STATE_BUCKET:-}" ]; then
+            echo "TF_STATE_BUCKET secret is missing"
+            exit 1
+          fi
+          if [ -z "${AWS_REGION:-}" ]; then
+            echo "AWS_REGION variable is missing"
+            exit 1
+          fi
+          if [ -z "${GRAFANA_URL:-}" ] && [ -z "${TF_VAR_grafana_url:-}" ]; then
+            echo "GRAFANA_URL variable is missing"
+            exit 1
+          fi
+          if [ -z "${GRAFANA_AUTH:-}" ] && [ -z "${TF_VAR_grafana_auth:-}" ]; then
+            echo "GRAFANA_AUTH secret is missing"
+            exit 1
+          fi
+          if [ -z "${FLASHSALE_GRAFANA_NEON_DATASOURCE_UID:-}" ] && [ -z "${TF_VAR_neon_datasource_uid:-}" ]; then
+            echo "FLASHSALE_GRAFANA_NEON_DATASOURCE_UID variable is missing"
+            exit 1
+          fi
+          if [ -z "${FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID:-}" ] && [ -z "${TF_VAR_loki_datasource_uid:-}" ]; then
+            echo "FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID variable is missing"
+            exit 1
+          fi
+          if [ -z "${FLASHSALE_GRAFANA_TEMPO_DATASOURCE_UID:-}" ] && [ -z "${TF_VAR_tempo_datasource_uid:-}" ]; then
+            echo "FLASHSALE_GRAFANA_TEMPO_DATASOURCE_UID variable is missing"
+            exit 1
           fi
 
       # If the Neon project already exists but Terraform state was lost, import it
@@ -117,8 +156,8 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           PROJECT_NAME: flashsales
         run: |
-          if terraform state show neon_project.flashsales >/dev/null 2>&1; then
-            echo "neon_project.flashsales already managed by Terraform"
+          if terraform state show module.neon.neon_project.flashsales >/dev/null 2>&1; then
+            echo "module.neon.neon_project.flashsales already managed by Terraform"
             exit 0
           fi
 
@@ -138,7 +177,10 @@ jobs:
           fi
 
           echo "Importing existing Neon project ${PROJECT_NAME} with id ${existing_project_id}"
-          terraform import -input=false neon_project.flashsales "$existing_project_id"
+          terraform import -input=false module.neon.neon_project.flashsales "$existing_project_id"
+
+      - name: Terraform Validate
+        run: terraform validate
 
       - name: Terraform Plan
         run: terraform plan -input=false
@@ -149,7 +191,7 @@ jobs:
         id: precheck_project
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         run: |
-          if terraform state show neon_project.flashsales >/dev/null 2>&1; then
+          if terraform state show module.neon.neon_project.flashsales >/dev/null 2>&1; then
             echo "project_preexisting=true" >> "$GITHUB_OUTPUT"
           else
             echo "project_preexisting=false" >> "$GITHUB_OUTPUT"
@@ -159,40 +201,14 @@ jobs:
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         run: terraform apply -auto-approve -input=false
 
-      - name: Sync Neon credentials to SSM via Terraform
-        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
-        env:
-          SSM_PATH_PREFIX: flashsales/prod
-        run: |
-          DB_USER=$(terraform output -raw database_user)
-          DB_PASSWORD=$(terraform output -raw database_password)
-          DB_NAME=$(terraform output -raw database_name)
-          DATABASE_URL=$(terraform output -raw database_url)
-
-          cd ../ssm
-
-          terraform init \
-            -backend-config="bucket=${TF_STATE_BUCKET}" \
-            -backend-config="key=flashsales/ssm/terraform.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="encrypt=true"
-
-          terraform apply -auto-approve -input=false \
-            -var="aws_region=${AWS_REGION}" \
-            -var="ssm_path_prefix=${SSM_PATH_PREFIX}" \
-            -var="postgres_user=${DB_USER}" \
-            -var="postgres_password=${DB_PASSWORD}" \
-            -var="postgres_db=${DB_NAME}" \
-            -var="database_url=${DATABASE_URL}"
-
       # Transaction-like safeguard:
       # if apply path fails and this run created a brand-new project,
       # clean it up so we do not leave orphan Neon projects behind.
       - name: Roll back newly-created Neon project if apply flow failed
         if: ${{ failure() && (inputs.action == 'apply' || inputs.action == '') && steps.precheck_project.outputs.project_preexisting == 'false' }}
         run: |
-          echo "Apply flow failed and project was not previously managed. Rolling back neon_project.flashsales..."
-          terraform destroy -target neon_project.flashsales -auto-approve -input=false || true
+          echo "Apply flow failed and project was not previously managed. Rolling back module.neon.neon_project.flashsales..."
+          terraform destroy -target module.neon.neon_project.flashsales -auto-approve -input=false || true
 
       - name: Terraform Destroy
         if: ${{ inputs.action == 'destroy' }}
@@ -218,6 +234,6 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ vars.AWS_REGION }}
           DISCORD_WEBHOOK_SSM_NAME: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
-          WORKFLOW_NAME: Terraform Provision
+          WORKFLOW_NAME: Terraform Provision Flashsale
           NEEDS_JSON: ${{ toJson(needs) }}
         run: bash .github/scripts/notify-discord.sh

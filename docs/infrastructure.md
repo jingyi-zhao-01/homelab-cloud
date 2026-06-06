@@ -28,7 +28,7 @@ That aggregate stack currently groups three flashsale-specific infrastructure su
 - Grafana dashboards for flashsale observability
 - Upstash Redis for flashsale runtime coordination
 
-The legacy `terraform/neon` stack still exists for backward compatibility and Neon-only workflows.
+The legacy `terraform/neon` stack still exists for backward compatibility and Neon-only workflows, but the main GitHub Actions provisioning entrypoint now targets `terraform/flashsale`.
 
 The aggregate `terraform/flashsale` stack now also mirrors runtime secrets into AWS SSM Parameter Store so workloads can consume them through External Secrets Operator.
 
