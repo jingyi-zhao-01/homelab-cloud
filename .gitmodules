@@ -8,3 +8,8 @@
 [submodule "application/strategy-tester"]
 	path = application/strategy-tester
 	url = https://github.com/jingyi-zhao-01/strategy-tester.git
+	branch = main
+[submodule "application/leetcode-intelligence"]
+	path = application/leetcode-intelligence
+	url = https://github.com/jingyi-zhao-01/leetcode-qa.git
+	branch = main
