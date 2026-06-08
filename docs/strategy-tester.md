@@ -29,5 +29,6 @@ helm upgrade --install strategy-tester charts/strategy-tester -n strategy-tester
 
 - [Repository overview](overview.md)
 - [Operations and tooling](operations.md)
+- [2026-06-07 option-ingestor Neon RCA](/home/jingyi/PycharmProjects/homelab-cloud/application/strategy-tester/docs/rca/2026-06-07-option-ingestor-neon-connectivity.md)
 
 Back to [README](../README.md).
