@@ -1,0 +1,66 @@
+name: Guard Control Plane Status Boundary
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/control-plane-status/**'
+      - '.github/workflows/**'
+      - 'charts/**'
+  pull_request:
+    paths:
+      - 'apps/control-plane-status/**'
+      - '.github/workflows/**'
+      - 'charts/**'
+
+permissions:
+  contents: read
+
+jobs:
+  assert-vercel-only:
+    name: Assert control plane status stays out of k3s
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fail if any Helm chart is added for control plane status
+        run: |
+          set -euo pipefail
+
+          if find charts -maxdepth 2 -type f | grep -E 'control-plane-status|homelab-cloud-control-plane-status' >/dev/null; then
+            echo "Control plane status app must not have a Helm chart under charts/"
+            find charts -maxdepth 2 -type f | grep -E 'control-plane-status|homelab-cloud-control-plane-status' || true
+            exit 1
+          fi
+
+      - name: Fail if any non-Vercel workflow references apps/control-plane-status
+        run: |
+          set -euo pipefail
+
+          matches=$(rg -n "apps/control-plane-status" .github/workflows \
+            -g '!deploy-control-plane-status-vercel.yml' \
+            -g '!guard-control-plane-status-boundary.yml' || true)
+
+          if [ -n "$matches" ]; then
+            echo "apps/control-plane-status is only allowed in the Vercel deploy workflow and this guard workflow"
+            echo "$matches"
+            exit 1
+          fi
+
+      - name: Fail if kubernetes manifests are introduced for control plane status
+        run: |
+          set -euo pipefail
+
+          matches=$(rg -n "control-plane-status|homelab-cloud-control-plane-status" charts deploy .github/workflows \
+            -g '!deploy-control-plane-status-vercel.yml' \
+            -g '!guard-control-plane-status-boundary.yml' || true)
+
+          if [ -n "$matches" ]; then
+            echo "Found control plane status references in kubernetes-oriented paths:"
+            echo "$matches"
+            exit 1
+          fi

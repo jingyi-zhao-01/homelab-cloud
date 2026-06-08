@@ -1,0 +1,89 @@
+name: Deploy Control Plane Status to Vercel
+
+# Important boundary:
+# - apps/control-plane-status is a Vercel-only surface
+# - it must not be deployed through Helm or any k3s workflow in this repository
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/control-plane-status/**'
+      - '.github/workflows/deploy-control-plane-status-vercel.yml'
+  workflow_run:
+    workflows:
+      - Flashsales Deploy
+      - Deploy Strategy Tester to strategy-tester Namespace
+      - Deploy LeetCode Intelligence to leetcode-intelligence Namespace
+    types:
+      - completed
+
+concurrency:
+  group: deploy-control-plane-status-vercel-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy apps/control-plane-status to Vercel
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_CONTROL_PLANE_STATUS_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Validate Vercel configuration
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "VERCEL_TOKEN secret is missing"
+            exit 1
+          fi
+
+          if [ -z "${VERCEL_ORG_ID:-}" ]; then
+            echo "VERCEL_ORG_ID repository variable is missing"
+            exit 1
+          fi
+
+          if [ -z "${VERCEL_PROJECT_ID:-}" ]; then
+            echo "VERCEL_CONTROL_PLANE_STATUS_PROJECT_ID repository variable is missing"
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/control-plane-status/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/control-plane-status
+        run: npm ci
+
+      - name: Pull Vercel environment
+        working-directory: apps/control-plane-status
+        run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build control plane status app
+        working-directory: apps/control-plane-status
+        run: npx vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy to Vercel production
+        working-directory: apps/control-plane-status
+        run: npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
