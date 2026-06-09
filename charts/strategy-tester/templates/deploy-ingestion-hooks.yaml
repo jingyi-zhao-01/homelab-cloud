@@ -1,0 +1,125 @@
+{{- if .Values.deployHooks.runIngestionOnDeploy }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "strategy-tester.fullname" . }}-option-deploy-{{ .Release.Revision }}
+  namespace: {{ include "strategy-tester.namespace" . }}
+  labels:
+    app: option-ingestor
+    trigger: deploy-hook
+    {{- include "strategy-tester.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "helm.sh/hook-weight": "0"
+spec:
+  parallelism: {{ .Values.optionIngestor.cronJob.parallelism }}
+  completions: {{ .Values.optionIngestor.cronJob.completions }}
+  backoffLimit: {{ .Values.optionIngestor.cronJob.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        app: option-ingestor
+        trigger: deploy-hook
+        {{- include "strategy-tester.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: {{ .Values.optionIngestor.cronJob.restartPolicy }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: option-ingestor
+          image: "{{ .Values.optionIngestor.image.repository }}:{{ .Values.optionIngestor.image.tag }}"
+          imagePullPolicy: {{ .Values.optionIngestor.image.pullPolicy }}
+          {{- with .Values.optionIngestor.env }}
+          env:
+            {{- range $key, $value := . }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: {{ $.Values.observability.tracing.otlpProtocol | default "http/protobuf" | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ $.Values.observability.tracing.otlpHttpEndpoint | default "" | quote }}
+            {{- if $.Values.observability.tracing.existingSecretName }}
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.observability.tracing.existingSecretName }}
+                  key: {{ $.Values.observability.tracing.existingSecretKey }}
+            {{- else if $.Values.observability.tracing.otlpHeaders }}
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              value: {{ $.Values.observability.tracing.otlpHeaders | quote }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.externalSecrets.enabled }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.externalSecrets.targetSecretName }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.optionIngestor.resources | nindent 12 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "strategy-tester.fullname" . }}-snapshot-deploy-{{ .Release.Revision }}
+  namespace: {{ include "strategy-tester.namespace" . }}
+  labels:
+    app: snapshot-ingestor
+    trigger: deploy-hook
+    {{- include "strategy-tester.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "helm.sh/hook-weight": "1"
+spec:
+  parallelism: {{ .Values.snapshotIngestor.cronJob.parallelism }}
+  completions: {{ .Values.snapshotIngestor.cronJob.completions }}
+  backoffLimit: {{ .Values.snapshotIngestor.cronJob.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        app: snapshot-ingestor
+        trigger: deploy-hook
+        {{- include "strategy-tester.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: {{ .Values.snapshotIngestor.cronJob.restartPolicy }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: snapshot-ingestor
+          image: "{{ .Values.snapshotIngestor.image.repository }}:{{ .Values.snapshotIngestor.image.tag }}"
+          imagePullPolicy: {{ .Values.snapshotIngestor.image.pullPolicy }}
+          {{- with .Values.snapshotIngestor.env }}
+          env:
+            {{- range $key, $value := . }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: {{ $.Values.observability.tracing.otlpProtocol | default "http/protobuf" | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ $.Values.observability.tracing.otlpHttpEndpoint | default "" | quote }}
+            {{- if $.Values.observability.tracing.existingSecretName }}
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.observability.tracing.existingSecretName }}
+                  key: {{ $.Values.observability.tracing.existingSecretKey }}
+            {{- else if $.Values.observability.tracing.otlpHeaders }}
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              value: {{ $.Values.observability.tracing.otlpHeaders | quote }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.externalSecrets.enabled }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.externalSecrets.targetSecretName }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.snapshotIngestor.resources | nindent 12 }}
+{{- end }}
