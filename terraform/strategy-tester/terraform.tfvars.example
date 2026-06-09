@@ -1,0 +1,4 @@
+grafana_url               = "https://grafana.example.com"
+grafana_auth              = "YOUR_GRAFANA_API_TOKEN"
+neon_datasource_uid       = "strategy-tester-neon"
+strategy_tester_namespace = "strategy-tester"

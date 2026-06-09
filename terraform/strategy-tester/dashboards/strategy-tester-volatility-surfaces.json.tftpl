@@ -1,0 +1,69 @@
+{
+  "uid": "strategy-tester-volatility-surfaces",
+  "title": "Strategy Tester Volatility Surfaces",
+  "tags": ["strategy-tester", "options", "volatility", "plotly"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30m",
+  "editable": true,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "constant",
+        "label": "Namespace",
+        "query": "${strategy_tester_namespace}",
+        "current": { "text": "${strategy_tester_namespace}", "value": "${strategy_tester_namespace}" },
+        "hide": 2
+      },
+      {
+        "name": "underlying_asset",
+        "label": "Underlying Asset",
+        "type": "query",
+        "hide": 2,
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "allValue": null,
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "${neon_datasource_uid}" },
+        "definition": "SELECT DISTINCT underlying_ticker AS __text, underlying_ticker AS __value FROM options ORDER BY 1;",
+        "query": "SELECT DISTINCT underlying_ticker AS __text, underlying_ticker AS __value FROM options ORDER BY 1;",
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": ["All"],
+          "value": ["$__all"]
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "ae3e-plotly-panel",
+      "title": "$${underlying_asset} Volatility Surface",
+      "description": "为什么重要：这张图把每个 underlying 的最新 snapshot 隐含波动率曲面自动画出来。怎么看：横轴是 DTE，纵轴是 strike，曲面高度是 implied volatility；如果曲面断裂或明显空洞，通常意味着 snapshot 覆盖不完整或某些 strike/expiry 没抓到。",
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${neon_datasource_uid}" },
+      "gridPos": { "h": 14, "w": 12, "x": 0, "y": 0 },
+      "repeat": "underlying_asset",
+      "repeatDirection": "h",
+      "maxPerRow": 2,
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT o.ticker AS option_ticker, o.strike_price, o.expiration_date, o.contract_type AS option_type, s.implied_vol AS implied_volatility, s.last_crawled, s.last_updated, EXTRACT(DAY FROM (o.expiration_date - NOW()))::int AS dte FROM options o JOIN option_snapshots s ON o.ticker = s.ticker WHERE o.underlying_ticker = '$${underlying_asset}' AND s.last_crawled = ( SELECT MAX(last_crawled) FROM option_snapshots WHERE ticker IN ( SELECT ticker FROM options WHERE underlying_ticker = '$${underlying_asset}' ) ) ORDER BY o.expiration_date, o.strike_price;"
+        }
+      ],
+      "options": {
+        "script": "const frame = data.series?.[0];\nif (!frame || !frame.fields?.length) {\n  return {\n    data: [],\n    layout: {\n      title: `${variables.underlying_asset} Volatility Surface`,\n      annotations: [{ text: 'No data', showarrow: false, x: 0.5, y: 0.5, xref: 'paper', yref: 'paper' }]\n    },\n    config: { displaylogo: false, responsive: true }\n  };\n}\n\nconst valuesFor = (name) => {\n  const field = frame.fields.find((candidate) => candidate.name === name);\n  if (!field) {\n    return [];\n  }\n  const values = field.values;\n  if (Array.isArray(values)) {\n    return values;\n  }\n  if (values?.buffer) {\n    return Array.from(values.buffer);\n  }\n  return Array.from(values || []);\n};\n\nconst dtes = valuesFor('dte').map((value) => Number(value));\nconst strikes = valuesFor('strike_price').map((value) => Number(value));\nconst impliedVols = valuesFor('implied_volatility').map((value) => value == null ? null : Number(value));\nconst expirations = valuesFor('expiration_date').map((value) => String(value));\nconst optionTickers = valuesFor('option_ticker').map((value) => String(value));\n\nconst uniqueDtes = [...new Set(dtes)].sort((left, right) => left - right);\nconst uniqueStrikes = [...new Set(strikes)].sort((left, right) => left - right);\nconst zMatrix = uniqueStrikes.map(() => uniqueDtes.map(() => null));\nconst textMatrix = uniqueStrikes.map(() => uniqueDtes.map(() => ''));\nconst strikeIndex = new Map(uniqueStrikes.map((value, index) => [value, index]));\nconst dteIndex = new Map(uniqueDtes.map((value, index) => [value, index]));\n\nfor (let i = 0; i < dtes.length; i += 1) {\n  const rowIndex = strikeIndex.get(strikes[i]);\n  const colIndex = dteIndex.get(dtes[i]);\n  if (rowIndex === undefined || colIndex === undefined) {\n    continue;\n  }\n  zMatrix[rowIndex][colIndex] = impliedVols[i];\n  textMatrix[rowIndex][colIndex] = `${optionTickers[i]}<br>Expiry: ${expirations[i]}<br>DTE: ${dtes[i]}<br>Strike: ${strikes[i]}<br>IV: ${impliedVols[i]}`;\n}\n\nreturn {\n  data: [\n    {\n      type: 'surface',\n      x: uniqueDtes,\n      y: uniqueStrikes,\n      z: zMatrix,\n      text: textMatrix,\n      hoverinfo: 'text',\n      colorscale: 'Viridis',\n      contours: {\n        z: {\n          show: true,\n          usecolormap: true,\n          highlightcolor: '#f59e0b',\n          project: { z: true }\n        }\n      }\n    }\n  ],\n  layout: {\n    title: `${variables.underlying_asset} Volatility Surface`,\n    margin: { l: 0, r: 0, b: 0, t: 48 },\n    paper_bgcolor: 'rgba(0,0,0,0)',\n    plot_bgcolor: 'rgba(0,0,0,0)',\n    scene: {\n      xaxis: { title: 'DTE' },\n      yaxis: { title: 'Strike Price' },\n      zaxis: { title: 'Implied Volatility' },\n      camera: { eye: { x: 1.5, y: 1.5, z: 0.8 } }\n    }\n  },\n  config: {\n    responsive: true,\n    displaylogo: false,\n    displayModeBar: false\n  }\n};",
+        "onclick": "",
+        "data": "[]",
+        "layout": "{}",
+        "config": "{}"
+      }
+    }
+  ]
+}
