@@ -39,7 +39,7 @@ optionIngestor:
   image:
     repository: ghcr.io/jingyi-zhao-01/strategy-tester-option-ingestor
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   resources:
     requests:
       cpu: "300m"
@@ -75,7 +75,7 @@ snapshotIngestor:
   image:
     repository: ghcr.io/jingyi-zhao-01/strategy-tester-snapshot-ingestor
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   resources:
     requests:
       cpu: "300m"
