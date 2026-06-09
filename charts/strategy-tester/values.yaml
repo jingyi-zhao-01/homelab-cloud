@@ -54,6 +54,7 @@ optionIngestor:
     LOG_LEVEL: INFO
     INGEST_CONCURRENCY_LIMIT: "20"
     INGEST_DB_CONCURRENCY_LIMIT: "20"
+    INGEST_DB_WRITE_BATCH_SIZE: "25"
     INGEST_OPTION_BATCH_SIZE: "500"
   cronJob:
     enabled: true
