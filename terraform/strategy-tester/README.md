@@ -28,6 +28,33 @@ terraform plan
 terraform apply
 ```
 
+## GitHub Actions
+
+This stack is wired to:
+
+- `.github/workflows/terraform-strategy-tester-grafana-dashboards.yml`
+
+Behavior:
+
+- push to `main` touching `terraform/strategy-tester/**` triggers automatic `terraform apply`
+- `workflow_dispatch` supports `plan`, `apply`, and `destroy`
+
+Required GitHub configuration:
+
+- Secret: `GRAFANA_AUTH`
+- Secret: `AWS_ACCESS_KEY_ID`
+- Secret: `AWS_SECRET_ACCESS_KEY`
+- Secret: `TF_STATE_BUCKET`
+- Variable: `GRAFANA_URL`
+- Variable: `AWS_REGION`
+- Variable: `STRATEGY_TESTER_GRAFANA_NEON_DATASOURCE_UID`
+
+Optional GitHub configuration:
+
+- Variable: `STRATEGY_TESTER_NAMESPACE`
+- Variable: `STRATEGY_TESTER_GRAFANA_FOLDER_TITLE`
+- Variable: `STRATEGY_TESTER_GRAFANA_FOLDER_UID`
+
 ## Required Inputs
 
 - `grafana_url`
