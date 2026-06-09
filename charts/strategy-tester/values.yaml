@@ -13,9 +13,6 @@ observability:
     existingSecretName: ""
     existingSecretKey: "OTEL_EXPORTER_OTLP_HEADERS"
 
-deployHooks:
-  runIngestionOnDeploy: true
-
 externalSecrets:
   enabled: true
   refreshInterval: 1h

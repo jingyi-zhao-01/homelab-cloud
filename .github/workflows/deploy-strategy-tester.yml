@@ -92,12 +92,19 @@ jobs:
             --set optionIngestor.image.tag=latest \
             --set snapshotIngestor.image.tag=latest
 
-      - name: Wait for deployments
+      - name: Trigger ingestion jobs after deploy
         run: |
-          kubectl -n "$NAMESPACE" rollout status deploy/strategy-tester-option-ingestor --timeout=300s || true
-          kubectl -n "$NAMESPACE" rollout status deploy/strategy-tester-snapshot-ingestor --timeout=300s || true
+          ts="$(date +%s)"
 
-      - name: Show deployment status
+          kubectl -n "$NAMESPACE" create job \
+            --from=cronjob/strategy-tester-option-ingestor \
+            "strategy-tester-option-deploy-$ts"
+
+          kubectl -n "$NAMESPACE" create job \
+            --from=cronjob/strategy-tester-snapshot-ingestor \
+            "strategy-tester-snapshot-deploy-$ts"
+
+      - name: Show workload status
         run: |
           kubectl -n "$NAMESPACE" get all
           kubectl -n "$NAMESPACE" get cronjob -o wide
@@ -106,8 +113,9 @@ jobs:
         if: failure()
         run: |
           kubectl get pods -n "$NAMESPACE" -o wide || true
+          kubectl get jobs -n "$NAMESPACE" -o wide || true
           kubectl get events -n "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 50 || true
-          kubectl describe deploy -n "$NAMESPACE" || true
+          kubectl describe cronjob -n "$NAMESPACE" || true
 
   notify-discord:
     name: Notify Discord
