@@ -32,6 +32,32 @@ variable "openrouter_api_key" {
   default     = ""
 }
 
+variable "github_token" {
+  description = "Optional direct override for the GitHub token. Leave empty to read from SSM."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "github_token_parameter_name" {
+  description = "Global SSM parameter name containing the source GitHub token used to seed the control-plane triage agent secret."
+  type        = string
+  default     = "/codex/GITHUB_ACCESS_TOKEN"
+}
+
+variable "discord_webhook_url" {
+  description = "Optional direct override for the Discord webhook URL. Leave empty to read from SSM."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "discord_webhook_url_parameter_name" {
+  description = "Global SSM parameter name containing the source Discord webhook URL used to seed the control-plane triage agent secret."
+  type        = string
+  default     = "/codex/discord-webhook"
+}
+
 variable "openrouter_api_key_parameter_name" {
   description = "Global SSM parameter name containing the source OpenRouter API key used to seed the control-plane triage agent secret."
   type        = string
