@@ -15,6 +15,24 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+_SUPPORTED_OPENHANDS_MODEL_PROVIDERS = {
+    "anthropic",
+    "azure",
+    "bedrock",
+    "deepseek",
+    "gemini",
+    "google",
+    "groq",
+    "huggingface",
+    "mistral",
+    "ollama",
+    "openai",
+    "openrouter",
+    "together_ai",
+    "vertex_ai",
+    "xai",
+}
+
 
 @dataclass(frozen=True)
 class WatchTarget:
@@ -77,6 +95,21 @@ def _parse_targets(raw: str | None) -> tuple[WatchTarget, ...]:
     return tuple(targets)
 
 
+def _validate_openhands_model(model: str) -> str:
+    """Require a provider-qualified OpenHands model name."""
+
+    provider, _, _ = model.partition("/")
+    if not provider or provider not in _SUPPORTED_OPENHANDS_MODEL_PROVIDERS:
+        supported = ", ".join(sorted(_SUPPORTED_OPENHANDS_MODEL_PROVIDERS))
+        raise ValueError(
+            "OpenHands model configuration is invalid. "
+            "The configured model needs an explicit provider prefix, for example "
+            "`openrouter/qwen/qwen3-coder-next`. "
+            f"Configured model: `{model}`. Supported provider prefixes: {supported}"
+        )
+    return model
+
+
 def load_config() -> Config:
     """Load process configuration from environment variables.
 
@@ -107,6 +140,9 @@ def load_config() -> Config:
         raise ValueError(
             "OPENHANDS_LLM_API_KEY must be configured because this service requires OpenHands for all flows"
         )
+    openhands_model = _validate_openhands_model(
+        os.environ.get("OPENHANDS_MODEL", "openhands/claude-sonnet-4-5-20250929")
+    )
 
     return Config(
         github_token=github_token,
@@ -120,7 +156,7 @@ def load_config() -> Config:
         max_discord_chars=int(os.environ.get("MAX_DISCORD_CHARS", "1800")),
         state_dir=state_dir,
         openhands_enabled=openhands_enabled,
-        openhands_model=os.environ.get("OPENHANDS_MODEL", "openhands/claude-sonnet-4-5-20250929"),
+        openhands_model=openhands_model,
         openhands_api_key=openhands_api_key,
         openhands_max_iterations=int(os.environ.get("OPENHANDS_MAX_ITERATIONS", "30")),
         watch_targets=_parse_targets(os.environ.get("WATCH_TARGETS_JSON")),
