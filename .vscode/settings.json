@@ -1,10 +1,13 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/application/flashsale/.venv/bin/python",
+  "python.defaultInterpreterPath": "${workspaceFolder}/apps/control-plane-triage-agent/.venv/bin/python",
   "python.analysis.extraPaths": [
+    "${workspaceFolder}/apps/control-plane-triage-agent/src",
     "${workspaceFolder}/application/flashsale/user-service",
     "${workspaceFolder}/application/flashsale/product-service",
     "${workspaceFolder}/application/flashsale/order-service"
   ],
+  "python.analysis.autoSearchPaths": true,
+  "python.terminal.activateEnvironment": true,
   "python.testing.unittestArgs": [
     "-v",
     "-s",
