@@ -107,7 +107,7 @@ def _validate_openhands_model(model: str) -> str:
         raise ValueError(
             "OpenHands model configuration is invalid. "
             "The configured model needs an explicit provider prefix, for example "
-            "`openrouter/qwen/qwen3-coder-next`. "
+            "`openrouter/free`. "
             f"Configured model: `{model}`. Supported provider prefixes: {supported}"
         )
     return model

@@ -23,7 +23,7 @@ Provision these into AWS SSM under `/control-plane-triage-agent/prod`:
 Important defaults:
 
 - `OPENHANDS_ENABLED=true`
-- `OPENHANDS_MODEL=openrouter/qwen/qwen3-coder-next`
+- `OPENHANDS_MODEL=openrouter/free`
 
 The model name must include an explicit provider prefix such as `openrouter/...`.
 

@@ -58,7 +58,7 @@ env:
   OPERATOR_HISTORY_MAX_BYTES: "131072"
   OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
   OPENHANDS_ENABLED: "true"
-  OPENHANDS_MODEL: "openrouter/qwen/qwen3-coder-next"
+  OPENHANDS_MODEL: "openrouter/free"
   OPENHANDS_MAX_ITERATIONS: "30"
   WATCH_TARGETS_JSON: >-
     [
