@@ -209,10 +209,10 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: application/leetcode-intelligence/client/package-lock.json
+          cache-dependency-path: application/leetcode-intelligence/package-lock.json
 
       - name: Install client dependencies
-        working-directory: application/leetcode-intelligence/client
+        working-directory: application/leetcode-intelligence
         run: npm ci
 
       - name: Pull Vercel environment
