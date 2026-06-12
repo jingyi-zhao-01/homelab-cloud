@@ -90,50 +90,10 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          set -euo pipefail
-
-          fetch_ssm() {
-            local name="$1"
-            aws ssm get-parameter \
-              --name "$name" \
-              --with-decryption \
-              --query 'Parameter.Value' \
-              --output text \
-              --region "$AWS_REGION"
-          }
-
-          mask_value() {
-            echo "::add-mask::$1"
-          }
-
-          vercel_org_id="$(fetch_ssm "$VERCEL_ORG_ID_SSM_NAME")"
-          vercel_token="$(fetch_ssm "$VERCEL_TOKEN_SSM_NAME")"
-          vercel_project_id="$(fetch_ssm "$VERCEL_PROJECT_ID_SSM_NAME")"
-
-          if [ -z "$vercel_org_id" ] || [ "$vercel_org_id" = "None" ]; then
-            echo "Failed to resolve VERCEL_ORG_ID from SSM parameter $VERCEL_ORG_ID_SSM_NAME"
-            exit 1
-          fi
-
-          if [ -z "$vercel_token" ] || [ "$vercel_token" = "None" ]; then
-            echo "Failed to resolve VERCEL_TOKEN from SSM parameter $VERCEL_TOKEN_SSM_NAME"
-            exit 1
-          fi
-
-          if [ -z "$vercel_project_id" ] || [ "$vercel_project_id" = "None" ]; then
-            echo "Failed to resolve VERCEL_PROJECT_ID from SSM parameter $VERCEL_PROJECT_ID_SSM_NAME"
-            exit 1
-          fi
-
-          mask_value "$vercel_org_id"
-          mask_value "$vercel_token"
-          mask_value "$vercel_project_id"
-
-          {
-            echo "VERCEL_ORG_ID=$vercel_org_id"
-            echo "VERCEL_TOKEN=$vercel_token"
-            echo "VERCEL_PROJECT_ID=$vercel_project_id"
-          } >> "$GITHUB_ENV"
+          bash .github/scripts/resolve-ssm-env.sh \
+            VERCEL_ORG_ID="$VERCEL_ORG_ID_SSM_NAME" \
+            VERCEL_TOKEN="$VERCEL_TOKEN_SSM_NAME" \
+            VERCEL_PROJECT_ID="$VERCEL_PROJECT_ID_SSM_NAME"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

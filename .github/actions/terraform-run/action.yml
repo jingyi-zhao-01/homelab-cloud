@@ -1,0 +1,62 @@
+name: Terraform Run
+description: Shared Terraform init/validate/plan/apply-or-destroy flow.
+
+inputs:
+  working_directory:
+    description: Terraform working directory.
+    required: true
+  backend_bucket:
+    description: Terraform backend S3 bucket.
+    required: true
+  backend_key:
+    description: Terraform backend state key.
+    required: true
+  aws_region:
+    description: AWS region used for backend configuration.
+    required: true
+  action:
+    description: "Terraform action. Supported values: plan, apply, destroy."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    - name: Terraform Init
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: |
+        terraform init \
+          -backend-config="bucket=${{ inputs.backend_bucket }}" \
+          -backend-config="key=${{ inputs.backend_key }}" \
+          -backend-config="region=${{ inputs.aws_region }}" \
+          -backend-config="encrypt=true"
+
+    - name: Terraform Validate
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: terraform validate
+
+    - name: Terraform Plan
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: |
+        if [ "${{ inputs.action }}" = "destroy" ]; then
+          terraform plan -destroy -input=false
+        else
+          terraform plan -input=false
+        fi
+
+    - name: Terraform Apply
+      if: inputs.action == 'apply'
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: terraform apply -auto-approve -input=false
+
+    - name: Terraform Destroy
+      if: inputs.action == 'destroy'
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: terraform destroy -auto-approve -input=false

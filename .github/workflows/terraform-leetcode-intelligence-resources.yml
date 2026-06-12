@@ -61,9 +61,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
       - name: Validate required configuration
         run: |
           set -euo pipefail
@@ -91,72 +88,19 @@ jobs:
 
       - name: Resolve Vercel firewall configuration from AWS SSM
         run: |
-          set -euo pipefail
+          bash .github/scripts/resolve-ssm-env.sh \
+            TF_VAR_vercel_team_id="$VERCEL_ORG_ID_SSM_NAME" \
+            TF_VAR_vercel_api_token="$VERCEL_TOKEN_SSM_NAME" \
+            TF_VAR_vercel_project_id="$VERCEL_PROJECT_ID_SSM_NAME"
 
-          fetch_ssm() {
-            local logical_name="$1"
-            local parameter_name="$2"
-            local value
-
-            if ! value="$(
-              aws ssm get-parameter \
-                --name "$parameter_name" \
-                --with-decryption \
-                --query 'Parameter.Value' \
-                --output text \
-                --region "$AWS_REGION"
-            )"; then
-              echo "Failed to resolve $logical_name from SSM parameter $parameter_name" >&2
-              exit 1
-            fi
-
-            if [ -z "$value" ] || [ "$value" = "None" ]; then
-              echo "Resolved empty value for $logical_name from SSM parameter $parameter_name" >&2
-              exit 1
-            fi
-
-            printf '%s\n' "$value"
-          }
-
-          mask_value() {
-            echo "::add-mask::$1"
-          }
-
-          vercel_org_id="$(fetch_ssm "VERCEL_ORG_ID" "$VERCEL_ORG_ID_SSM_NAME")"
-          vercel_token="$(fetch_ssm "VERCEL_TOKEN" "$VERCEL_TOKEN_SSM_NAME")"
-          vercel_project_id="$(fetch_ssm "VERCEL_PROJECT_ID" "$VERCEL_PROJECT_ID_SSM_NAME")"
-
-          mask_value "$vercel_org_id"
-          mask_value "$vercel_token"
-          mask_value "$vercel_project_id"
-
-          {
-            echo "TF_VAR_vercel_team_id=$vercel_org_id"
-            echo "TF_VAR_vercel_api_token=$vercel_token"
-            echo "TF_VAR_vercel_project_id=$vercel_project_id"
-          } >> "$GITHUB_ENV"
-
-      - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="bucket=${TF_STATE_BUCKET}" \
-            -backend-config="key=leetcode-intelligence/resources/terraform.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="encrypt=true"
-
-      - name: Terraform Validate
-        run: terraform validate
-
-      - name: Terraform Plan
-        run: terraform plan -input=false
-
-      - name: Terraform Apply
-        if: ${{ github.event_name == 'push' || inputs.action == 'apply' }}
-        run: terraform apply -auto-approve -input=false
-
-      - name: Terraform Destroy
-        if: ${{ github.event_name != 'push' && inputs.action == 'destroy' }}
-        run: terraform destroy -auto-approve -input=false
+      - name: Terraform shared flow
+        uses: ./.github/actions/terraform-run
+        with:
+          working_directory: terraform/leetcode-intelligence
+          backend_bucket: ${{ env.TF_STATE_BUCKET }}
+          backend_key: leetcode-intelligence/resources/terraform.tfstate
+          aws_region: ${{ env.AWS_REGION }}
+          action: ${{ github.event_name == 'push' && 'apply' || inputs.action }}
 
   notify-discord:
     name: Notify Discord
@@ -173,11 +117,12 @@ jobs:
 
       - name: Send Discord notification
         continue-on-error: true
+        uses: ./.github/actions/notify-discord
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ vars.AWS_REGION }}
-          DISCORD_WEBHOOK_SSM_NAME: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
-          WORKFLOW_NAME: Terraform LeetCode Intelligence Resources
-          NEEDS_JSON: ${{ toJson(needs) }}
-        run: bash .github/scripts/notify-discord.sh
+        with:
+          aws_region: ${{ vars.AWS_REGION }}
+          discord_webhook_ssm_name: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
+          workflow_name: Terraform LeetCode Intelligence Resources
+          needs_json: ${{ toJson(needs) }}

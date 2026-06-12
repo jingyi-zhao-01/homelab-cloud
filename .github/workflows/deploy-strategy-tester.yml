@@ -47,40 +47,14 @@ jobs:
           ts_oauth_secret: ${{ env.TS_OAUTH_SECRET }}
           ts_ci_tags: ${{ env.TS_CI_TAGS }}
 
-      - name: Create namespace and image pull secret
+      - name: Prepare Kubernetes prerequisites
         env:
+          NAMESPACE: ${{ env.NAMESPACE }}
           GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
-        run: |
-          if [ -z "$GHCR_PULL_USERNAME" ] || [ -z "$GHCR_PULL_TOKEN" ]; then
-            echo "GHCR_PULL_USERNAME or GHCR_PULL_TOKEN is missing"
-            exit 1
-          fi
-
-          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-
-          kubectl -n "$NAMESPACE" create secret docker-registry ghcr-pull-secret \
-            --docker-server=ghcr.io \
-            --docker-username="$GHCR_PULL_USERNAME" \
-            --docker-password="$GHCR_PULL_TOKEN" \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-      - name: Create ESO AWS credentials secret
-        env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        run: |
-          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-            echo "AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY is missing"
-            exit 1
-          fi
-
-          kubectl create namespace external-secrets --dry-run=client -o yaml | kubectl apply -f -
-
-          kubectl -n external-secrets create secret generic aws-ssm-credentials \
-            --from-literal=access-key-id="$AWS_ACCESS_KEY_ID" \
-            --from-literal=secret-access-key="$AWS_SECRET_ACCESS_KEY" \
-            --dry-run=client -o yaml | kubectl apply -f -
+        run: bash .github/scripts/ensure-k8s-prereqs.sh
 
       - name: Deploy Strategy Tester via Helm
         run: |
@@ -132,11 +106,12 @@ jobs:
 
       - name: Send Discord notification
         continue-on-error: true
+        uses: ./.github/actions/notify-discord
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ vars.AWS_REGION }}
-          DISCORD_WEBHOOK_SSM_NAME: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
-          WORKFLOW_NAME: Deploy Strategy Tester
-          NEEDS_JSON: ${{ toJson(needs) }}
-        run: bash .github/scripts/notify-discord.sh
+        with:
+          aws_region: ${{ vars.AWS_REGION }}
+          discord_webhook_ssm_name: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
+          workflow_name: Deploy Strategy Tester
+          needs_json: ${{ toJson(needs) }}

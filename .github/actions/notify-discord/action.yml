@@ -1,0 +1,30 @@
+name: Notify Discord
+description: Send a workflow result summary to Discord using an SSM-backed webhook.
+
+inputs:
+  workflow_name:
+    description: Human-readable workflow name displayed in Discord.
+    required: true
+  needs_json:
+    description: JSON-serialized GitHub `needs` payload.
+    required: true
+  aws_region:
+    description: AWS region used for SSM lookup.
+    required: false
+    default: us-west-1
+  discord_webhook_ssm_name:
+    description: SSM parameter storing the Discord webhook URL.
+    required: false
+    default: /codex/discord-webhook
+
+runs:
+  using: composite
+  steps:
+    - name: Send Discord notification
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws_region }}
+        DISCORD_WEBHOOK_SSM_NAME: ${{ inputs.discord_webhook_ssm_name }}
+        WORKFLOW_NAME: ${{ inputs.workflow_name }}
+        NEEDS_JSON: ${{ inputs.needs_json }}
+      run: bash .github/scripts/notify-discord.sh
