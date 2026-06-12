@@ -1,0 +1,6 @@
+apiVersion: v2
+name: control-plane-triage-agent
+description: Long-running control-plane GitHub Actions triage agent
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

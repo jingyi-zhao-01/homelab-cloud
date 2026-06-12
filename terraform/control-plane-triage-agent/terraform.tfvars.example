@@ -1,0 +1,3 @@
+aws_region                    = "us-west-1"
+ssm_path_prefix               = "control-plane-triage-agent/prod"
+openrouter_api_key_parameter_name = "/openrouter/OPEN_ROUTER_API_KEY"

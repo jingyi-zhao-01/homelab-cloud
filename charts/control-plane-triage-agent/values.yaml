@@ -1,0 +1,82 @@
+namespaceOverride: ""
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
+
+image:
+  repository: ghcr.io/jingyi-zhao-01/control-plane-triage-agent
+  tag: latest
+  pullPolicy: Always
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1"
+    memory: "1Gi"
+
+persistence:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 2Gi
+  storageClassName: ""
+
+nodeSelector: {}
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+
+env:
+  POLL_INTERVAL_SECONDS: "120"
+  LOOKBACK_MINUTES: "180"
+  MAX_RUNS_PER_REPO: "20"
+  MAX_LOG_BYTES: "524288"
+  MAX_DISCORD_CHARS: "1800"
+  STATE_DIR: "/var/lib/control-plane-triage-agent"
+  OPENHANDS_ENABLED: "true"
+  OPENHANDS_MODEL: "qwen/qwen3-coder-next"
+  OPENHANDS_MAX_ITERATIONS: "30"
+  WATCH_TARGETS_JSON: >-
+    [
+      {"repository":"jingyi-zhao-01/homelab-cloud","workflow_names":["Flashsales Deploy"],"namespace":"flashsale","branch":"main"},
+      {"repository":"jingyi-zhao-01/homelab-cloud","workflow_names":["Deploy Strategy Tester to strategy-tester Namespace"],"namespace":"strategy-tester","branch":"main"},
+      {"repository":"jingyi-zhao-01/homelab-cloud","workflow_names":["Deploy LeetCode Intelligence to leetcode-intelligence Namespace"],"namespace":"leetcode-intelligence","branch":"main"}
+    ]
+
+secrets:
+  existingSecretName: control-plane-triage-agent-secrets
+
+externalSecrets:
+  enabled: true
+  refreshInterval: 1h
+  targetSecretName: control-plane-triage-agent-secrets
+  parameterPrefix: /control-plane-triage-agent/prod
+  optionalKeys:
+    openhandsApiKey: true
+  store:
+    kind: ClusterSecretStore
+    name: control-plane-triage-agent-aws-ssm
+    create: true
+    region: us-west-1
+    authSecret:
+      name: aws-ssm-credentials
+      namespace: external-secrets
+      accessKeyIdKey: access-key-id
+      secretAccessKeyKey: secret-access-key
