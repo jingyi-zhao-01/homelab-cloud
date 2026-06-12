@@ -97,6 +97,17 @@ def load_config() -> Config:
     if discord_bot_token and discord_channel_id is None:
         raise ValueError("DISCORD_CHANNEL_ID must be configured when DISCORD_BOT_TOKEN is set")
 
+    openhands_enabled = _parse_bool(os.environ.get("OPENHANDS_ENABLED"), True)
+    openhands_api_key = os.environ.get("OPENHANDS_LLM_API_KEY")
+    if not openhands_enabled:
+        raise ValueError(
+            "OPENHANDS_ENABLED must remain true because this service requires OpenHands for all flows"
+        )
+    if not openhands_api_key:
+        raise ValueError(
+            "OPENHANDS_LLM_API_KEY must be configured because this service requires OpenHands for all flows"
+        )
+
     return Config(
         github_token=github_token,
         discord_webhook_url=discord_webhook_url,
@@ -108,9 +119,9 @@ def load_config() -> Config:
         max_log_bytes=int(os.environ.get("MAX_LOG_BYTES", str(512 * 1024))),
         max_discord_chars=int(os.environ.get("MAX_DISCORD_CHARS", "1800")),
         state_dir=state_dir,
-        openhands_enabled=_parse_bool(os.environ.get("OPENHANDS_ENABLED"), True),
+        openhands_enabled=openhands_enabled,
         openhands_model=os.environ.get("OPENHANDS_MODEL", "openhands/claude-sonnet-4-5-20250929"),
-        openhands_api_key=os.environ.get("OPENHANDS_LLM_API_KEY"),
+        openhands_api_key=openhands_api_key,
         openhands_max_iterations=int(os.environ.get("OPENHANDS_MAX_ITERATIONS", "30")),
         watch_targets=_parse_targets(os.environ.get("WATCH_TARGETS_JSON")),
     )

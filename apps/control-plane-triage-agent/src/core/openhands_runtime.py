@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from core.config import Config
 from openhands.sdk import Agent, Conversation, LLM
 from openhands.tools.file_editor import (
     FileEditorAction,
@@ -36,8 +37,6 @@ from openhands.tools.terminal import (
     TerminalTool,
 )
 
-from core.config import Config
-
 logger = logging.getLogger(__name__)
 
 
@@ -53,6 +52,12 @@ class OpenHandsRuntime:
     """Small runtime facade around the OpenHands SDK."""
 
     def __init__(self, config: Config) -> None:
+        if not config.openhands_enabled:
+            raise RuntimeError("OpenHandsRuntime requires OPENHANDS_ENABLED=true")
+        if not config.openhands_api_key:
+            raise RuntimeError(
+                "OpenHandsRuntime requires OPENHANDS_LLM_API_KEY to be configured"
+            )
         self._config = config
 
     def run_incident_diagnosis(self, incident: dict) -> OpenHandsRunResult:
@@ -141,23 +146,6 @@ class OpenHandsRuntime:
         max_iterations: int,
     ) -> None:
         """Construct SDK objects and execute one OpenHands run."""
-
-        from openhands.sdk import Agent, Conversation, LLM
-        from openhands.tools.file_editor import (
-            FileEditorAction,
-            FileEditorObservation,
-            FileEditorTool,
-        )
-        from openhands.tools.task_tracker import (
-            TaskTrackerAction,
-            TaskTrackerObservation,
-            TaskTrackerTool,
-        )
-        from openhands.tools.terminal import (
-            TerminalAction,
-            TerminalObservation,
-            TerminalTool,
-        )
 
         llm = LLM(
             model=self._config.openhands_model, api_key=self._config.openhands_api_key
