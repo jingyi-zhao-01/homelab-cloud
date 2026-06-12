@@ -53,8 +53,9 @@ env:
   MAX_LOG_BYTES: "524288"
   MAX_DISCORD_CHARS: "1800"
   STATE_DIR: "/var/lib/control-plane-triage-agent"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
   OPENHANDS_ENABLED: "true"
-  OPENHANDS_MODEL: "qwen/qwen3-coder-next"
+  OPENHANDS_MODEL: "openrouter/qwen/qwen3-coder-next"
   OPENHANDS_MAX_ITERATIONS: "30"
   WATCH_TARGETS_JSON: >-
     [
@@ -71,6 +72,9 @@ externalSecrets:
   refreshInterval: 1h
   targetSecretName: control-plane-triage-agent-secrets
   parameterPrefix: /control-plane-triage-agent/prod
+  grafana:
+    endpointParameter: /grafana/OTEL_EXPORTER_OTLP_ENDPOINT
+    headersParameter: /grafana/OTEL_EXPORTER_OTLP_HEADERS
   optionalKeys:
     openhandsApiKey: true
   store:

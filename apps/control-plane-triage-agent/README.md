@@ -1,6 +1,6 @@
 # control-plane-triage-agent
 
-Long-running control-plane agent that watches configured GitHub Actions workflows, gathers failure context, optionally asks OpenHands for a diagnosis, and posts the result to Discord.
+Long-running control-plane agent that watches configured GitHub Actions workflows, gathers failure context, requires OpenHands for diagnosis and operator chat, and posts the result to Discord.
 
 ## What it does
 
@@ -8,7 +8,7 @@ Long-running control-plane agent that watches configured GitHub Actions workflow
 - detects newly failed or cancelled runs
 - downloads run logs and extracts high-signal failure snippets
 - collects namespace-level Kubernetes diagnostics for the mapped workload
-- optionally runs an OpenHands SDK conversation over the failure bundle
+- runs an OpenHands SDK conversation over the failure bundle
 - posts a compact incident summary to Discord
 
 ## Required secrets
@@ -16,13 +16,16 @@ Long-running control-plane agent that watches configured GitHub Actions workflow
 Provision these into AWS SSM under `/control-plane-triage-agent/prod`:
 
 - `GITHUB_TOKEN`
-- `DISCORD_WEBHOOK_URL`
-
-Optional:
-
 - `OPENHANDS_LLM_API_KEY`
 
 ## Core config
+
+Important defaults:
+
+- `OPENHANDS_ENABLED=true`
+- `OPENHANDS_MODEL=openrouter/qwen/qwen3-coder-next`
+
+The model name must include an explicit provider prefix such as `openrouter/...`.
 
 `WATCH_TARGETS_JSON` is a JSON array.
 

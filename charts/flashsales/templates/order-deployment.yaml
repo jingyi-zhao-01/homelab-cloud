@@ -71,6 +71,11 @@ spec:
                   key: REDIS_URL
                   optional: true
             {{- if .Values.observability.tracing.existingSecretName }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.observability.tracing.existingSecretName }}
+                  key: {{ .Values.observability.tracing.existingSecretEndpointKey }}
             - name: OTEL_EXPORTER_OTLP_HEADERS
               valueFrom:
                 secretKeyRef:

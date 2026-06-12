@@ -43,8 +43,16 @@ spec:
                 {{- end }}
                 - name: OTEL_EXPORTER_OTLP_PROTOCOL
                   value: {{ $.Values.observability.tracing.otlpProtocol | default "http/protobuf" | quote }}
+                {{- if $.Values.observability.tracing.existingSecretName }}
+                - name: OTEL_EXPORTER_OTLP_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $.Values.observability.tracing.existingSecretName }}
+                      key: {{ $.Values.observability.tracing.existingSecretEndpointKey }}
+                {{- else }}
                 - name: OTEL_EXPORTER_OTLP_ENDPOINT
                   value: {{ $.Values.observability.tracing.otlpHttpEndpoint | default "" | quote }}
+                {{- end }}
                 {{- if $.Values.observability.tracing.existingSecretName }}
                 - name: OTEL_EXPORTER_OTLP_HEADERS
                   valueFrom:
