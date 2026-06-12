@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-import json
 import logging
 import time
 from datetime import datetime, timezone
 
-from config import Config, WatchTarget, load_config
-from diagnoser import Diagnoser
-from discord import send_discord
-from github_actions import GitHubActionsClient, extract_failure_excerpt, match_runs
-from kubernetes_triage import KubernetesTriage
-from state import StateStore
+from core.config import Config, WatchTarget
+from core.state import StateStore
+from functions.diagnoser import Diagnoser
+from functions.discord import send_discord
+from functions.github_actions import GitHubActionsClient, extract_failure_excerpt, match_runs
+from functions.kubernetes_triage import KubernetesTriage
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -149,9 +147,3 @@ class TriageService:
             len(diagnosis),
         )
         return content[: self._config.max_discord_chars]
-
-
-def main() -> None:
-    config = load_config()
-    logger.info("Starting control-plane-triage-agent process")
-    TriageService(config).run_forever()

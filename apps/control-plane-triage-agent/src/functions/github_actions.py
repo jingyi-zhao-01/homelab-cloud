@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-from config import WatchTarget
+from core.config import WatchTarget
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class GitHubActionsClient:
             repository,
             run_id,
             len(collected),
-            sum(len(text.encode('utf-8', errors='ignore')) for text in collected.values()),
+            sum(len(text.encode("utf-8", errors="ignore")) for text in collected.values()),
             remaining,
         )
         return collected

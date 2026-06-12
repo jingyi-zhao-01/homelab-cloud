@@ -21,14 +21,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = [
-  "config",
-  "diagnoser",
-  "discord",
-  "github_actions",
-  "kubernetes_triage",
-  "main",
-  "service",
-  "state",
-]
+py-modules = ["main"]
 package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["core*", "functions*", "run_time*", "util*"]
