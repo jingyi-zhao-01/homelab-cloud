@@ -13,6 +13,7 @@ from core.tracing import get_tracer
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
+_TARGET_CONCLUSIONS = {"failure"}
 
 
 class GitHubActionsClient:
@@ -94,7 +95,7 @@ def match_runs(runs: list[dict], target: WatchTarget, lookback_minutes: int) -> 
     for run in runs:
         if run.get("status") != "completed":
             continue
-        if run.get("conclusion") in {"success", "skipped"}:
+        if run.get("conclusion") not in _TARGET_CONCLUSIONS:
             continue
         created_at = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
         if created_at < cutoff:
