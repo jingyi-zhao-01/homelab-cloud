@@ -136,6 +136,10 @@ jobs:
             printf '%s\n' "$value"
           }
 
+          mask_value() {
+            echo "::add-mask::$1"
+          }
+
           vercel_org_id="$(fetch_ssm "VERCEL_ORG_ID" "$VERCEL_ORG_ID_SSM_NAME")"
           vercel_token="$(fetch_ssm "VERCEL_TOKEN" "$VERCEL_TOKEN_SSM_NAME")"
           vercel_project_id="$(fetch_ssm "VERCEL_PROJECT_ID" "$VERCEL_PROJECT_ID_SSM_NAME")"
@@ -143,6 +147,14 @@ jobs:
           upstash_redis_rest_token="$(fetch_ssm "UPSTASH_REDIS_REST_TOKEN" "$UPSTASH_REDIS_REST_TOKEN_SSM_NAME")"
           non_admin_rate_limit_max_requests="$(fetch_ssm "NON_ADMIN_RATE_LIMIT_MAX_REQUESTS" "$NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME")"
           non_admin_rate_limit_window_seconds="$(fetch_ssm "NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS" "$NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME")"
+
+          mask_value "$vercel_org_id"
+          mask_value "$vercel_token"
+          mask_value "$vercel_project_id"
+          mask_value "$upstash_redis_rest_url"
+          mask_value "$upstash_redis_rest_token"
+          mask_value "$non_admin_rate_limit_max_requests"
+          mask_value "$non_admin_rate_limit_window_seconds"
 
           {
             echo "VERCEL_ORG_ID=$vercel_org_id"
@@ -174,16 +186,16 @@ jobs:
 
             if grep -qi "already exists" "$log"; then
               if ! npx vercel env update "$name" production --token="$VERCEL_TOKEN" < "$tmp"; then
-                cat "$log"
                 rm -f "$tmp" "$log"
+                echo "Failed to update Vercel environment variable $name" >&2
                 exit 1
               fi
               rm -f "$tmp" "$log"
               return 0
             fi
 
-            cat "$log"
             rm -f "$tmp" "$log"
+            echo "Failed to create Vercel environment variable $name" >&2
             exit 1
           }
 

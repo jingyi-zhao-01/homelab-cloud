@@ -118,9 +118,17 @@ jobs:
             printf '%s\n' "$value"
           }
 
+          mask_value() {
+            echo "::add-mask::$1"
+          }
+
           vercel_org_id="$(fetch_ssm "VERCEL_ORG_ID" "$VERCEL_ORG_ID_SSM_NAME")"
           vercel_token="$(fetch_ssm "VERCEL_TOKEN" "$VERCEL_TOKEN_SSM_NAME")"
           vercel_project_id="$(fetch_ssm "VERCEL_PROJECT_ID" "$VERCEL_PROJECT_ID_SSM_NAME")"
+
+          mask_value "$vercel_org_id"
+          mask_value "$vercel_token"
+          mask_value "$vercel_project_id"
 
           {
             echo "TF_VAR_vercel_team_id=$vercel_org_id"
