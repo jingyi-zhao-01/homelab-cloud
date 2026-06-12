@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from core.config import Config, WatchTarget
 from core.state import StateStore
 from functions.diagnoser import Diagnoser
-from functions.discord import send_discord
+from functions.discord import DiscordNotifier
 from functions.github_actions import GitHubActionsClient, extract_failure_excerpt, match_runs
 from functions.kubernetes_triage import KubernetesTriage
 
@@ -30,8 +30,9 @@ logger = logging.getLogger(__name__)
 class TriageService:
     """Own the poll/triage/notify lifecycle for watched workflow failures."""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, notifier: DiscordNotifier) -> None:
         self._config = config
+        self._notifier = notifier
         self._github = GitHubActionsClient(token=config.github_token, max_log_bytes=config.max_log_bytes)
         self._state = StateStore(config.state_dir)
         self._diagnoser = Diagnoser(config)
@@ -92,7 +93,7 @@ class TriageService:
                     incident = self._build_incident(repository, target, run)
                     diagnosis = self._diagnoser.diagnose(incident)
                     message = self._render_message(incident, diagnosis)
-                    send_discord(self._config.discord_webhook_url, message)
+                    self._notifier.send(message)
                     self._state.mark_seen(run_id)
                     logger.info("Completed triage for run_id=%s repository=%s", run_id, repository)
 

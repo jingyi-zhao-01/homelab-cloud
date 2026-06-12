@@ -32,7 +32,9 @@ class Config:
     """Fully parsed runtime configuration for the agent process."""
 
     github_token: str
-    discord_webhook_url: str
+    discord_webhook_url: str | None
+    discord_bot_token: str | None
+    discord_channel_id: int | None
     poll_interval_seconds: int
     lookback_minutes: int
     max_runs_per_repo: int
@@ -83,13 +85,23 @@ def load_config() -> Config:
     """
 
     github_token = os.environ["GITHUB_TOKEN"]
-    discord_webhook_url = os.environ["DISCORD_WEBHOOK_URL"]
+    discord_webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+    discord_bot_token = os.environ.get("DISCORD_BOT_TOKEN")
+    discord_channel_id_raw = os.environ.get("DISCORD_CHANNEL_ID")
+    discord_channel_id = int(discord_channel_id_raw) if discord_channel_id_raw else None
     state_dir = Path(os.environ.get("STATE_DIR", "/var/lib/control-plane-triage-agent"))
     state_dir.mkdir(parents=True, exist_ok=True)
+
+    if not discord_bot_token and not discord_webhook_url:
+        raise ValueError("One of DISCORD_BOT_TOKEN or DISCORD_WEBHOOK_URL must be configured")
+    if discord_bot_token and discord_channel_id is None:
+        raise ValueError("DISCORD_CHANNEL_ID must be configured when DISCORD_BOT_TOKEN is set")
 
     return Config(
         github_token=github_token,
         discord_webhook_url=discord_webhook_url,
+        discord_bot_token=discord_bot_token,
+        discord_channel_id=discord_channel_id,
         poll_interval_seconds=int(os.environ.get("POLL_INTERVAL_SECONDS", "120")),
         lookback_minutes=int(os.environ.get("LOOKBACK_MINUTES", "120")),
         max_runs_per_repo=int(os.environ.get("MAX_RUNS_PER_REPO", "20")),

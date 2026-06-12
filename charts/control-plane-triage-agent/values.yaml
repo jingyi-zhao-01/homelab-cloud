@@ -72,6 +72,7 @@ externalSecrets:
   targetSecretName: control-plane-triage-agent-secrets
   parameterPrefix: /control-plane-triage-agent/prod
   optionalKeys:
+    discordWebhookUrl: true
     openhandsApiKey: true
   store:
     kind: ClusterSecretStore
