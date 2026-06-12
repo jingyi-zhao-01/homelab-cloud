@@ -6,12 +6,12 @@ on:
     branches:
       - main
     paths:
-      - 'apps/control-plane-status/**'
+      - 'apps/client/**'
       - '.github/workflows/**'
       - 'charts/**'
   pull_request:
     paths:
-      - 'apps/control-plane-status/**'
+      - 'apps/client/**'
       - '.github/workflows/**'
       - 'charts/**'
 
@@ -31,22 +31,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          if find charts -maxdepth 2 -type f | grep -E 'control-plane-status|homelab-cloud-control-plane-status' >/dev/null; then
+          if find charts -maxdepth 2 -type f | grep -E 'client|homelab-cloud-client' >/dev/null; then
             echo "Control plane status app must not have a Helm chart under charts/"
-            find charts -maxdepth 2 -type f | grep -E 'control-plane-status|homelab-cloud-control-plane-status' || true
+            find charts -maxdepth 2 -type f | grep -E 'client|homelab-cloud-client' || true
             exit 1
           fi
 
-      - name: Fail if any non-Vercel workflow references apps/control-plane-status
+      - name: Fail if any non-Vercel workflow references apps/client
         run: |
           set -euo pipefail
 
-          matches=$(rg -n "apps/control-plane-status" .github/workflows \
-            -g '!deploy-control-plane-status-client-vercel.yml' \
-            -g '!guard-control-plane-status-boundary.yml' || true)
+          matches=$(rg -n "apps/client" .github/workflows \
+            -g '!deploy-client-client-vercel.yml' \
+            -g '!guard-client-boundary.yml' || true)
 
           if [ -n "$matches" ]; then
-            echo "apps/control-plane-status is only allowed in the Vercel deploy workflow and this guard workflow"
+            echo "apps/client is only allowed in the Vercel deploy workflow and this guard workflow"
             echo "$matches"
             exit 1
           fi
@@ -55,9 +55,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          matches=$(rg -n "control-plane-status|homelab-cloud-control-plane-status" charts deploy .github/workflows \
-            -g '!deploy-control-plane-status-client-vercel.yml' \
-            -g '!guard-control-plane-status-boundary.yml' || true)
+          matches=$(rg -n "client|homelab-cloud-client" charts deploy .github/workflows \
+            -g '!deploy-client-client-vercel.yml' \
+            -g '!guard-client-boundary.yml' || true)
 
           if [ -n "$matches" ]; then
             echo "Found control plane status references in kubernetes-oriented paths:"

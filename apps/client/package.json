@@ -1,5 +1,5 @@
 {
-  "name": "homelab-cloud-control-plane-status",
+  "name": "homelab-cloud-client",
   "private": true,
   "version": "0.1.0",
   "scripts": {

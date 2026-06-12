@@ -11,7 +11,7 @@ Important boundary:
 ## Local Run
 
 ```bash
-cd apps/control-plane-status
+cd apps/client
 npm install
 npm run dev
 ```
@@ -23,21 +23,21 @@ npm run dev
 
 ## Vercel Project Setup
 
-Create one Vercel project whose root directory is `apps/control-plane-status`.
+Create one Vercel project whose root directory is `apps/client`.
 
 Recommended wiring:
 
 1. In Vercel, create or import a project for this repo.
-2. Set the project root directory to `apps/control-plane-status`.
+2. Set the project root directory to `apps/client`.
 3. In GitHub repository settings, add:
    - secret: `VERCEL_TOKEN`
    - variable: `VERCEL_ORG_ID`
    - variable: `VERCEL_CONTROL_PLANE_STATUS_PROJECT_ID`
-4. Enable the GitHub Actions workflow at `.github/workflows/deploy-control-plane-status-vercel.yml`.
+4. Enable the GitHub Actions workflow at `.github/workflows/deploy-client-vercel.yml`.
 
 That workflow deploys production in three cases:
 
-- when `apps/control-plane-status/**` changes on `main`
+- when `apps/client/**` changes on `main`
 - when you run the workflow manually
 - when one of the main cluster deploy workflows completes successfully on `main`
 

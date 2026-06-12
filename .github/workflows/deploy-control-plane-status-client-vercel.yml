@@ -1,7 +1,7 @@
 name: Deploy Control Plane Status Client to Vercel
 
 # Important boundary:
-# - apps/control-plane-status is a Vercel-only surface
+# - apps/client is a Vercel-only surface
 # - it must not be deployed through Helm or any k3s workflow in this repository
 
 on:
@@ -10,8 +10,8 @@ on:
     branches:
       - main
     paths:
-      - 'apps/control-plane-status/**'
-      - '.github/workflows/deploy-control-plane-status-client-vercel.yml'
+      - 'apps/client/**'
+      - '.github/workflows/deploy-client-client-vercel.yml'
   workflow_run:
     workflows:
       - Flashsales Deploy
@@ -21,7 +21,7 @@ on:
       - completed
 
 concurrency:
-  group: deploy-control-plane-status-client-vercel-production
+  group: deploy-client-client-vercel-production
   cancel-in-progress: true
 
 permissions:
@@ -31,11 +31,11 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   VERCEL_ORG_ID_SSM_NAME: ${{ vars.VERCEL_ORG_ID_SSM_NAME || '/vercel/VERCEL_ORG_ID' }}
   VERCEL_TOKEN_SSM_NAME: ${{ vars.VERCEL_TOKEN_SSM_NAME || '/vercel/VERCEL_TOKEN' }}
-  VERCEL_PROJECT_ID_SSM_NAME: ${{ vars.CONTROL_PLANE_STATUS_VERCEL_PROJECT_ID_SSM_NAME || '/control-plane-status/VERCEL_PROJECT_ID' }}
+  VERCEL_PROJECT_ID_SSM_NAME: ${{ vars.CONTROL_PLANE_STATUS_VERCEL_PROJECT_ID_SSM_NAME || '/client/VERCEL_PROJECT_ID' }}
 
 jobs:
   deploy:
-    name: Deploy apps/control-plane-status to Vercel
+    name: Deploy apps/client to Vercel
     if: >-
       github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion == 'success' &&
@@ -140,20 +140,20 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: apps/control-plane-status/package-lock.json
+          cache-dependency-path: apps/client/package-lock.json
 
       - name: Install dependencies
-        working-directory: apps/control-plane-status
+        working-directory: apps/client
         run: npm ci
 
       - name: Pull Vercel environment
-        working-directory: apps/control-plane-status
+        working-directory: apps/client
         run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build control plane status app
-        working-directory: apps/control-plane-status
+        working-directory: apps/client
         run: npx vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy to Vercel production
-        working-directory: apps/control-plane-status
+        working-directory: apps/client
         run: npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
