@@ -1,5 +1,18 @@
 from __future__ import annotations
 
+"""Long-running orchestration loop for the triage agent.
+
+This module wires together:
+- GitHub run polling
+- deduplication state
+- Kubernetes snapshot collection
+- diagnosis generation
+- Discord delivery
+
+It should contain the high-level control flow, while concrete integrations live
+under `functions/` and durable process state lives under `core/`.
+"""
+
 import logging
 import time
 from datetime import datetime, timezone
@@ -15,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 
 class TriageService:
+    """Own the poll/triage/notify lifecycle for watched workflow failures."""
+
     def __init__(self, config: Config) -> None:
         self._config = config
         self._github = GitHubActionsClient(token=config.github_token, max_log_bytes=config.max_log_bytes)
@@ -33,6 +48,8 @@ class TriageService:
         )
 
     def run_forever(self) -> None:
+        """Run the infinite polling loop used by the deployed agent pod."""
+
         if not self._config.watch_targets:
             logger.warning("No WATCH_TARGETS_JSON configured; agent will idle")
         while True:
@@ -45,6 +62,8 @@ class TriageService:
             time.sleep(self._config.poll_interval_seconds)
 
     def poll_once(self) -> None:
+        """Execute one full polling pass across all configured repositories."""
+
         grouped: dict[str, list[WatchTarget]] = {}
         for target in self._config.watch_targets:
             grouped.setdefault(target.repository, []).append(target)
@@ -78,6 +97,8 @@ class TriageService:
                     logger.info("Completed triage for run_id=%s repository=%s", run_id, repository)
 
     def _build_incident(self, repository: str, target: WatchTarget, run: dict) -> dict:
+        """Assemble the full incident payload used by diagnosers and notifiers."""
+
         run_id = int(run["id"])
         logger.info(
             "Building incident run_id=%s repository=%s workflow=%s namespace=%s",
@@ -115,6 +136,8 @@ class TriageService:
         }
 
     def _render_message(self, incident: dict, diagnosis: str) -> str:
+        """Render the final Discord message payload for one triaged incident."""
+
         run = incident["run"]
         lines = [
             "❌ control-plane-triage-agent detected a failed pipeline",

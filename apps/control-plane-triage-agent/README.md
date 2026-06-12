@@ -4,7 +4,7 @@ Long-running control-plane agent that watches configured GitHub Actions workflow
 
 ## What it does
 
-- polls GitHub Actions runs for configured repositories and workflow names/ids
+- polls GitHub Actions runs for configured repositories
 - detects newly failed or cancelled runs
 - downloads run logs and extracts high-signal failure snippets
 - collects namespace-level Kubernetes diagnostics for the mapped workload
@@ -24,27 +24,46 @@ Optional:
 
 ## Core config
 
-`WATCH_TARGETS_JSON` is a JSON array. Example:
+`WATCH_TARGETS_JSON` is a JSON array.
+
+If `workflow_names` and `workflow_ids` are omitted for a target, the agent will
+watch all workflows in that repository that match the configured branch and
+lookback window.
+
+Example:
 
 ```json
 [
   {
     "repository": "jingyi-zhao-01/homelab-cloud",
-    "workflow_names": ["Flashsales Deploy"],
     "namespace": "flashsale",
     "branch": "main"
   },
   {
     "repository": "jingyi-zhao-01/homelab-cloud",
-    "workflow_names": ["Deploy Strategy Tester to strategy-tester Namespace"],
     "namespace": "strategy-tester",
     "branch": "main"
   },
   {
     "repository": "jingyi-zhao-01/homelab-cloud",
-    "workflow_names": ["Deploy LeetCode Intelligence to leetcode-intelligence Namespace"],
     "namespace": "leetcode-intelligence",
     "branch": "main"
   }
 ]
 ```
+
+## Image versioning
+
+Deployments publish and use both:
+
+- `latest`
+- a commit-specific image tag equal to the full Git SHA
+
+The Helm release deploys the commit-specific tag, and the Deployment/Pod
+annotations also record:
+
+- `control-plane-triage-agent/image-tag`
+- `control-plane-triage-agent/git-sha`
+
+This makes it easy to inspect exactly which image version is running with
+`kubectl describe pod` or `kubectl get deployment -o yaml`.

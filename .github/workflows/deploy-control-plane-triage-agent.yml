@@ -22,6 +22,7 @@ permissions:
 env:
   NAMESPACE: control-plane-agents
   IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/control-plane-triage-agent
+  IMAGE_TAG: ${{ github.sha }}
   TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
   TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
   TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
@@ -52,8 +53,10 @@ jobs:
         run: |
           docker build \
             -t "$IMAGE_REPOSITORY:latest" \
+            -t "$IMAGE_REPOSITORY:$IMAGE_TAG" \
             apps/control-plane-triage-agent
           docker push "$IMAGE_REPOSITORY:latest"
+          docker push "$IMAGE_REPOSITORY:$IMAGE_TAG"
 
       - name: Configure private k3s access
         uses: ./.github/actions/setup-private-k3s-access
@@ -95,7 +98,8 @@ jobs:
             --create-namespace \
             --set namespaceOverride="$NAMESPACE" \
             --set image.repository="$IMAGE_REPOSITORY" \
-            --set image.tag=latest
+            --set image.tag="$IMAGE_TAG" \
+            --set deploymentMetadata.gitSha="$GITHUB_SHA"
 
       - name: Wait for deployment
         run: |

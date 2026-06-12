@@ -8,6 +8,9 @@ image:
   tag: latest
   pullPolicy: Always
 
+deploymentMetadata:
+  gitSha: ""
+
 replicaCount: 1
 
 resources:
@@ -55,9 +58,9 @@ env:
   OPENHANDS_MAX_ITERATIONS: "30"
   WATCH_TARGETS_JSON: >-
     [
-      {"repository":"jingyi-zhao-01/homelab-cloud","workflow_names":["Flashsales Deploy"],"namespace":"flashsale","branch":"main"},
-      {"repository":"jingyi-zhao-01/homelab-cloud","workflow_names":["Deploy Strategy Tester to strategy-tester Namespace"],"namespace":"strategy-tester","branch":"main"},
-      {"repository":"jingyi-zhao-01/homelab-cloud","workflow_names":["Deploy LeetCode Intelligence to leetcode-intelligence Namespace"],"namespace":"leetcode-intelligence","branch":"main"}
+      {"repository":"jingyi-zhao-01/homelab-cloud","namespace":"flashsale","branch":"main"},
+      {"repository":"jingyi-zhao-01/homelab-cloud","namespace":"strategy-tester","branch":"main"},
+      {"repository":"jingyi-zhao-01/homelab-cloud","namespace":"leetcode-intelligence","branch":"main"}
     ]
 
 secrets:

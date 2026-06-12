@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+"""Core configuration model for the triage agent.
+
+This module is intentionally small and dependency-light:
+- define the immutable runtime config shape
+- parse environment variables into typed fields
+- parse WATCH_TARGETS_JSON into semantic watch targets
+
+Higher-level orchestration should depend on this module, not on raw os.environ.
+"""
+
 import json
 import os
 from dataclasses import dataclass
@@ -8,6 +18,8 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class WatchTarget:
+    """One workflow subscription target watched by the polling loop."""
+
     repository: str
     workflow_names: tuple[str, ...] = ()
     workflow_ids: tuple[int, ...] = ()
@@ -17,6 +29,8 @@ class WatchTarget:
 
 @dataclass(frozen=True)
 class Config:
+    """Fully parsed runtime configuration for the agent process."""
+
     github_token: str
     discord_webhook_url: str
     poll_interval_seconds: int
@@ -33,12 +47,16 @@ class Config:
 
 
 def _parse_bool(value: str | None, default: bool) -> bool:
+    """Parse common truthy env-var forms while preserving a default."""
+
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _parse_targets(raw: str | None) -> tuple[WatchTarget, ...]:
+    """Decode WATCH_TARGETS_JSON into strongly typed watch target entries."""
+
     if not raw:
         return ()
 
@@ -58,6 +76,12 @@ def _parse_targets(raw: str | None) -> tuple[WatchTarget, ...]:
 
 
 def load_config() -> Config:
+    """Load process configuration from environment variables.
+
+    This is the single entrypoint for translating deployment-time env vars into
+    the typed Config object consumed by the rest of the service.
+    """
+
     github_token = os.environ["GITHUB_TOKEN"]
     discord_webhook_url = os.environ["DISCORD_WEBHOOK_URL"]
     state_dir = Path(os.environ.get("STATE_DIR", "/var/lib/control-plane-triage-agent"))
