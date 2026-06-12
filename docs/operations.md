@@ -12,7 +12,9 @@ This page collects the operational commands and workflow details that used to be
 | `deploy-strategy-tester.yml` | Pushes to `strategy-tester/**` or `charts/strategy-tester/**` | Strategy tester |
 | `deploy-leetcode-intelligence.yml` | Pushes to `charts/leetcode-intelligence/**` | LeetCode intelligence |
 | `flashsales-loadtest-manual.yml` | Manual `workflow_dispatch` | Performance testing |
-| `terraform-provision.yml` | Manual | Flashsale-only Terraform provisioning for Neon, Upstash, Grafana, and SSM |
+| `terraform-flashsale-resources.yml` | Manual or push to `terraform/flashsale/**` | Flashsales namespace resources: Neon, Upstash, Grafana, and SSM |
+| `terraform-leetcode-intelligence-resources.yml` | Manual or push to `terraform/leetcode-intelligence/**` | LeetCode intelligence namespace resources |
+| `terraform-strategy-tester-resources.yml` | Manual or push to `terraform/strategy-tester/**` | Strategy tester namespace resources |
 | `terraform-k3s-spot-network.yml` | Manual | Low-cost VPC and public subnets for the spot worker |
 | `terraform-k3s-spot-node.yml` | Manual | One self-healing AWS spot k3s worker |
 
@@ -66,16 +68,11 @@ The repo uses pre-commit hooks for whitespace, end-of-file, YAML checks, Helm li
 
 The current k3s setup relies on Terraform-provisioned AWS SSM parameters for secrets delivery, Terraform can also maintain one AWS spot-backed k3s worker, and Terraform state is stored in an S3 bucket configured at init time.
 
-For the unified flashsale infrastructure entrypoint and the flashsale-specific provisioning workflow details, see [Infrastructure](infrastructure.md).
+For the service-namespace Terraform entrypoints and provisioning workflow details, see [Infrastructure](infrastructure.md).
 
-For Grafana provisioning related to the flashsale async reservation path, use:
+For flashsale provisioning related to the async reservation path, use:
 
 - [terraform/flashsale](../terraform/flashsale/README.md)
-- [terraform/flashsale-grafana-dashboards](../terraform/flashsale-grafana-dashboards/README.md)
-
-Automatic provisioning entrypoint:
-
-- `.github/workflows/terraform-flashsale-grafana-dashboards.yml`
 
 Important datasource note:
 
@@ -90,7 +87,7 @@ Required GitHub configuration for auto-apply:
 - Variable: `FLASHSALE_GRAFANA_NEON_DATASOURCE_UID`
 - Variable: `FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID`
 
-The workflow auto-applies on pushes to `main` when files under `terraform/flashsale-grafana-dashboards/**` change.
+The flashsale resources workflow auto-applies on pushes to `main` when files under `terraform/flashsale/**` change.
 
 If flashsale is configured to read Redis credentials from AWS SSM through External Secrets, enable both of these Helm values:
 

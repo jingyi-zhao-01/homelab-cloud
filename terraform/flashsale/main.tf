@@ -51,18 +51,66 @@ module "neon" {
   neon_history_retention_seconds = var.neon_history_retention_seconds
 }
 
-module "grafana_dashboards" {
-  source = "../flashsale-grafana-dashboards"
+resource "grafana_folder" "flashsale" {
+  title = var.grafana_folder_title
+  uid   = var.grafana_folder_uid
+}
 
-  grafana_url            = var.grafana_url
-  grafana_auth           = var.grafana_auth
-  grafana_folder_title   = var.grafana_folder_title
-  grafana_folder_uid     = var.grafana_folder_uid
-  flashsale_namespace    = var.flashsale_namespace
-  neon_datasource_uid    = var.neon_datasource_uid
-  loki_datasource_uid    = var.loki_datasource_uid
-  tempo_datasource_uid   = var.tempo_datasource_uid
-  processing_sla_minutes = var.processing_sla_minutes
+locals {
+  order_service_dashboard_json = templatefile("/dashboards/flashsale-order-service.json.tftpl", {
+    datasource_uid      = var.neon_datasource_uid
+    loki_datasource_uid = var.loki_datasource_uid
+    namespace           = var.flashsale_namespace
+  })
+
+  product_service_dashboard_json = templatefile("/dashboards/flashsale-product-service.json.tftpl", {
+    datasource_uid      = var.neon_datasource_uid
+    loki_datasource_uid = var.loki_datasource_uid
+    namespace           = var.flashsale_namespace
+  })
+
+  queue_health_dashboard_json = templatefile("/dashboards/flashsale-terminalization-queue-health.json.tftpl", {
+    datasource_uid        = var.neon_datasource_uid
+    loki_datasource_uid   = var.loki_datasource_uid
+    namespace             = var.flashsale_namespace
+    processing_sla_minutes = var.processing_sla_minutes
+  })
+
+  terminalization_outcomes_dashboard_json = templatefile("/dashboards/flashsale-terminalization-outcomes.json.tftpl", {
+    datasource_uid = var.neon_datasource_uid
+    namespace      = var.flashsale_namespace
+  })
+
+  distributed_traces_dashboard_json = templatefile("/dashboards/flashsale-distributed-traces.json.tftpl", {
+    loki_datasource_uid  = var.loki_datasource_uid
+    tempo_datasource_uid = var.tempo_datasource_uid
+    namespace            = var.flashsale_namespace
+  })
+}
+
+resource "grafana_dashboard" "flashsale_order_service" {
+  folder      = grafana_folder.flashsale.id
+  config_json = local.order_service_dashboard_json
+}
+
+resource "grafana_dashboard" "flashsale_product_service" {
+  folder      = grafana_folder.flashsale.id
+  config_json = local.product_service_dashboard_json
+}
+
+resource "grafana_dashboard" "flashsale_terminalization_queue_health" {
+  folder      = grafana_folder.flashsale.id
+  config_json = local.queue_health_dashboard_json
+}
+
+resource "grafana_dashboard" "flashsale_terminalization_outcomes" {
+  folder      = grafana_folder.flashsale.id
+  config_json = local.terminalization_outcomes_dashboard_json
+}
+
+resource "grafana_dashboard" "flashsale_distributed_traces" {
+  folder      = grafana_folder.flashsale.id
+  config_json = local.distributed_traces_dashboard_json
 }
 
 resource "upstash_redis_database" "flashsale" {

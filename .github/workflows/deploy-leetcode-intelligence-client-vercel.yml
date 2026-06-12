@@ -1,0 +1,236 @@
+name: Deploy LeetCode Intelligence Client to Vercel
+
+# Important boundary:
+# - application/leetcode-intelligence/client is a Vercel-only surface
+# - the rest of leetcode-intelligence services continue to deploy through self-hosted workflows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'application/leetcode-intelligence'
+      - '.gitmodules'
+      - '.github/workflows/deploy-leetcode-intelligence-client-vercel.yml'
+
+concurrency:
+  group: deploy-leetcode-intelligence-client-vercel-production
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  VERCEL_ORG_ID_SSM_NAME: ${{ vars.VERCEL_ORG_ID_SSM_NAME || '/vercel/VERCEL_ORG_ID' }}
+  VERCEL_TOKEN_SSM_NAME: ${{ vars.VERCEL_TOKEN_SSM_NAME || '/vercel/VERCEL_TOKEN' }}
+  VERCEL_PROJECT_ID_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_VERCEL_PROJECT_ID_SSM_NAME || '/leetcode-intelligence/VERCEL_PROJECT_ID' }}
+  UPSTASH_REDIS_REST_URL_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_REDIS_REST_URL_SSM_NAME || '/leetcode-intelligence/UPSTASH_REDIS_REST_URL' }}
+  UPSTASH_REDIS_REST_TOKEN_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_REDIS_REST_TOKEN_SSM_NAME || '/leetcode-intelligence/UPSTASH_REDIS_REST_TOKEN' }}
+  NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME || '/leetcode-intelligence/NON_ADMIN_RATE_LIMIT_MAX_REQUESTS' }}
+  NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME || '/leetcode-intelligence/NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS' }}
+
+jobs:
+  deploy:
+    name: Deploy application/leetcode-intelligence/client to Vercel
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout homelab-cloud with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Validate AWS configuration
+        run: |
+          set -euo pipefail
+
+          if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+            echo "AWS_ACCESS_KEY_ID secret is missing"
+            exit 1
+          fi
+
+          if [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+            echo "AWS_SECRET_ACCESS_KEY secret is missing"
+            exit 1
+          fi
+
+          if [ -z "${AWS_REGION:-}" ]; then
+            echo "AWS_REGION repository variable is missing"
+            exit 1
+          fi
+
+          if [ -z "${VERCEL_ORG_ID_SSM_NAME:-}" ]; then
+            echo "VERCEL_ORG_ID_SSM_NAME is missing"
+            exit 1
+          fi
+
+          if [ -z "${VERCEL_TOKEN_SSM_NAME:-}" ]; then
+            echo "VERCEL_TOKEN_SSM_NAME is missing"
+            exit 1
+          fi
+
+          if [ -z "${VERCEL_PROJECT_ID_SSM_NAME:-}" ]; then
+            echo "VERCEL_PROJECT_ID_SSM_NAME is missing"
+            exit 1
+          fi
+
+          if [ -z "${UPSTASH_REDIS_REST_URL_SSM_NAME:-}" ]; then
+            echo "UPSTASH_REDIS_REST_URL_SSM_NAME is missing"
+            exit 1
+          fi
+
+          if [ -z "${UPSTASH_REDIS_REST_TOKEN_SSM_NAME:-}" ]; then
+            echo "UPSTASH_REDIS_REST_TOKEN_SSM_NAME is missing"
+            exit 1
+          fi
+
+          if [ -z "${NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME:-}" ]; then
+            echo "NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME is missing"
+            exit 1
+          fi
+
+          if [ -z "${NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME:-}" ]; then
+            echo "NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME is missing"
+            exit 1
+          fi
+
+          test -f application/leetcode-intelligence/client/package.json || {
+            echo "application/leetcode-intelligence/client/package.json not found"
+            exit 1
+          }
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Resolve Vercel configuration from AWS SSM
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+
+          fetch_ssm() {
+            local name="$1"
+            aws ssm get-parameter \
+              --name "$name" \
+              --with-decryption \
+              --query 'Parameter.Value' \
+              --output text \
+              --region "$AWS_REGION"
+          }
+
+          vercel_org_id="$(fetch_ssm "$VERCEL_ORG_ID_SSM_NAME")"
+          vercel_token="$(fetch_ssm "$VERCEL_TOKEN_SSM_NAME")"
+          vercel_project_id="$(fetch_ssm "$VERCEL_PROJECT_ID_SSM_NAME")"
+          upstash_redis_rest_url="$(fetch_ssm "$UPSTASH_REDIS_REST_URL_SSM_NAME")"
+          upstash_redis_rest_token="$(fetch_ssm "$UPSTASH_REDIS_REST_TOKEN_SSM_NAME")"
+          non_admin_rate_limit_max_requests="$(fetch_ssm "$NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME")"
+          non_admin_rate_limit_window_seconds="$(fetch_ssm "$NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME")"
+
+          if [ -z "$vercel_org_id" ] || [ "$vercel_org_id" = "None" ]; then
+            echo "Failed to resolve VERCEL_ORG_ID from SSM parameter $VERCEL_ORG_ID_SSM_NAME"
+            exit 1
+          fi
+
+          if [ -z "$vercel_token" ] || [ "$vercel_token" = "None" ]; then
+            echo "Failed to resolve VERCEL_TOKEN from SSM parameter $VERCEL_TOKEN_SSM_NAME"
+            exit 1
+          fi
+
+          if [ -z "$vercel_project_id" ] || [ "$vercel_project_id" = "None" ]; then
+            echo "Failed to resolve VERCEL_PROJECT_ID from SSM parameter $VERCEL_PROJECT_ID_SSM_NAME"
+            exit 1
+          fi
+
+          if [ -z "$upstash_redis_rest_url" ] || [ "$upstash_redis_rest_url" = "None" ]; then
+            echo "Failed to resolve UPSTASH_REDIS_REST_URL from SSM parameter $UPSTASH_REDIS_REST_URL_SSM_NAME"
+            exit 1
+          fi
+
+          if [ -z "$upstash_redis_rest_token" ] || [ "$upstash_redis_rest_token" = "None" ]; then
+            echo "Failed to resolve UPSTASH_REDIS_REST_TOKEN from SSM parameter $UPSTASH_REDIS_REST_TOKEN_SSM_NAME"
+            exit 1
+          fi
+
+          if [ -z "$non_admin_rate_limit_max_requests" ] || [ "$non_admin_rate_limit_max_requests" = "None" ]; then
+            echo "Failed to resolve NON_ADMIN_RATE_LIMIT_MAX_REQUESTS from SSM parameter $NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME"
+            exit 1
+          fi
+
+          if [ -z "$non_admin_rate_limit_window_seconds" ] || [ "$non_admin_rate_limit_window_seconds" = "None" ]; then
+            echo "Failed to resolve NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS from SSM parameter $NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME"
+            exit 1
+          fi
+
+          {
+            echo "VERCEL_ORG_ID=$vercel_org_id"
+            echo "VERCEL_TOKEN=$vercel_token"
+            echo "VERCEL_PROJECT_ID=$vercel_project_id"
+            echo "UPSTASH_REDIS_REST_URL=$upstash_redis_rest_url"
+            echo "UPSTASH_REDIS_REST_TOKEN=$upstash_redis_rest_token"
+            echo "NON_ADMIN_RATE_LIMIT_MAX_REQUESTS=$non_admin_rate_limit_max_requests"
+            echo "NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS=$non_admin_rate_limit_window_seconds"
+          } >> "$GITHUB_ENV"
+
+      - name: Sync production env to Vercel
+        working-directory: application/leetcode-intelligence/client
+        run: |
+          set -euo pipefail
+
+          upsert_env() {
+            local name="$1"
+            local value="$2"
+            local tmp log
+            tmp="$(mktemp)"
+            log="$(mktemp)"
+            printf '%s' "$value" > "$tmp"
+
+            if npx vercel env add "$name" production --token="$VERCEL_TOKEN" < "$tmp" >"$log" 2>&1; then
+              rm -f "$tmp" "$log"
+              return 0
+            fi
+
+            if grep -qi "already exists" "$log"; then
+              if ! npx vercel env update "$name" production --token="$VERCEL_TOKEN" < "$tmp"; then
+                cat "$log"
+                rm -f "$tmp" "$log"
+                exit 1
+              fi
+              rm -f "$tmp" "$log"
+              return 0
+            fi
+
+            cat "$log"
+            rm -f "$tmp" "$log"
+            exit 1
+          }
+
+          upsert_env UPSTASH_REDIS_REST_URL "$UPSTASH_REDIS_REST_URL"
+          upsert_env UPSTASH_REDIS_REST_TOKEN "$UPSTASH_REDIS_REST_TOKEN"
+          upsert_env NON_ADMIN_RATE_LIMIT_MAX_REQUESTS "$NON_ADMIN_RATE_LIMIT_MAX_REQUESTS"
+          upsert_env NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS "$NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: application/leetcode-intelligence/client/package-lock.json
+
+      - name: Install client dependencies
+        working-directory: application/leetcode-intelligence/client
+        run: npm ci
+
+      - name: Pull Vercel environment
+        working-directory: application/leetcode-intelligence/client
+        run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build client
+        working-directory: application/leetcode-intelligence/client
+        run: npx vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy to Vercel production
+        working-directory: application/leetcode-intelligence/client
+        run: npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

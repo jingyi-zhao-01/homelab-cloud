@@ -21,11 +21,11 @@ The stack currently manages:
 ## Layout
 
 - `terraform/flashsale/`
-  The preferred root module for flashsale infrastructure.
+  The preferred namespace-level root module for flashsale infrastructure.
 - `terraform/neon/`
-  Kept for backward compatibility with existing workflows and thin-scope applies.
+  Kept for backward compatibility with existing thin-scope applies.
 - `terraform/flashsale-grafana-dashboards/`
-  Kept for backward compatibility with existing workflows and dashboard-only applies.
+  Legacy dashboard-only module retained for compatibility, but no longer the preferred workflow entrypoint.
 
 ## Why This Exists
 
@@ -84,7 +84,7 @@ but the preferred pattern is:
 
 ## Notes
 
-- The Neon and Grafana subdirectories still exist so current CI and workflow automation can keep running while the repo transitions toward this aggregate stack.
+- The Neon and Grafana subdirectories still exist for compatibility, but the preferred automation entrypoint is the namespace-level flashsale stack and its `terraform-flashsale-resources.yml` workflow.
 - The Upstash provider stores connection outputs in Terraform state. Treat remote state access as sensitive.
 - The stack now mirrors both Neon and Upstash credentials into AWS SSM Parameter Store under `/flashsales/prod` by default.
 - The SSM path includes `DATABASE_URL`, `POSTGRES_*`, `REDIS_URL`, `UPSTASH_REDIS_ENDPOINT`, `UPSTASH_REDIS_PASSWORD`, `UPSTASH_REDIS_REST_TOKEN`, and `UPSTASH_REDIS_READ_ONLY_REST_TOKEN`.

@@ -27,6 +27,12 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  VERCEL_ORG_ID_SSM_NAME: ${{ vars.VERCEL_ORG_ID_SSM_NAME || '/vercel/VERCEL_ORG_ID' }}
+  VERCEL_TOKEN_SSM_NAME: ${{ vars.VERCEL_TOKEN_SSM_NAME || '/vercel/VERCEL_TOKEN' }}
+  VERCEL_PROJECT_ID_SSM_NAME: ${{ vars.CONTROL_PLANE_STATUS_VERCEL_PROJECT_ID_SSM_NAME || '/control-plane-status/VERCEL_PROJECT_ID' }}
+
 jobs:
   deploy:
     name: Deploy apps/control-plane-status to Vercel
@@ -35,10 +41,6 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
-    env:
-      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ vars.VERCEL_CONTROL_PLANE_STATUS_PROJECT_ID }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
       - name: Checkout
@@ -46,24 +48,84 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Validate Vercel configuration
+      - name: Validate AWS configuration
         run: |
           set -euo pipefail
 
-          if [ -z "${VERCEL_TOKEN:-}" ]; then
-            echo "VERCEL_TOKEN secret is missing"
+          if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+            echo "AWS_ACCESS_KEY_ID secret is missing"
             exit 1
           fi
 
-          if [ -z "${VERCEL_ORG_ID:-}" ]; then
-            echo "VERCEL_ORG_ID repository variable is missing"
+          if [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+            echo "AWS_SECRET_ACCESS_KEY secret is missing"
             exit 1
           fi
 
-          if [ -z "${VERCEL_PROJECT_ID:-}" ]; then
-            echo "VERCEL_CONTROL_PLANE_STATUS_PROJECT_ID repository variable is missing"
+          if [ -z "${AWS_REGION:-}" ]; then
+            echo "AWS_REGION repository variable is missing"
             exit 1
           fi
+
+          if [ -z "${VERCEL_ORG_ID_SSM_NAME:-}" ]; then
+            echo "VERCEL_ORG_ID_SSM_NAME is missing"
+            exit 1
+          fi
+
+          if [ -z "${VERCEL_TOKEN_SSM_NAME:-}" ]; then
+            echo "VERCEL_TOKEN_SSM_NAME is missing"
+            exit 1
+          fi
+
+          if [ -z "${VERCEL_PROJECT_ID_SSM_NAME:-}" ]; then
+            echo "VERCEL_PROJECT_ID_SSM_NAME is missing"
+            exit 1
+          fi
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Resolve Vercel configuration from AWS SSM
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+
+          fetch_ssm() {
+            local name="$1"
+            aws ssm get-parameter \
+              --name "$name" \
+              --with-decryption \
+              --query 'Parameter.Value' \
+              --output text \
+              --region "$AWS_REGION"
+          }
+
+          vercel_org_id="$(fetch_ssm "$VERCEL_ORG_ID_SSM_NAME")"
+          vercel_token="$(fetch_ssm "$VERCEL_TOKEN_SSM_NAME")"
+          vercel_project_id="$(fetch_ssm "$VERCEL_PROJECT_ID_SSM_NAME")"
+
+          if [ -z "$vercel_org_id" ] || [ "$vercel_org_id" = "None" ]; then
+            echo "Failed to resolve VERCEL_ORG_ID from SSM parameter $VERCEL_ORG_ID_SSM_NAME"
+            exit 1
+          fi
+
+          if [ -z "$vercel_token" ] || [ "$vercel_token" = "None" ]; then
+            echo "Failed to resolve VERCEL_TOKEN from SSM parameter $VERCEL_TOKEN_SSM_NAME"
+            exit 1
+          fi
+
+          if [ -z "$vercel_project_id" ] || [ "$vercel_project_id" = "None" ]; then
+            echo "Failed to resolve VERCEL_PROJECT_ID from SSM parameter $VERCEL_PROJECT_ID_SSM_NAME"
+            exit 1
+          fi
+
+          {
+            echo "VERCEL_ORG_ID=$vercel_org_id"
+            echo "VERCEL_TOKEN=$vercel_token"
+            echo "VERCEL_PROJECT_ID=$vercel_project_id"
+          } >> "$GITHUB_ENV"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

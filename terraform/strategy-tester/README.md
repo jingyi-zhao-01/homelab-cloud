@@ -32,7 +32,7 @@ terraform apply
 
 This stack is wired to:
 
-- `.github/workflows/terraform-strategy-tester-grafana-dashboards.yml`
+- `.github/workflows/terraform-strategy-tester-resources.yml`
 
 Behavior:
 

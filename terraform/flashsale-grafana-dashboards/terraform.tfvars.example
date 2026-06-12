@@ -1,6 +1,0 @@
-grafana_url            = "https://grafana.example.com"
-grafana_auth           = "YOUR_GRAFANA_API_TOKEN"
-neon_datasource_uid    = "flashsale-neon"
-loki_datasource_uid    = "loki"
-flashsale_namespace    = "flashsales"
-processing_sla_minutes = 5

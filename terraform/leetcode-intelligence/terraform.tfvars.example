@@ -1,0 +1,9 @@
+aws_region = "us-west-1"
+ssm_path_prefix = "leetcode-intelligence"
+
+upstash_redis_database_name = "leetcode-intelligence-rate-limit"
+upstash_redis_region        = "global"
+upstash_redis_primary_region = "us-west-1"
+
+non_admin_rate_limit_max_requests   = 120
+non_admin_rate_limit_window_seconds = 60

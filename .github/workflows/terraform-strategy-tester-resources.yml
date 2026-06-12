@@ -1,4 +1,4 @@
-name: Terraform Strategy Tester Grafana Dashboards
+name: Terraform Strategy Tester Resources
 
 on:
   workflow_dispatch:
@@ -18,10 +18,10 @@ on:
       - main
     paths:
       - "terraform/strategy-tester/**"
-      - ".github/workflows/terraform-strategy-tester-grafana-dashboards.yml"
+      - ".github/workflows/terraform-strategy-tester-resources.yml"
 
 concurrency:
-  group: strategy-tester-grafana-dashboards
+  group: strategy-tester-resources
   cancel-in-progress: false
 
 permissions:
@@ -82,7 +82,7 @@ jobs:
         run: |
           terraform init \
             -backend-config="bucket=${TF_STATE_BUCKET}" \
-            -backend-config="key=strategy-tester/grafana-dashboards/terraform.tfstate" \
+            -backend-config="key=strategy-tester/resources/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
 
@@ -120,6 +120,6 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ vars.AWS_REGION }}
           DISCORD_WEBHOOK_SSM_NAME: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
-          WORKFLOW_NAME: Terraform Strategy Tester Grafana Dashboards
+          WORKFLOW_NAME: Terraform Strategy Tester Resources
           NEEDS_JSON: ${{ toJson(needs) }}
         run: bash .github/scripts/notify-discord.sh

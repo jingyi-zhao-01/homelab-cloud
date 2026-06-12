@@ -1,8 +1,5 @@
-name: Terraform Provision Flashsale
+name: Terraform Flashsale Resources
 
-# This workflow provisions flashsale-specific infrastructure
-# and syncs flashsale runtime credentials into AWS SSM Parameter Store.
-# Design goal: idempotent apply with safe rollback when partial failures happen.
 on:
   workflow_dispatch:
     inputs:
@@ -16,7 +13,6 @@ on:
           - apply
           - destroy
 
-  # Called by deploy-remote-vps.yml as a reusable workflow (always applies)
   workflow_call:
     inputs:
       action:
@@ -41,12 +37,11 @@ on:
       - main
     paths:
       - 'terraform/flashsale/**'
-      - '.github/workflows/terraform-provision.yml'
+      - '.github/workflows/terraform-flashsale-resources.yml'
 
 concurrency:
-  # Serialize runs to avoid tfstate races between concurrent workflow executions.
-  group: flashsale-provision
-  cancel-in-progress: false   # never cancel infra runs mid-flight
+  group: flashsale-resources
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -56,8 +51,6 @@ jobs:
     name: Terraform ${{ inputs.action || 'apply' }}
     runs-on: ubuntu-latest
     env:
-      # Export as TF_VAR_* so every terraform command (plan/apply/import/destroy)
-      # gets the provider credentials without repeating step-level env blocks.
       TF_VAR_neon_api_key: ${{ secrets.NEON_API_KEY }}
       TF_VAR_grafana_url: ${{ vars.GRAFANA_URL }}
       TF_VAR_grafana_auth: ${{ secrets.GRAFANA_AUTH }}
@@ -68,7 +61,6 @@ jobs:
       TF_VAR_processing_sla_minutes: ${{ vars.FLASHSALE_GRAFANA_PROCESSING_SLA_MINUTES || '5' }}
       TF_VAR_grafana_folder_title: ${{ vars.FLASHSALE_GRAFANA_FOLDER_TITLE || 'Flashsale' }}
       TF_VAR_grafana_folder_uid: ${{ vars.FLASHSALE_GRAFANA_FOLDER_UID || 'flashsale-folder' }}
-      # AWS credentials are needed for the S3 backend.
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}
@@ -146,10 +138,6 @@ jobs:
             exit 1
           fi
 
-      # If the Neon project already exists but Terraform state was lost, import it
-      # before apply so we do not create another flashsales project on every deploy.
-      # When multiple projects share the same name, prefer the most recently created
-      # one so we keep following the latest live deployment path.
       - name: Import existing project into Terraform state
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         env:
@@ -196,8 +184,6 @@ jobs:
       - name: Terraform Plan
         run: terraform plan -input=false
 
-      # Capture whether neon_project.flashsales was already managed before apply.
-      # Used by rollback step to avoid deleting long-lived existing projects.
       - name: Detect whether project is already managed
         id: precheck_project
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
@@ -212,9 +198,6 @@ jobs:
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         run: terraform apply -auto-approve -input=false
 
-      # Transaction-like safeguard:
-      # if apply path fails and this run created a brand-new project,
-      # clean it up so we do not leave orphan Neon projects behind.
       - name: Roll back newly-created Neon project if apply flow failed
         if: ${{ failure() && (inputs.action == 'apply' || inputs.action == '') && steps.precheck_project.outputs.project_preexisting == 'false' }}
         run: |
@@ -245,6 +228,6 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ vars.AWS_REGION }}
           DISCORD_WEBHOOK_SSM_NAME: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
-          WORKFLOW_NAME: Terraform Provision Flashsale
+          WORKFLOW_NAME: Terraform Flashsale Resources
           NEEDS_JSON: ${{ toJson(needs) }}
         run: bash .github/scripts/notify-discord.sh
