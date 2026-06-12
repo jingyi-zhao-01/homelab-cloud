@@ -11,7 +11,7 @@ on:
       - main
     paths:
       - 'apps/client/**'
-      - '.github/workflows/deploy-client-client-vercel.yml'
+      - '.github/workflows/deploy-control-plane-status-client-vercel.yml'
   workflow_run:
     workflows:
       - Flashsales Deploy
