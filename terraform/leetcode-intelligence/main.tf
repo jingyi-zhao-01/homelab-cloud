@@ -35,6 +35,7 @@ locals {
   upstash_provider_email   = var.upstash_email != "" ? var.upstash_email : nonsensitive(data.aws_ssm_parameter.upstash_email[0].value)
   upstash_provider_api_key = var.upstash_api_key != "" ? var.upstash_api_key : data.aws_ssm_parameter.upstash_api_key[0].value
   ssm_prefix               = "/${var.ssm_path_prefix}"
+  upstash_redis_rest_url   = "https://${upstash_redis_database.leetcode_intelligence.endpoint}"
 }
 
 provider "upstash" {
@@ -56,7 +57,7 @@ resource "aws_ssm_parameter" "upstash_redis_rest_url" {
   name        = "${local.ssm_prefix}/UPSTASH_REDIS_REST_URL"
   description = "Upstash Redis REST URL for leetcode-intelligence rate limiting"
   type        = "SecureString"
-  value       = upstash_redis_database.leetcode_intelligence.rest_url
+  value       = local.upstash_redis_rest_url
   key_id      = var.kms_key_id
   overwrite   = true
 
