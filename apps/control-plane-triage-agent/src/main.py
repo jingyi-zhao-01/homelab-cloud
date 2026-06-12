@@ -1,14 +1,16 @@
+from util.logging_utils import configure_logging
 from core.config import load_config
 from core.tracing import configure_tracing
-from functions.discord import DiscordNotifier
-from run_time.service import TriageService
-from util.logging_utils import configure_logging
 
 
 def main() -> None:
     configure_logging()
     configure_tracing("control-plane-triage-agent")
     config = load_config()
+
+    from run_time.service import TriageService
+    from functions.discord import DiscordNotifier
+
     service = TriageService(config)
     notifier = DiscordNotifier(
         webhook_url=config.discord_webhook_url,

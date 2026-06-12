@@ -31,12 +31,18 @@ def send_discord_webhook(webhook_url: str, content: str) -> None:
 class _DiscordGatewayClient(discord.Client):
     """Small Discord client that only needs to establish a bot session."""
 
-    def __init__(self, ready_event: threading.Event, command_handler: Callable[[discord.Message], str | None]) -> None:
+    def __init__(
+        self,
+        ready_event: threading.Event,
+        command_handler: Callable[[discord.Message], str | None],
+        channel_id: int | None,
+    ) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(intents=intents)
         self._ready_event = ready_event
         self._command_handler = command_handler
+        self._channel_id = channel_id
 
     async def on_ready(self) -> None:
         logger.info("Discord bot connected user=%s", self.user)
@@ -47,8 +53,12 @@ class _DiscordGatewayClient(discord.Client):
             return
         if message.author.bot:
             return
-        if self.user not in message.mentions:
+        if not _is_target_channel(message, self._channel_id):
             return
+        if self._channel_id is not None and self.user not in message.mentions:
+            logger.debug(
+                "Handling channel message without mention for dedicated triage channel"
+            )
 
         with tracer.start_as_current_span("discord.on_message") as span:
             span.set_attribute("discord.message_id", message.id)
@@ -163,7 +173,11 @@ class DiscordNotifier:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         self._loop = loop
-        self._client = _DiscordGatewayClient(self._ready_event, self._handle_command)
+        self._client = _DiscordGatewayClient(
+            self._ready_event,
+            self._handle_command,
+            self._channel_id,
+        )
 
         async def runner() -> None:
             try:
@@ -225,9 +239,43 @@ def _conversation_key_for_message(message: discord.Message) -> str:
     else:
         scope = "guild"
         scope_id = str(message.guild.id)
-    thread = getattr(message.channel, "thread", None)
-    if thread is not None and getattr(thread, "id", None) is not None:
-        channel_id = str(thread.id)
+    thread_id = _discord_thread_id(message.channel)
+    if thread_id is not None:
+        channel_id = str(thread_id)
     else:
         channel_id = str(message.channel.id)
     return f"{scope}-{scope_id}-channel-{channel_id}"
+
+
+def _discord_thread_id(channel: discord.abc.Messageable) -> int | None:
+    """Return thread id when message is posted inside a thread."""
+
+    thread_id = getattr(channel, "id", None)
+    if thread_id is None:
+        return None
+    if isinstance(channel, discord.Thread):
+        return thread_id
+    if isinstance(channel, discord.abc.Messageable):
+        parent_id = getattr(channel, "parent_id", None)
+        if parent_id is None:
+            return None
+        return thread_id
+    return None
+
+
+def _is_target_channel(message: discord.Message, configured_channel_id: int | None) -> bool:
+    """Whether the message is in the configured channel or one of its threads."""
+
+    if configured_channel_id is None:
+        return True
+
+    if message.guild is None:
+        return False
+
+    if message.channel.id == configured_channel_id:
+        return True
+
+    parent_id = getattr(message.channel, "parent_id", None)
+    if parent_id is None:
+        return False
+    return int(parent_id) == configured_channel_id
