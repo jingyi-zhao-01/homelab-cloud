@@ -1,0 +1,50 @@
+# Shared SSM parameter definitions for flashsales.
+# ExternalSecret reads this file and renders all required parameter keys.
+
+POSTGRES_USER:
+  path: /flashsales/prod/POSTGRES_USER
+  optional: false
+
+POSTGRES_PASSWORD:
+  path: /flashsales/prod/POSTGRES_PASSWORD
+  optional: false
+
+POSTGRES_DB:
+  path: /flashsales/prod/POSTGRES_DB
+  optional: false
+
+DATABASE_URL:
+  path: /flashsales/prod/DATABASE_URL
+  optional: false
+
+OTEL_EXPORTER_OTLP_ENDPOINT:
+  path: /grafana/OTEL_EXPORTER_OTLP_ENDPOINT
+  optional: false
+
+OTEL_EXPORTER_OTLP_HEADERS:
+  path: /grafana/OTEL_EXPORTER_OTLP_HEADERS
+  optional: false
+
+REDIS_URL:
+  path: /flashsales/prod/REDIS_URL
+  optional: false
+
+UPSTASH_REDIS_ENDPOINT:
+  path: /flashsales/prod/UPSTASH_REDIS_ENDPOINT
+  optional: false
+
+UPSTASH_REDIS_PORT:
+  path: /flashsales/prod/UPSTASH_REDIS_PORT
+  optional: false
+
+UPSTASH_REDIS_PASSWORD:
+  path: /flashsales/prod/UPSTASH_REDIS_PASSWORD
+  optional: false
+
+UPSTASH_REDIS_REST_TOKEN:
+  path: /flashsales/prod/UPSTASH_REDIS_REST_TOKEN
+  optional: false
+
+UPSTASH_REDIS_READ_ONLY_REST_TOKEN:
+  path: /flashsales/prod/UPSTASH_REDIS_READ_ONLY_REST_TOKEN
+  optional: false

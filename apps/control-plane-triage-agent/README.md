@@ -55,6 +55,22 @@ Example:
 ]
 ```
 
+## Retention policy
+
+The agent keeps disk usage bounded by pruning old incident workspaces and trimming long Discord history files.
+
+Defaults:
+
+- `INCIDENT_RETENTION_MAX_COUNT=25`
+- `INCIDENT_RETENTION_MAX_AGE_DAYS=7`
+- `OPERATOR_HISTORY_MAX_BYTES=131072`
+
+Behavior:
+
+- incident workspaces are stored under `STATE_DIR/incident-*`
+- only the newest incident workspaces within the age window are kept
+- `discord-operator-chat/*/HISTORY.md` is truncated to the latest bytes budget
+
 ## Image versioning
 
 Deployments publish and use both:

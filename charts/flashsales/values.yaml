@@ -7,8 +7,6 @@ observability:
     otlpProtocol: "http/protobuf"
     otlpHttpEndpoint: ""
     otlpHeaders: ""
-    endpointSsmParameter: "/grafana/OTEL_EXPORTER_OTLP_ENDPOINT"
-    headersSsmParameter: "/grafana/OTEL_EXPORTER_OTLP_HEADERS"
     existingSecretName: "flashsales-postgres-auth"
     existingSecretEndpointKey: "OTEL_EXPORTER_OTLP_ENDPOINT"
     existingSecretKey: "OTEL_EXPORTER_OTLP_HEADERS"
@@ -206,7 +204,7 @@ externalSecrets:
   includeUpstashRedis: true
   refreshInterval: 1h
   targetSecretName: flashsales-postgres-auth
-  parameterPrefix: /flashsales/prod
+  parameterMapFile: ssm-parameter-keys.yaml
   store:
     # Supported values: SecretStore or ClusterSecretStore
     kind: ClusterSecretStore

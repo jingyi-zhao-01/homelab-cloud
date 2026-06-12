@@ -1,0 +1,33 @@
+# Shared SSM parameter definitions for leetcode-intelligence service.
+
+DATABASE_URL:
+  path: /leetcode-intelligence/prod/DATABASE_URL
+  optional: false
+
+OPEN_ROUTER_API_KEY:
+  path: /openrouter/OPEN_ROUTER_API_KEY
+  optional: false
+
+API_KEY:
+  path: /leetcode-intelligence/prod/API_KEY
+  optional: true
+
+DISCORD_BOT_TOKEN:
+  path: /leetcode-intelligence/prod/DISCORD_BOT_TOKEN
+  optional: false
+
+PROMPT_DISCORD_CHANNEL_ID:
+  path: /leetcode-intelligence/prod/PROMPT_DISCORD_CHANNEL_ID
+  optional: false
+
+RECOMMEND_DISCORD_CHANNEL_ID:
+  path: /leetcode-intelligence/prod/RECOMMEND_DISCORD_CHANNEL_ID
+  optional: false
+
+OTEL_EXPORTER_OTLP_ENDPOINT:
+  path: /grafana/OTEL_EXPORTER_OTLP_ENDPOINT
+  optional: false
+
+OTEL_EXPORTER_OTLP_HEADERS:
+  path: /grafana/OTEL_EXPORTER_OTLP_HEADERS
+  optional: false

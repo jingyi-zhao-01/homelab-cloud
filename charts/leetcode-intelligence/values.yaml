@@ -133,7 +133,7 @@ externalSecrets:
   enabled: true
   refreshInterval: 1h
   targetSecretName: leetcode-intelligence-service-secrets
-  parameterPrefix: /leetcode-intelligence/prod
+  parameterMapFile: ssm-parameter-keys.yaml
   optionalKeys:
     apiKey: false
   store:

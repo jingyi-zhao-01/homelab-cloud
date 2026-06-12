@@ -1,0 +1,17 @@
+# Shared SSM parameter definitions for strategy-tester.
+
+DATABASE_URL:
+  path: /strategy-tester/prod/DATABASE_URL
+  optional: false
+
+POLYGON_API_KEY:
+  path: /strategy-tester/prod/POLYGON_API_KEY
+  optional: false
+
+OTEL_EXPORTER_OTLP_ENDPOINT:
+  path: /grafana/OTEL_EXPORTER_OTLP_ENDPOINT
+  optional: false
+
+OTEL_EXPORTER_OTLP_HEADERS:
+  path: /grafana/OTEL_EXPORTER_OTLP_HEADERS
+  optional: false

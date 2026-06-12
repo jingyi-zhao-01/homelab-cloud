@@ -63,6 +63,9 @@ class Config:
     openhands_model: str
     openhands_api_key: str | None
     openhands_max_iterations: int
+    incident_retention_max_count: int
+    incident_retention_max_age_days: int
+    operator_history_max_bytes: int
     watch_targets: tuple[WatchTarget, ...]
 
 
@@ -159,5 +162,8 @@ def load_config() -> Config:
         openhands_model=openhands_model,
         openhands_api_key=openhands_api_key,
         openhands_max_iterations=int(os.environ.get("OPENHANDS_MAX_ITERATIONS", "30")),
+        incident_retention_max_count=int(os.environ.get("INCIDENT_RETENTION_MAX_COUNT", "25")),
+        incident_retention_max_age_days=int(os.environ.get("INCIDENT_RETENTION_MAX_AGE_DAYS", "7")),
+        operator_history_max_bytes=int(os.environ.get("OPERATOR_HISTORY_MAX_BYTES", str(128 * 1024))),
         watch_targets=_parse_targets(os.environ.get("WATCH_TARGETS_JSON")),
     )

@@ -16,8 +16,9 @@ import json
 import logging
 import os
 import re
+import shutil
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from core.config import Config
@@ -60,6 +61,7 @@ class OpenHandsRuntime:
                 "OpenHandsRuntime requires OPENHANDS_LLM_API_KEY to be configured"
             )
         self._config = config
+        self._apply_retention_policy()
 
     def run_incident_diagnosis(self, incident: dict) -> OpenHandsRunResult:
         """Execute diagnosis for one failed workflow incident."""
@@ -90,10 +92,12 @@ class OpenHandsRuntime:
                 output_filename="DIAGNOSIS.md",
                 max_iterations=self._config.openhands_max_iterations,
             )
-            return OpenHandsRunResult(
+            result = OpenHandsRunResult(
                 workspace=workspace,
                 output_text=self._read_output(workspace / "DIAGNOSIS.md", limit=4000),
             )
+            self._apply_retention_policy()
+            return result
 
     def run_operator_reply(
         self, conversation_key: str, prompt: str, status_snapshot: str
@@ -126,7 +130,9 @@ class OpenHandsRuntime:
             reply = self._read_output(workspace / "REPLY.md", limit=2000)
             if reply:
                 self.append_history_event(workspace, "assistant", reply)
-            return OpenHandsRunResult(workspace=workspace, output_text=reply)
+            result = OpenHandsRunResult(workspace=workspace, output_text=reply)
+            self._apply_retention_policy()
+            return result
 
     def operator_workspace(self, conversation_key: str) -> Path:
         """Resolve a stable workspace path for one Discord conversation."""
@@ -143,6 +149,7 @@ class OpenHandsRuntime:
         timestamp = datetime.now(UTC).isoformat()
         with history_path.open("a", encoding="utf-8") as history_file:
             history_file.write(f"\n## {timestamp} {role}\n\n{content.strip()}\n")
+        self._trim_file(history_path, self._config.operator_history_max_bytes)
 
     def _run_conversation(
         self,
@@ -221,3 +228,70 @@ class OpenHandsRuntime:
             user_message="OpenHands failed while processing this request. Check the agent logs for the full trace.",
             detail=detail,
         )
+
+    def _apply_retention_policy(self) -> None:
+        """Prune stale incident workspaces and cap operator history growth."""
+
+        self._prune_incident_workspaces()
+        self._trim_operator_history()
+
+    def _prune_incident_workspaces(self) -> None:
+        """Keep only a bounded number of incident workspaces and a bounded age window."""
+
+        incident_dirs = [
+            path
+            for path in self._config.state_dir.glob("incident-*")
+            if path.is_dir()
+        ]
+        if not incident_dirs:
+            return
+
+        cutoff = datetime.now(UTC) - timedelta(days=self._config.incident_retention_max_age_days)
+        ranked: list[tuple[float, Path]] = []
+        for path in incident_dirs:
+            try:
+                mtime = path.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            ranked.append((mtime, path))
+
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        keep: set[Path] = set()
+        for mtime, path in ranked:
+            if datetime.fromtimestamp(mtime, UTC) >= cutoff and len(keep) < self._config.incident_retention_max_count:
+                keep.add(path)
+
+        for _, path in ranked:
+            if path in keep:
+                continue
+            logger.info("Pruning stale incident workspace path=%s", path)
+            shutil.rmtree(path, ignore_errors=True)
+
+    def _trim_operator_history(self) -> None:
+        """Cap per-conversation HISTORY.md files to a bounded byte budget."""
+
+        chat_root = self._config.state_dir / "discord-operator-chat"
+        if not chat_root.exists():
+            return
+
+        for history_path in chat_root.glob("*/HISTORY.md"):
+            self._trim_file(history_path, self._config.operator_history_max_bytes)
+
+    @staticmethod
+    def _trim_file(path: Path, max_bytes: int) -> None:
+        """Keep only the tail of a file when it grows beyond the configured budget."""
+
+        try:
+            raw = path.read_bytes()
+        except FileNotFoundError:
+            return
+        if len(raw) <= max_bytes:
+            return
+
+        trimmed = raw[-max_bytes:]
+        try:
+            text = trimmed.decode("utf-8")
+        except UnicodeDecodeError:
+            text = trimmed.decode("utf-8", errors="ignore")
+        path.write_text(text, encoding="utf-8")
+        logger.info("Trimmed retained history file path=%s max_bytes=%s", path, max_bytes)

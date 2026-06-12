@@ -9,10 +9,7 @@ observability:
     otlpHttpEndpoint: ""
     otlpHeaders: ""
     externalSecretEnabled: true
-    externalSecretKey: "OTEL_EXPORTER_OTLP_HEADERS"
     existingSecretEndpointKey: "OTEL_EXPORTER_OTLP_ENDPOINT"
-    endpointSsmParameter: "/grafana/OTEL_EXPORTER_OTLP_ENDPOINT"
-    headersSsmParameter: "/grafana/OTEL_EXPORTER_OTLP_HEADERS"
     existingSecretName: "strategy-tester-apis"
     existingSecretKey: "OTEL_EXPORTER_OTLP_HEADERS"
 
@@ -20,7 +17,7 @@ externalSecrets:
   enabled: true
   refreshInterval: 1h
   targetSecretName: strategy-tester-apis
-  parameterPrefix: /strategy-tester/prod
+  parameterMapFile: ssm-parameter-keys.yaml
   store:
     kind: ClusterSecretStore
     name: strategy-tester-aws-ssm

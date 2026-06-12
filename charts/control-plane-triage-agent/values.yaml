@@ -53,6 +53,9 @@ env:
   MAX_LOG_BYTES: "524288"
   MAX_DISCORD_CHARS: "1800"
   STATE_DIR: "/var/lib/control-plane-triage-agent"
+  INCIDENT_RETENTION_MAX_COUNT: "25"
+  INCIDENT_RETENTION_MAX_AGE_DAYS: "7"
+  OPERATOR_HISTORY_MAX_BYTES: "131072"
   OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
   OPENHANDS_ENABLED: "true"
   OPENHANDS_MODEL: "openrouter/qwen/qwen3-coder-next"
@@ -71,10 +74,9 @@ externalSecrets:
   enabled: true
   refreshInterval: 1h
   targetSecretName: control-plane-triage-agent-secrets
-  parameterPrefix: /control-plane-triage-agent/prod
-  grafana:
-    endpointParameter: /grafana/OTEL_EXPORTER_OTLP_ENDPOINT
-    headersParameter: /grafana/OTEL_EXPORTER_OTLP_HEADERS
+  parameterMapFile: ssm-parameter-keys.yaml
+  # OpenHands key is intentionally optional; keep enabled while source key
+  # may be created later in a separate rotation/provision flow.
   optionalKeys:
     openhandsApiKey: true
   store:

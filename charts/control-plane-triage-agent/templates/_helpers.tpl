@@ -48,3 +48,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- .Values.secrets.existingSecretName }}
 {{- end }}
 {{- end }}
+
+{{- define "control-plane-triage-agent.ssmParameters" -}}
+{{- $path := .Values.externalSecrets.parameterMapFile | default "ssm-parameter-keys.yaml" -}}
+{{- $raw := .Files.Get $path -}}
+{{- if not $raw -}}
+{{- fail (printf "control-plane-triage-agent external secret map file not found: %s" $path) -}}
+{{- end -}}
+{{- $raw -}}
+{{- end }}
