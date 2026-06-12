@@ -98,6 +98,52 @@ variable "upstash_redis_budget" {
   default     = 20
 }
 
+variable "vercel_api_token" {
+  description = "Vercel API token used to manage firewall configuration for the leetcode-intelligence client project."
+  type        = string
+  sensitive   = true
+}
+
+variable "vercel_team_id" {
+  description = "Vercel team/org ID that owns the leetcode-intelligence client project."
+  type        = string
+}
+
+variable "vercel_project_id" {
+  description = "Vercel project ID for the leetcode-intelligence client."
+  type        = string
+}
+
+variable "vercel_firewall_enabled" {
+  description = "Whether to enable the Vercel Firewall for the leetcode-intelligence client project."
+  type        = bool
+  default     = true
+}
+
+variable "vercel_firewall_ai_bots_enabled" {
+  description = "Whether to enable the Vercel managed AI bots ruleset."
+  type        = bool
+  default     = true
+}
+
+variable "vercel_firewall_ai_bots_action" {
+  description = "Firewall action for the managed AI bots ruleset."
+  type        = string
+  default     = "deny"
+}
+
+variable "vercel_firewall_bot_protection_enabled" {
+  description = "Whether to enable the Vercel managed bot protection ruleset."
+  type        = bool
+  default     = true
+}
+
+variable "vercel_firewall_bot_protection_action" {
+  description = "Firewall action for the managed bot protection ruleset."
+  type        = string
+  default     = "challenge"
+}
+
 variable "non_admin_rate_limit_max_requests" {
   description = "Maximum number of requests allowed per IP in one rate-limit window."
   type        = number

@@ -27,6 +27,11 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  VERCEL_ORG_ID_SSM_NAME: ${{ vars.VERCEL_ORG_ID_SSM_NAME || '/vercel/VERCEL_ORG_ID' }}
+  VERCEL_TOKEN_SSM_NAME: ${{ vars.VERCEL_TOKEN_SSM_NAME || '/vercel/VERCEL_TOKEN' }}
+  VERCEL_PROJECT_ID_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_VERCEL_PROJECT_ID_SSM_NAME || '/leetcode-intelligence/VERCEL_PROJECT_ID' }}
+
 jobs:
   terraform:
     name: Terraform ${{ github.event_name == 'push' && 'apply' || inputs.action }}
@@ -37,6 +42,11 @@ jobs:
       TF_VAR_upstash_redis_database_name: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_DATABASE_NAME || 'leetcode-intelligence-rate-limit' }}
       TF_VAR_upstash_redis_primary_region: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_PRIMARY_REGION || 'us-west-1' }}
       TF_VAR_upstash_redis_budget: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_REDIS_BUDGET || '20' }}
+      TF_VAR_vercel_firewall_enabled: ${{ vars.LEETCODE_INTELLIGENCE_VERCEL_FIREWALL_ENABLED || 'true' }}
+      TF_VAR_vercel_firewall_ai_bots_enabled: ${{ vars.LEETCODE_INTELLIGENCE_VERCEL_FIREWALL_AI_BOTS_ENABLED || 'true' }}
+      TF_VAR_vercel_firewall_ai_bots_action: ${{ vars.LEETCODE_INTELLIGENCE_VERCEL_FIREWALL_AI_BOTS_ACTION || 'deny' }}
+      TF_VAR_vercel_firewall_bot_protection_enabled: ${{ vars.LEETCODE_INTELLIGENCE_VERCEL_FIREWALL_BOT_PROTECTION_ENABLED || 'true' }}
+      TF_VAR_vercel_firewall_bot_protection_action: ${{ vars.LEETCODE_INTELLIGENCE_VERCEL_FIREWALL_BOT_PROTECTION_ACTION || 'challenge' }}
       TF_VAR_non_admin_rate_limit_max_requests: ${{ vars.LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_MAX_REQUESTS || '120' }}
       TF_VAR_non_admin_rate_limit_window_seconds: ${{ vars.LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS || '60' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -66,6 +76,57 @@ jobs:
             echo "AWS_REGION variable is missing"
             exit 1
           fi
+          if [ -z "${VERCEL_ORG_ID_SSM_NAME:-}" ]; then
+            echo "VERCEL_ORG_ID_SSM_NAME variable is missing"
+            exit 1
+          fi
+          if [ -z "${VERCEL_TOKEN_SSM_NAME:-}" ]; then
+            echo "VERCEL_TOKEN_SSM_NAME variable is missing"
+            exit 1
+          fi
+          if [ -z "${VERCEL_PROJECT_ID_SSM_NAME:-}" ]; then
+            echo "VERCEL_PROJECT_ID_SSM_NAME variable is missing"
+            exit 1
+          fi
+
+      - name: Resolve Vercel firewall configuration from AWS SSM
+        run: |
+          set -euo pipefail
+
+          fetch_ssm() {
+            local logical_name="$1"
+            local parameter_name="$2"
+            local value
+
+            if ! value="$(
+              aws ssm get-parameter \
+                --name "$parameter_name" \
+                --with-decryption \
+                --query 'Parameter.Value' \
+                --output text \
+                --region "$AWS_REGION"
+            )"; then
+              echo "Failed to resolve $logical_name from SSM parameter $parameter_name" >&2
+              exit 1
+            fi
+
+            if [ -z "$value" ] || [ "$value" = "None" ]; then
+              echo "Resolved empty value for $logical_name from SSM parameter $parameter_name" >&2
+              exit 1
+            fi
+
+            printf '%s\n' "$value"
+          }
+
+          vercel_org_id="$(fetch_ssm "VERCEL_ORG_ID" "$VERCEL_ORG_ID_SSM_NAME")"
+          vercel_token="$(fetch_ssm "VERCEL_TOKEN" "$VERCEL_TOKEN_SSM_NAME")"
+          vercel_project_id="$(fetch_ssm "VERCEL_PROJECT_ID" "$VERCEL_PROJECT_ID_SSM_NAME")"
+
+          {
+            echo "TF_VAR_vercel_team_id=$vercel_org_id"
+            echo "TF_VAR_vercel_api_token=$vercel_token"
+            echo "TF_VAR_vercel_project_id=$vercel_project_id"
+          } >> "$GITHUB_ENV"
 
       - name: Terraform Init
         run: |

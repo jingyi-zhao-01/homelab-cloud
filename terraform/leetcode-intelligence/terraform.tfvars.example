@@ -1,10 +1,20 @@
 aws_region = "us-west-1"
 ssm_path_prefix = "leetcode-intelligence"
 
+vercel_team_id    = "team_xxxxxxxxxxxxxxxxxxxxxxxx"
+vercel_project_id = "prj_xxxxxxxxxxxxxxxxxxxxxxxx"
+vercel_api_token  = "vercel_api_token"
+
 upstash_redis_database_name = "leetcode-intelligence-rate-limit"
 upstash_redis_region        = "global"
 upstash_redis_primary_region = "us-west-1"
 upstash_redis_budget         = 20
+
+vercel_firewall_enabled                       = true
+vercel_firewall_ai_bots_enabled               = true
+vercel_firewall_ai_bots_action                = "deny"
+vercel_firewall_bot_protection_enabled        = true
+vercel_firewall_bot_protection_action         = "challenge"
 
 non_admin_rate_limit_max_requests   = 120
 non_admin_rate_limit_window_seconds = 60

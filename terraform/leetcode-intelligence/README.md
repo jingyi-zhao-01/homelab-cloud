@@ -5,6 +5,7 @@ This Terraform root module provisions the Upstash Redis database used for `leetc
 ## Scope
 
 - create one Upstash Redis database for Vercel-side rate limiting
+- manage baseline Vercel Firewall protections for the `leetcode-intelligence` client project
 - store `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in SSM
 - store the non-admin rate-limit policy values in SSM so the Vercel deploy workflow can sync them into the project environment
 
@@ -59,5 +60,16 @@ Optional GitHub configuration:
 - Variable: `LEETCODE_INTELLIGENCE_UPSTASH_DATABASE_NAME`
 - Variable: `LEETCODE_INTELLIGENCE_UPSTASH_PRIMARY_REGION`
 - Variable: `LEETCODE_INTELLIGENCE_UPSTASH_REDIS_BUDGET`
+- Variable: `LEETCODE_INTELLIGENCE_VERCEL_FIREWALL_ENABLED`
+- Variable: `LEETCODE_INTELLIGENCE_VERCEL_FIREWALL_AI_BOTS_ENABLED`
+- Variable: `LEETCODE_INTELLIGENCE_VERCEL_FIREWALL_AI_BOTS_ACTION`
+- Variable: `LEETCODE_INTELLIGENCE_VERCEL_FIREWALL_BOT_PROTECTION_ENABLED`
+- Variable: `LEETCODE_INTELLIGENCE_VERCEL_FIREWALL_BOT_PROTECTION_ACTION`
 - Variable: `LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_MAX_REQUESTS`
 - Variable: `LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS`
+
+The workflow resolves these Vercel identifiers from AWS SSM before running Terraform:
+
+- `/vercel/VERCEL_ORG_ID`
+- `/vercel/VERCEL_TOKEN`
+- `/leetcode-intelligence/VERCEL_PROJECT_ID`

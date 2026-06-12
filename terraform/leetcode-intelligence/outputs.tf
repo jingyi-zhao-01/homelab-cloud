@@ -17,3 +17,8 @@ output "upstash_redis_rest_token_ssm_parameter_name" {
   description = "SSM parameter name holding the Upstash REST token."
   value       = aws_ssm_parameter.upstash_redis_rest_token.name
 }
+
+output "vercel_firewall_config_id" {
+  description = "Vercel firewall configuration resource ID for the leetcode-intelligence client."
+  value       = vercel_firewall_config.leetcode_intelligence.id
+}

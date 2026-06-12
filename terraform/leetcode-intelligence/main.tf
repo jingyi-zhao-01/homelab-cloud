@@ -13,6 +13,11 @@ terraform {
       source  = "upstash/upstash"
       version = "~> 2.1"
     }
+
+    vercel = {
+      source  = "vercel/vercel"
+      version = "~> 5.0"
+    }
   }
 }
 
@@ -41,6 +46,11 @@ locals {
 provider "upstash" {
   email   = local.upstash_provider_email
   api_key = local.upstash_provider_api_key
+}
+
+provider "vercel" {
+  api_token = var.vercel_api_token
+  team      = var.vercel_team_id
 }
 
 resource "upstash_redis_database" "leetcode_intelligence" {
@@ -94,4 +104,21 @@ resource "aws_ssm_parameter" "non_admin_rate_limit_window_seconds" {
   overwrite   = true
 
   tags = var.ssm_tags
+}
+
+resource "vercel_firewall_config" "leetcode_intelligence" {
+  project_id = var.vercel_project_id
+  enabled    = var.vercel_firewall_enabled
+
+  managed_rulesets {
+    ai_bots {
+      active = var.vercel_firewall_ai_bots_enabled
+      action = var.vercel_firewall_ai_bots_action
+    }
+
+    bot_protection {
+      active = var.vercel_firewall_bot_protection_enabled
+      action = var.vercel_firewall_bot_protection_action
+    }
+  }
 }

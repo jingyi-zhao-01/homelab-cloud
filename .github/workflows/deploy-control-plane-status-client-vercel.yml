@@ -1,4 +1,4 @@
-name: Deploy Control Plane Status to Vercel
+name: Deploy Control Plane Status Client to Vercel
 
 # Important boundary:
 # - apps/control-plane-status is a Vercel-only surface
@@ -11,7 +11,7 @@ on:
       - main
     paths:
       - 'apps/control-plane-status/**'
-      - '.github/workflows/deploy-control-plane-status-vercel.yml'
+      - '.github/workflows/deploy-control-plane-status-client-vercel.yml'
   workflow_run:
     workflows:
       - Flashsales Deploy
@@ -21,7 +21,7 @@ on:
       - completed
 
 concurrency:
-  group: deploy-control-plane-status-vercel-production
+  group: deploy-control-plane-status-client-vercel-production
   cancel-in-progress: true
 
 permissions:

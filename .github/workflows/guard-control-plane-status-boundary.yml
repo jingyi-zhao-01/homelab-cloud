@@ -42,7 +42,7 @@ jobs:
           set -euo pipefail
 
           matches=$(rg -n "apps/control-plane-status" .github/workflows \
-            -g '!deploy-control-plane-status-vercel.yml' \
+            -g '!deploy-control-plane-status-client-vercel.yml' \
             -g '!guard-control-plane-status-boundary.yml' || true)
 
           if [ -n "$matches" ]; then
@@ -56,7 +56,7 @@ jobs:
           set -euo pipefail
 
           matches=$(rg -n "control-plane-status|homelab-cloud-control-plane-status" charts deploy .github/workflows \
-            -g '!deploy-control-plane-status-vercel.yml' \
+            -g '!deploy-control-plane-status-client-vercel.yml' \
             -g '!guard-control-plane-status-boundary.yml' || true)
 
           if [ -n "$matches" ]; then
