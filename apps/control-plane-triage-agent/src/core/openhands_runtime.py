@@ -61,8 +61,14 @@ class OpenHandsRuntime:
         run_id = incident["run"]["id"]
         workspace = self._config.state_dir / f"incident-{run_id}"
         workspace.mkdir(parents=True, exist_ok=True)
-        (workspace / "incident.json").write_text(json.dumps(incident, indent=2), encoding="utf-8")
-        logger.info("Prepared OpenHands incident workspace run_id=%s workspace=%s", run_id, workspace)
+        (workspace / "incident.json").write_text(
+            json.dumps(incident, indent=2), encoding="utf-8"
+        )
+        logger.info(
+            "Prepared OpenHands incident workspace run_id=%s workspace=%s",
+            run_id,
+            workspace,
+        )
 
         prompt = (
             "You are diagnosing a failed GitHub Actions deployment pipeline. "
@@ -80,7 +86,9 @@ class OpenHandsRuntime:
             output_text=self._read_output(workspace / "DIAGNOSIS.md", limit=4000),
         )
 
-    def run_operator_reply(self, conversation_key: str, prompt: str, status_snapshot: str) -> OpenHandsRunResult:
+    def run_operator_reply(
+        self, conversation_key: str, prompt: str, status_snapshot: str
+    ) -> OpenHandsRunResult:
         """Execute one thread-scoped operator reply conversation."""
 
         workspace = self.operator_workspace(conversation_key)
@@ -111,7 +119,9 @@ class OpenHandsRuntime:
     def operator_workspace(self, conversation_key: str) -> Path:
         """Resolve a stable workspace path for one Discord conversation."""
 
-        safe_key = re.sub(r"[^a-zA-Z0-9._-]+", "-", conversation_key).strip("-") or "default"
+        safe_key = (
+            re.sub(r"[^a-zA-Z0-9._-]+", "-", conversation_key).strip("-") or "default"
+        )
         return self._config.state_dir / "discord-operator-chat" / safe_key
 
     def append_history_event(self, workspace: Path, role: str, content: str) -> None:
@@ -149,7 +159,9 @@ class OpenHandsRuntime:
             TerminalTool,
         )
 
-        llm = LLM(model=self._config.openhands_model, api_key=self._config.openhands_api_key)
+        llm = LLM(
+            model=self._config.openhands_model, api_key=self._config.openhands_api_key
+        )
         tools = [
             FileEditorTool(
                 description="Read and edit files inside the OpenHands workspace.",
