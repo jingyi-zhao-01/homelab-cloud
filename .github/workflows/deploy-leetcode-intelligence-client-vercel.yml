@@ -219,10 +219,6 @@ jobs:
         working-directory: application/leetcode-intelligence/client
         run: npx vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
-      - name: Build client
-        working-directory: application/leetcode-intelligence/client
-        run: npx vercel build --prod --token="$VERCEL_TOKEN"
-
       - name: Deploy to Vercel production
         working-directory: application/leetcode-intelligence/client
-        run: npx vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        run: npx vercel deploy --yes --prod --token="$VERCEL_TOKEN"
