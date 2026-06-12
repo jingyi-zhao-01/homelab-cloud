@@ -7,14 +7,18 @@ from util.logging_utils import configure_logging
 def main() -> None:
     configure_logging()
     config = load_config()
+    service = TriageService(config)
     notifier = DiscordNotifier(
         webhook_url=config.discord_webhook_url,
         bot_token=config.discord_bot_token,
         channel_id=config.discord_channel_id,
+        status_provider=service.render_status,
+        conversation_provider=service.answer_operator_prompt,
     )
+    service.set_notifier(notifier)
     notifier.start()
     try:
-        TriageService(config, notifier).run_forever()
+        service.run_forever()
     finally:
         notifier.close()
 

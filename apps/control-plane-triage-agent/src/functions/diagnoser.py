@@ -57,6 +57,20 @@ class Diagnoser:
                 lines.append(f"- namespace triaged: {namespace_snapshot.get('namespace')}")
         return "\n".join(lines)
 
+    def answer_operator_prompt(self, prompt: str, status_snapshot: str) -> str:
+        """Answer a Discord operator prompt using the same diagnosis stack."""
+
+        if self._config.openhands_enabled and self._config.openhands_api_key:
+            try:
+                logger.info("Running OpenHands operator reply chars=%s model=%s", len(prompt), self._config.openhands_model)
+                return self._run_openhands_operator_prompt(prompt, status_snapshot)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("OpenHands operator reply failed: %s", exc)
+        return (
+            "I am online, but rich conversation needs the OpenHands API key path to be healthy.\n"
+            f"{status_snapshot}"
+        )[:2000]
+
     def _run_openhands(self, incident: dict) -> str:
         """Run OpenHands against a workspace containing the incident bundle."""
 
@@ -96,3 +110,38 @@ class Diagnoser:
             return diagnosis_path.read_text(encoding="utf-8")[:4000]
         logger.warning("OpenHands diagnosis file missing run_id=%s path=%s", incident["run"]["id"], diagnosis_path)
         return self._heuristic_summary(incident)
+
+    def _run_openhands_operator_prompt(self, prompt: str, status_snapshot: str) -> str:
+        """Run a short OpenHands conversation for an operator's Discord question."""
+
+        from openhands.sdk import Agent, Conversation, LLM
+        from openhands.tools.file_editor import FileEditorTool
+        from openhands.tools.task_tracker import TaskTrackerTool
+        from openhands.tools.terminal import TerminalTool
+
+        workspace = self._config.state_dir / "discord-operator-chat"
+        workspace.mkdir(parents=True, exist_ok=True)
+        (workspace / "STATUS.md").write_text(status_snapshot, encoding="utf-8")
+        operator_prompt = (
+            "You are a concise control-plane triage assistant responding inside Discord. "
+            "Use STATUS.md as runtime context. "
+            "Answer the operator's message directly, briefly, and practically. "
+            "If you are unsure, say what you can observe and what to check next. "
+            "Write the final answer to REPLY.md.\n\n"
+            f"Operator message:\n{prompt}\n"
+        )
+
+        llm = LLM(model=self._config.openhands_model, api_key=self._config.openhands_api_key)
+        agent = Agent(llm=llm, tools=[FileEditorTool(), TaskTrackerTool(), TerminalTool()])
+        conversation = Conversation(
+            agent=agent,
+            workspace=str(workspace),
+            max_iteration_per_run=min(self._config.openhands_max_iterations, 8),
+        )
+        conversation.send_message(operator_prompt)
+        conversation.run()
+
+        reply_path = workspace / "REPLY.md"
+        if reply_path.exists():
+            return reply_path.read_text(encoding="utf-8")[:2000]
+        return "I could not produce a reply file, but I am online and still processing operator prompts."

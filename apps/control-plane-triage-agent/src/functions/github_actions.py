@@ -5,6 +5,7 @@ import logging
 import zipfile
 from datetime import datetime, timedelta, timezone
 
+import httpx
 import requests
 
 from core.config import WatchTarget
@@ -15,48 +16,44 @@ logger = logging.getLogger(__name__)
 class GitHubActionsClient:
     def __init__(self, token: str, max_log_bytes: int) -> None:
         self._max_log_bytes = max_log_bytes
-        self._session = requests.Session()
-        self._session.headers.update(
-            {
-                "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {token}",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "User-Agent": "control-plane-triage-agent",
-            }
-        )
+        self._headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "control-plane-triage-agent",
+        }
 
-    def list_recent_runs(self, repository: str, per_page: int) -> list[dict]:
+    async def list_recent_runs(self, repository: str, per_page: int) -> list[dict]:
         logger.info("Fetching GitHub Actions runs repository=%s per_page=%s", repository, per_page)
-        response = self._session.get(
-            f"https://api.github.com/repos/{repository}/actions/runs",
-            params={"per_page": per_page},
-            timeout=30,
-        )
-        response.raise_for_status()
-        runs = response.json().get("workflow_runs", [])
+        async with httpx.AsyncClient(headers=self._headers, timeout=30) as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{repository}/actions/runs",
+                params={"per_page": per_page},
+            )
+            response.raise_for_status()
+            runs = response.json().get("workflow_runs", [])
         logger.info("Fetched GitHub Actions runs repository=%s count=%s", repository, len(runs))
         return runs
 
-    def list_jobs(self, repository: str, run_id: int) -> list[dict]:
+    async def list_jobs(self, repository: str, run_id: int) -> list[dict]:
         logger.info("Fetching GitHub Actions jobs repository=%s run_id=%s", repository, run_id)
-        response = self._session.get(
-            f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/jobs",
-            params={"per_page": 100},
-            timeout=30,
-        )
-        response.raise_for_status()
-        jobs = response.json().get("jobs", [])
+        async with httpx.AsyncClient(headers=self._headers, timeout=30) as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/jobs",
+                params={"per_page": 100},
+            )
+            response.raise_for_status()
+            jobs = response.json().get("jobs", [])
         logger.info("Fetched GitHub Actions jobs repository=%s run_id=%s count=%s", repository, run_id, len(jobs))
         return jobs
 
-    def download_run_logs(self, repository: str, run_id: int) -> dict[str, str]:
+    async def download_run_logs(self, repository: str, run_id: int) -> dict[str, str]:
         logger.info("Downloading GitHub Actions logs repository=%s run_id=%s", repository, run_id)
-        response = self._session.get(
-            f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/logs",
-            timeout=60,
-            allow_redirects=True,
-        )
-        response.raise_for_status()
+        async with httpx.AsyncClient(headers=self._headers, timeout=60, follow_redirects=True) as client:
+            response = await client.get(
+                f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/logs",
+            )
+            response.raise_for_status()
         archive = zipfile.ZipFile(io.BytesIO(response.content))
         collected: dict[str, str] = {}
         remaining = self._max_log_bytes
