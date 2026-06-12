@@ -21,21 +21,7 @@ from pathlib import Path
 
 from core.config import Config
 from openhands.sdk import Agent, Conversation, LLM
-from openhands.tools.file_editor import (
-    FileEditorAction,
-    FileEditorObservation,
-    FileEditorTool,
-)
-from openhands.tools.task_tracker import (
-    TaskTrackerAction,
-    TaskTrackerObservation,
-    TaskTrackerTool,
-)
-from openhands.tools.terminal import (
-    TerminalAction,
-    TerminalObservation,
-    TerminalTool,
-)
+from openhands.tools import get_default_tools
 
 logger = logging.getLogger(__name__)
 
@@ -150,23 +136,7 @@ class OpenHandsRuntime:
         llm = LLM(
             model=self._config.openhands_model, api_key=self._config.openhands_api_key
         )
-        tools = [
-            FileEditorTool(
-                description="Read and edit files inside the OpenHands workspace.",
-                action_type=FileEditorAction,
-                observation_type=FileEditorObservation,
-            ),
-            TaskTrackerTool(
-                description="Track intermediate tasks and execution progress.",
-                action_type=TaskTrackerAction,
-                observation_type=TaskTrackerObservation,
-            ),
-            TerminalTool(
-                description="Run terminal commands inside the OpenHands workspace.",
-                action_type=TerminalAction,
-                observation_type=TerminalObservation,
-            ),
-        ]
+        tools = get_default_tools(enable_browser=False, enable_sub_agents=False)
         agent = Agent(llm=llm, tools=tools)
         conversation = Conversation(
             agent=agent,
