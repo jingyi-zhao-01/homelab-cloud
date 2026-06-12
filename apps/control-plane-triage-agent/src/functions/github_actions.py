@@ -9,8 +9,10 @@ import httpx
 import requests
 
 from core.config import WatchTarget
+from core.tracing import get_tracer
 
 logger = logging.getLogger(__name__)
+tracer = get_tracer(__name__)
 
 
 class GitHubActionsClient:
@@ -24,54 +26,66 @@ class GitHubActionsClient:
         }
 
     async def list_recent_runs(self, repository: str, per_page: int) -> list[dict]:
-        logger.info("Fetching GitHub Actions runs repository=%s per_page=%s", repository, per_page)
-        async with httpx.AsyncClient(headers=self._headers, timeout=30) as client:
-            response = await client.get(
-                f"https://api.github.com/repos/{repository}/actions/runs",
-                params={"per_page": per_page},
-            )
-            response.raise_for_status()
-            runs = response.json().get("workflow_runs", [])
-        logger.info("Fetched GitHub Actions runs repository=%s count=%s", repository, len(runs))
-        return runs
+        with tracer.start_as_current_span("github.list_recent_runs") as span:
+            span.set_attribute("github.repository", repository)
+            span.set_attribute("github.per_page", per_page)
+            logger.info("Fetching GitHub Actions runs repository=%s per_page=%s", repository, per_page)
+            async with httpx.AsyncClient(headers=self._headers, timeout=30) as client:
+                response = await client.get(
+                    f"https://api.github.com/repos/{repository}/actions/runs",
+                    params={"per_page": per_page},
+                )
+                response.raise_for_status()
+                runs = response.json().get("workflow_runs", [])
+            span.set_attribute("github.run_count", len(runs))
+            logger.info("Fetched GitHub Actions runs repository=%s count=%s", repository, len(runs))
+            return runs
 
     async def list_jobs(self, repository: str, run_id: int) -> list[dict]:
-        logger.info("Fetching GitHub Actions jobs repository=%s run_id=%s", repository, run_id)
-        async with httpx.AsyncClient(headers=self._headers, timeout=30) as client:
-            response = await client.get(
-                f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/jobs",
-                params={"per_page": 100},
-            )
-            response.raise_for_status()
-            jobs = response.json().get("jobs", [])
-        logger.info("Fetched GitHub Actions jobs repository=%s run_id=%s count=%s", repository, run_id, len(jobs))
-        return jobs
+        with tracer.start_as_current_span("github.list_jobs") as span:
+            span.set_attribute("github.repository", repository)
+            span.set_attribute("github.run_id", run_id)
+            logger.info("Fetching GitHub Actions jobs repository=%s run_id=%s", repository, run_id)
+            async with httpx.AsyncClient(headers=self._headers, timeout=30) as client:
+                response = await client.get(
+                    f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/jobs",
+                    params={"per_page": 100},
+                )
+                response.raise_for_status()
+                jobs = response.json().get("jobs", [])
+            span.set_attribute("github.job_count", len(jobs))
+            logger.info("Fetched GitHub Actions jobs repository=%s run_id=%s count=%s", repository, run_id, len(jobs))
+            return jobs
 
     async def download_run_logs(self, repository: str, run_id: int) -> dict[str, str]:
-        logger.info("Downloading GitHub Actions logs repository=%s run_id=%s", repository, run_id)
-        async with httpx.AsyncClient(headers=self._headers, timeout=60, follow_redirects=True) as client:
-            response = await client.get(
-                f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/logs",
+        with tracer.start_as_current_span("github.download_run_logs") as span:
+            span.set_attribute("github.repository", repository)
+            span.set_attribute("github.run_id", run_id)
+            logger.info("Downloading GitHub Actions logs repository=%s run_id=%s", repository, run_id)
+            async with httpx.AsyncClient(headers=self._headers, timeout=60, follow_redirects=True) as client:
+                response = await client.get(
+                    f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/logs",
+                )
+                response.raise_for_status()
+            archive = zipfile.ZipFile(io.BytesIO(response.content))
+            collected: dict[str, str] = {}
+            remaining = self._max_log_bytes
+            for name in archive.namelist():
+                if remaining <= 0:
+                    break
+                data = archive.read(name)[:remaining]
+                remaining -= len(data)
+                collected[name] = data.decode("utf-8", errors="replace")
+            span.set_attribute("github.log_file_count", len(collected))
+            logger.info(
+                "Downloaded GitHub Actions logs repository=%s run_id=%s files=%s bytes_collected=%s bytes_remaining=%s",
+                repository,
+                run_id,
+                len(collected),
+                sum(len(text.encode("utf-8", errors="ignore")) for text in collected.values()),
+                remaining,
             )
-            response.raise_for_status()
-        archive = zipfile.ZipFile(io.BytesIO(response.content))
-        collected: dict[str, str] = {}
-        remaining = self._max_log_bytes
-        for name in archive.namelist():
-            if remaining <= 0:
-                break
-            data = archive.read(name)[:remaining]
-            remaining -= len(data)
-            collected[name] = data.decode("utf-8", errors="replace")
-        logger.info(
-            "Downloaded GitHub Actions logs repository=%s run_id=%s files=%s bytes_collected=%s bytes_remaining=%s",
-            repository,
-            run_id,
-            len(collected),
-            sum(len(text.encode("utf-8", errors="ignore")) for text in collected.values()),
-            remaining,
-        )
-        return collected
+            return collected
 
 
 def match_runs(runs: list[dict], target: WatchTarget, lookback_minutes: int) -> list[dict]:

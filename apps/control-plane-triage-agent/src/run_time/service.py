@@ -20,6 +20,7 @@ from core.config import Config, WatchTarget
 from core.event_bus import AsyncEventBus
 from core.events import IncidentAssembled, IncidentDiagnosed, WorkflowRunDetected
 from core.state import StateStore
+from core.tracing import get_tracer
 from functions.diagnoser import Diagnoser
 from functions.discord import DiscordNotifier
 from functions.github_actions import GitHubActionsClient, match_runs
@@ -31,6 +32,7 @@ from run_time.event_handlers import (
 )
 
 logger = logging.getLogger(__name__)
+tracer = get_tracer(__name__)
 
 
 class TriageService:
@@ -78,9 +80,13 @@ class TriageService:
             logger.warning("No WATCH_TARGETS_JSON configured; agent will idle")
         while True:
             try:
-                logger.info("Starting poll cycle")
-                asyncio.run(self.poll_once())
-                logger.info("Completed poll cycle")
+                with tracer.start_as_current_span("triage.poll_loop") as span:
+                    span.set_attribute(
+                        "triage.watch_target_count", len(self._config.watch_targets)
+                    )
+                    logger.info("Starting poll cycle")
+                    asyncio.run(self.poll_once())
+                    logger.info("Completed poll cycle")
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Poll loop failed: %s", exc)
             time.sleep(self._config.poll_interval_seconds)
@@ -88,38 +94,47 @@ class TriageService:
     async def poll_once(self) -> None:
         """Execute one full polling pass across all configured repositories."""
 
-        grouped: dict[str, list[WatchTarget]] = {}
-        for target in self._config.watch_targets:
-            grouped.setdefault(target.repository, []).append(target)
+        with tracer.start_as_current_span("triage.poll_once") as span:
+            grouped: dict[str, list[WatchTarget]] = {}
+            for target in self._config.watch_targets:
+                grouped.setdefault(target.repository, []).append(target)
+            span.set_attribute("triage.repository_count", len(grouped))
 
-        for repository, targets in grouped.items():
-            logger.info("Polling repository=%s target_count=%s", repository, len(targets))
-            runs = await self._github.list_recent_runs(repository=repository, per_page=self._config.max_runs_per_repo)
-            logger.info("Fetched repository=%s recent_runs=%s", repository, len(runs))
-            for target in targets:
-                matched_runs = match_runs(runs, target, self._config.lookback_minutes)
-                logger.info(
-                    "Matched repository=%s namespace=%s workflow_names=%s workflow_ids=%s branch=%s matched_runs=%s",
-                    repository,
-                    target.namespace,
-                    list(target.workflow_names),
-                    list(target.workflow_ids),
-                    target.branch,
-                    len(matched_runs),
-                )
-                for run in matched_runs:
-                    run_id = int(run["id"])
-                    if self._state.has_seen(run_id):
-                        logger.info("Skipping previously triaged run_id=%s repository=%s", run_id, repository)
-                        continue
-                    logger.info("Publishing workflow event run_id=%s repository=%s", run_id, repository)
-                    await self._event_bus.publish(
-                        WorkflowRunDetected(
-                            repository=repository,
-                            target=target,
-                            run=run,
-                        )
+            for repository, targets in grouped.items():
+                with tracer.start_as_current_span("triage.poll_repository") as repository_span:
+                    repository_span.set_attribute("github.repository", repository)
+                    repository_span.set_attribute("triage.target_count", len(targets))
+                    logger.info("Polling repository=%s target_count=%s", repository, len(targets))
+                    runs = await self._github.list_recent_runs(
+                        repository=repository,
+                        per_page=self._config.max_runs_per_repo,
                     )
+                    repository_span.set_attribute("github.recent_run_count", len(runs))
+                    logger.info("Fetched repository=%s recent_runs=%s", repository, len(runs))
+                    for target in targets:
+                        matched_runs = match_runs(runs, target, self._config.lookback_minutes)
+                        logger.info(
+                            "Matched repository=%s namespace=%s workflow_names=%s workflow_ids=%s branch=%s matched_runs=%s",
+                            repository,
+                            target.namespace,
+                            list(target.workflow_names),
+                            list(target.workflow_ids),
+                            target.branch,
+                            len(matched_runs),
+                        )
+                        for run in matched_runs:
+                            run_id = int(run["id"])
+                            if self._state.has_seen(run_id):
+                                logger.info("Skipping previously triaged run_id=%s repository=%s", run_id, repository)
+                                continue
+                            logger.info("Publishing workflow event run_id=%s repository=%s", run_id, repository)
+                            await self._event_bus.publish(
+                                WorkflowRunDetected(
+                                    repository=repository,
+                                    target=target,
+                                    run=run,
+                                )
+                            )
 
     def render_status(self) -> str:
         """Render a short operator-facing status snapshot for Discord mentions."""

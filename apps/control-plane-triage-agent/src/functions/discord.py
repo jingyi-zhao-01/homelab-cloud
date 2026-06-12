@@ -8,17 +8,24 @@ from collections.abc import Callable
 import discord
 import requests
 
+from core.openhands_runtime import OpenHandsFlowError
+from core.tracing import get_tracer
+
 logger = logging.getLogger(__name__)
+tracer = get_tracer(__name__)
 _DISCORD_MESSAGE_LIMIT = 2000
 _STREAM_CHUNK_SIZE = 220
 _STREAM_EDIT_INTERVAL_SECONDS = 0.35
 
 
 def send_discord_webhook(webhook_url: str, content: str) -> None:
-    logger.info("Sending Discord webhook notification chars=%s", len(content))
-    response = requests.post(webhook_url, json={"content": content}, timeout=30)
-    response.raise_for_status()
-    logger.info("Sent Discord webhook notification status_code=%s", response.status_code)
+    with tracer.start_as_current_span("discord.send_webhook") as span:
+        span.set_attribute("discord.message_chars", len(content))
+        logger.info("Sending Discord webhook notification chars=%s", len(content))
+        response = requests.post(webhook_url, json={"content": content}, timeout=30)
+        response.raise_for_status()
+        span.set_attribute("http.status_code", response.status_code)
+        logger.info("Sent Discord webhook notification status_code=%s", response.status_code)
 
 
 class _DiscordGatewayClient(discord.Client):
@@ -43,39 +50,55 @@ class _DiscordGatewayClient(discord.Client):
         if self.user not in message.mentions:
             return
 
-        logger.info("Received Discord mention message_id=%s author=%s", message.id, message.author)
-        placeholder = await message.reply("Thinking...", mention_author=False)
-        try:
-            async with message.channel.typing():
-                reply = await asyncio.to_thread(self._command_handler, message)
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Failed to handle Discord mention message_id=%s: %s", message.id, exc)
-            await placeholder.edit(content="I hit an internal error while processing that request.")
-            return
+        with tracer.start_as_current_span("discord.on_message") as span:
+            span.set_attribute("discord.message_id", message.id)
+            span.set_attribute("discord.channel_id", message.channel.id)
+            logger.info("Received Discord mention message_id=%s author=%s", message.id, message.author)
+            placeholder = await message.reply("Thinking...", mention_author=False)
+            try:
+                async with message.channel.typing():
+                    reply = await asyncio.to_thread(self._command_handler, message)
+            except OpenHandsFlowError as exc:
+                span.record_exception(exc)
+                logger.warning(
+                    "OpenHands flow failed for Discord message_id=%s detail=%s",
+                    message.id,
+                    exc.detail,
+                )
+                await placeholder.edit(content=exc.user_message[:_DISCORD_MESSAGE_LIMIT])
+                return
+            except Exception as exc:  # noqa: BLE001
+                span.record_exception(exc)
+                logger.exception("Failed to handle Discord mention message_id=%s: %s", message.id, exc)
+                await placeholder.edit(content="I hit an internal error while processing that request.")
+                return
 
-        if not reply:
-            await placeholder.edit(content="I could not produce a reply.")
-            return
+            if not reply:
+                await placeholder.edit(content="I could not produce a reply.")
+                return
 
-        logger.info("Streaming Discord reply message_id=%s chars=%s", message.id, len(reply))
-        await _stream_message_edit(placeholder, reply)
+            span.set_attribute("discord.reply_chars", len(reply))
+            logger.info("Streaming Discord reply message_id=%s chars=%s", message.id, len(reply))
+            await _stream_message_edit(placeholder, reply)
 
 
 async def _stream_message_edit(message: discord.Message, content: str) -> None:
     """Simulate streaming by progressively editing one Discord message."""
 
-    final_content = content[:_DISCORD_MESSAGE_LIMIT]
-    if len(final_content) <= _STREAM_CHUNK_SIZE:
-        await message.edit(content=final_content)
-        return
+    with tracer.start_as_current_span("discord.stream_message_edit") as span:
+        final_content = content[:_DISCORD_MESSAGE_LIMIT]
+        span.set_attribute("discord.final_chars", len(final_content))
+        if len(final_content) <= _STREAM_CHUNK_SIZE:
+            await message.edit(content=final_content)
+            return
 
-    rendered = ""
-    for chunk_start in range(0, len(final_content), _STREAM_CHUNK_SIZE):
-        chunk = final_content[chunk_start : chunk_start + _STREAM_CHUNK_SIZE]
-        rendered = f"{rendered}{chunk}"
-        await message.edit(content=rendered)
-        if len(rendered) < len(final_content):
-            await asyncio.sleep(_STREAM_EDIT_INTERVAL_SECONDS)
+        rendered = ""
+        for chunk_start in range(0, len(final_content), _STREAM_CHUNK_SIZE):
+            chunk = final_content[chunk_start : chunk_start + _STREAM_CHUNK_SIZE]
+            rendered = f"{rendered}{chunk}"
+            await message.edit(content=rendered)
+            if len(rendered) < len(final_content):
+                await asyncio.sleep(_STREAM_EDIT_INTERVAL_SECONDS)
 
 
 class DiscordNotifier:
