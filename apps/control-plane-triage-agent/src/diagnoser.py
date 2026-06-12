@@ -14,11 +14,14 @@ class Diagnoser:
         self._config = config
 
     def diagnose(self, incident: dict) -> str:
+        run_id = incident["run"]["id"]
         if self._config.openhands_enabled and self._config.openhands_api_key:
             try:
+                logger.info("Running OpenHands diagnosis run_id=%s model=%s", run_id, self._config.openhands_model)
                 return self._run_openhands(incident)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("OpenHands diagnosis failed: %s", exc)
+        logger.info("Using heuristic diagnosis run_id=%s", run_id)
         return self._heuristic_summary(incident)
 
     def _heuristic_summary(self, incident: dict) -> str:
@@ -51,6 +54,7 @@ class Diagnoser:
         workspace = self._config.state_dir / f"incident-{incident['run']['id']}"
         workspace.mkdir(parents=True, exist_ok=True)
         (workspace / "incident.json").write_text(json.dumps(incident, indent=2), encoding="utf-8")
+        logger.info("Prepared OpenHands workspace run_id=%s workspace=%s", incident["run"]["id"], workspace)
         prompt = (
             "You are diagnosing a failed GitHub Actions deployment pipeline. "
             "Read incident.json, identify the most likely root cause, the fastest next checks, "
@@ -66,8 +70,15 @@ class Diagnoser:
         )
         conversation.send_message(prompt)
         conversation.run()
+        logger.info(
+            "Completed OpenHands conversation run_id=%s max_iterations=%s",
+            incident["run"]["id"],
+            self._config.openhands_max_iterations,
+        )
 
         diagnosis_path = workspace / "DIAGNOSIS.md"
         if diagnosis_path.exists():
+            logger.info("Read OpenHands diagnosis run_id=%s path=%s", incident["run"]["id"], diagnosis_path)
             return diagnosis_path.read_text(encoding="utf-8")[:4000]
+        logger.warning("OpenHands diagnosis file missing run_id=%s path=%s", incident["run"]["id"], diagnosis_path)
         return self._heuristic_summary(incident)

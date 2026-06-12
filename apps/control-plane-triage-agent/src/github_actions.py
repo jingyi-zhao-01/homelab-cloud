@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import io
+import logging
 import zipfile
 from datetime import datetime, timedelta, timezone
 
 import requests
 
 from config import WatchTarget
+
+logger = logging.getLogger(__name__)
 
 
 class GitHubActionsClient:
@@ -23,24 +26,31 @@ class GitHubActionsClient:
         )
 
     def list_recent_runs(self, repository: str, per_page: int) -> list[dict]:
+        logger.info("Fetching GitHub Actions runs repository=%s per_page=%s", repository, per_page)
         response = self._session.get(
             f"https://api.github.com/repos/{repository}/actions/runs",
             params={"per_page": per_page},
             timeout=30,
         )
         response.raise_for_status()
-        return response.json().get("workflow_runs", [])
+        runs = response.json().get("workflow_runs", [])
+        logger.info("Fetched GitHub Actions runs repository=%s count=%s", repository, len(runs))
+        return runs
 
     def list_jobs(self, repository: str, run_id: int) -> list[dict]:
+        logger.info("Fetching GitHub Actions jobs repository=%s run_id=%s", repository, run_id)
         response = self._session.get(
             f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/jobs",
             params={"per_page": 100},
             timeout=30,
         )
         response.raise_for_status()
-        return response.json().get("jobs", [])
+        jobs = response.json().get("jobs", [])
+        logger.info("Fetched GitHub Actions jobs repository=%s run_id=%s count=%s", repository, run_id, len(jobs))
+        return jobs
 
     def download_run_logs(self, repository: str, run_id: int) -> dict[str, str]:
+        logger.info("Downloading GitHub Actions logs repository=%s run_id=%s", repository, run_id)
         response = self._session.get(
             f"https://api.github.com/repos/{repository}/actions/runs/{run_id}/logs",
             timeout=60,
@@ -56,6 +66,14 @@ class GitHubActionsClient:
             data = archive.read(name)[:remaining]
             remaining -= len(data)
             collected[name] = data.decode("utf-8", errors="replace")
+        logger.info(
+            "Downloaded GitHub Actions logs repository=%s run_id=%s files=%s bytes_collected=%s bytes_remaining=%s",
+            repository,
+            run_id,
+            len(collected),
+            sum(len(text.encode('utf-8', errors='ignore')) for text in collected.values()),
+            remaining,
+        )
         return collected
 
 
@@ -77,6 +95,15 @@ def match_runs(runs: list[dict], target: WatchTarget, lookback_minutes: int) -> 
         if target.workflow_ids and int(run.get("workflow_id", 0)) not in target.workflow_ids:
             continue
         matched.append(run)
+    logger.info(
+        "Matched runs namespace=%s workflow_names=%s workflow_ids=%s branch=%s lookback_minutes=%s matched=%s",
+        target.namespace,
+        list(target.workflow_names),
+        list(target.workflow_ids),
+        target.branch,
+        lookback_minutes,
+        len(matched),
+    )
     return matched
 
 
@@ -95,5 +122,8 @@ def extract_failure_excerpt(logs: dict[str, str], limit: int = 4000) -> str:
         for filename, text in logs.items():
             snippet = text[:limit]
             if snippet:
+                logger.info("No explicit failure lines found; using raw snippet file=%s chars=%s", filename, len(snippet))
                 return f"[{filename}]\n{snippet}"
-    return "\n".join(interesting_lines)[:limit]
+    excerpt = "\n".join(interesting_lines)[:limit]
+    logger.info("Extracted failure excerpt lines=%s chars=%s", len(interesting_lines), len(excerpt))
+    return excerpt
