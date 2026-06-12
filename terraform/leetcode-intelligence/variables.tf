@@ -92,6 +92,12 @@ variable "upstash_redis_auto_scale" {
   default     = false
 }
 
+variable "upstash_redis_budget" {
+  description = "Monthly budget in USD for the leetcode-intelligence Upstash Redis database."
+  type        = number
+  default     = 20
+}
+
 variable "non_admin_rate_limit_max_requests" {
   description = "Maximum number of requests allowed per IP in one rate-limit window."
   type        = number

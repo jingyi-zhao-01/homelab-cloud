@@ -81,6 +81,7 @@ but the preferred pattern is:
 
 - shared provider bootstrap credentials in `/upstash/*`
 - project-scoped runtime outputs under `/flashsales/prod/*`
+- a per-database Upstash monthly budget via `upstash_redis_budget` (default `20`)
 
 ## Notes
 

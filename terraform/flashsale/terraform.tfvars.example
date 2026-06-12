@@ -19,3 +19,4 @@ tempo_datasource_uid = "tempo"
 # upstash_api_key       = "YOUR_UPSTASH_API_KEY"
 upstash_redis_region = "us-west-1"
 upstash_redis_tls    = true
+upstash_redis_budget = 20

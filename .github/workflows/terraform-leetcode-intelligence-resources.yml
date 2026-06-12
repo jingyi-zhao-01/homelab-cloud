@@ -36,6 +36,7 @@ jobs:
       TF_VAR_ssm_path_prefix: ${{ vars.LEETCODE_INTELLIGENCE_SSM_PATH_PREFIX || 'leetcode-intelligence' }}
       TF_VAR_upstash_redis_database_name: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_DATABASE_NAME || 'leetcode-intelligence-rate-limit' }}
       TF_VAR_upstash_redis_primary_region: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_PRIMARY_REGION || 'us-west-1' }}
+      TF_VAR_upstash_redis_budget: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_REDIS_BUDGET || '20' }}
       TF_VAR_non_admin_rate_limit_max_requests: ${{ vars.LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_MAX_REQUESTS || '120' }}
       TF_VAR_non_admin_rate_limit_window_seconds: ${{ vars.LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS || '60' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

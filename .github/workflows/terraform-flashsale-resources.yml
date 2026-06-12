@@ -61,6 +61,7 @@ jobs:
       TF_VAR_processing_sla_minutes: ${{ vars.FLASHSALE_GRAFANA_PROCESSING_SLA_MINUTES || '5' }}
       TF_VAR_grafana_folder_title: ${{ vars.FLASHSALE_GRAFANA_FOLDER_TITLE || 'Flashsale' }}
       TF_VAR_grafana_folder_uid: ${{ vars.FLASHSALE_GRAFANA_FOLDER_UID || 'flashsale-folder' }}
+      TF_VAR_upstash_redis_budget: ${{ vars.FLASHSALE_UPSTASH_REDIS_BUDGET || '20' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}

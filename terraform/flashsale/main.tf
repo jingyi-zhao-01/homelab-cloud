@@ -119,6 +119,7 @@ resource "upstash_redis_database" "flashsale" {
   tls            = var.upstash_redis_tls
   eviction       = var.upstash_redis_eviction
   auto_scale     = var.upstash_redis_auto_scale
+  budget         = var.upstash_redis_budget
   primary_region = var.upstash_redis_region == "global" ? var.upstash_redis_primary_region : null
   read_regions   = var.upstash_redis_region == "global" ? var.upstash_redis_read_regions : null
 }

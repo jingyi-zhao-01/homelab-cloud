@@ -159,3 +159,9 @@ variable "upstash_redis_auto_scale" {
   type        = bool
   default     = false
 }
+
+variable "upstash_redis_budget" {
+  description = "Monthly budget in USD for the flashsale Upstash Redis database."
+  type        = number
+  default     = 20
+}
