@@ -9,6 +9,9 @@ import discord
 import requests
 
 logger = logging.getLogger(__name__)
+_DISCORD_MESSAGE_LIMIT = 2000
+_STREAM_CHUNK_SIZE = 220
+_STREAM_EDIT_INTERVAL_SECONDS = 0.35
 
 
 def send_discord_webhook(webhook_url: str, content: str) -> None:
@@ -40,11 +43,39 @@ class _DiscordGatewayClient(discord.Client):
         if self.user not in message.mentions:
             return
 
-        reply = await asyncio.to_thread(self._command_handler, message)
-        if not reply:
+        logger.info("Received Discord mention message_id=%s author=%s", message.id, message.author)
+        placeholder = await message.reply("Thinking...", mention_author=False)
+        try:
+            async with message.channel.typing():
+                reply = await asyncio.to_thread(self._command_handler, message)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to handle Discord mention message_id=%s: %s", message.id, exc)
+            await placeholder.edit(content="I hit an internal error while processing that request.")
             return
-        logger.info("Replying to Discord mention message_id=%s author=%s", message.id, message.author)
-        await message.reply(reply, mention_author=False)
+
+        if not reply:
+            await placeholder.edit(content="I could not produce a reply.")
+            return
+
+        logger.info("Streaming Discord reply message_id=%s chars=%s", message.id, len(reply))
+        await _stream_message_edit(placeholder, reply)
+
+
+async def _stream_message_edit(message: discord.Message, content: str) -> None:
+    """Simulate streaming by progressively editing one Discord message."""
+
+    final_content = content[:_DISCORD_MESSAGE_LIMIT]
+    if len(final_content) <= _STREAM_CHUNK_SIZE:
+        await message.edit(content=final_content)
+        return
+
+    rendered = ""
+    for chunk_start in range(0, len(final_content), _STREAM_CHUNK_SIZE):
+        chunk = final_content[chunk_start : chunk_start + _STREAM_CHUNK_SIZE]
+        rendered = f"{rendered}{chunk}"
+        await message.edit(content=rendered)
+        if len(rendered) < len(final_content):
+            await asyncio.sleep(_STREAM_EDIT_INTERVAL_SECONDS)
 
 
 class DiscordNotifier:
@@ -57,7 +88,7 @@ class DiscordNotifier:
         bot_token: str | None,
         channel_id: int | None,
         status_provider: Callable[[], str] | None = None,
-        conversation_provider: Callable[[str], str] | None = None,
+        conversation_provider: Callable[[str, str], str] | None = None,
     ) -> None:
         self._webhook_url = webhook_url
         self._bot_token = bot_token
@@ -139,7 +170,7 @@ class DiscordNotifier:
         logger.info("Sent Discord bot notification channel_id=%s", self._channel_id)
 
     def _handle_command(self, message: discord.Message) -> str | None:
-        """Handle mention-based operator interaction for lightweight conversations."""
+        """Route every operator mention through the conversational LLM path."""
 
         if self._client is None or self._client.user is None:
             return "I am still starting up."
@@ -150,23 +181,30 @@ class DiscordNotifier:
         for token in mention_tokens:
             normalized = normalized.replace(token, "")
         normalized = normalized.strip()
-        content_lower = normalized.lower()
-
-        if not normalized or content_lower == "help":
-            return (
-                "I can chat when you mention me.\n"
-                "- `@me ping`\n"
-                "- `@me status`\n"
-                "- `@me help`\n"
-                "- or ask an operational question in plain language"
-            )
-        if content_lower == "ping":
-            return "pong"
-        if content_lower == "status":
-            if self._status_provider is not None:
-                return self._status_provider()
-            return "control-plane-triage-agent is online."
         if self._conversation_provider is not None:
-            logger.info("Dispatching conversational prompt chars=%s", len(normalized))
-            return self._conversation_provider(normalized)
-        return "I can answer `ping`, `status`, and `help`, but conversational replies are not configured yet."
+            prompt = normalized or "Please introduce yourself, explain what you monitor, and summarize your current status."
+            conversation_key = _conversation_key_for_message(message)
+            logger.info(
+                "Dispatching conversational prompt chars=%s conversation_key=%s",
+                len(prompt),
+                conversation_key,
+            )
+            return self._conversation_provider(conversation_key, prompt)
+        return "Conversational replies are not configured yet."
+
+
+def _conversation_key_for_message(message: discord.Message) -> str:
+    """Build a stable per-thread/per-channel conversation key for Discord chat state."""
+
+    if message.guild is None:
+        scope = "dm"
+        scope_id = str(message.channel.id)
+    else:
+        scope = "guild"
+        scope_id = str(message.guild.id)
+    thread = getattr(message.channel, "thread", None)
+    if thread is not None and getattr(thread, "id", None) is not None:
+        channel_id = str(thread.id)
+    else:
+        channel_id = str(message.channel.id)
+    return f"{scope}-{scope_id}-channel-{channel_id}"

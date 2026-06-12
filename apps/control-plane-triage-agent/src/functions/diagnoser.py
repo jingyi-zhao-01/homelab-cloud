@@ -9,6 +9,8 @@ heuristic summary when the LLM path is disabled or fails.
 
 import json
 import logging
+import re
+from datetime import UTC, datetime
 
 from core.config import Config
 
@@ -57,19 +59,26 @@ class Diagnoser:
                 lines.append(f"- namespace triaged: {namespace_snapshot.get('namespace')}")
         return "\n".join(lines)
 
-    def answer_operator_prompt(self, prompt: str, status_snapshot: str) -> str:
-        """Answer a Discord operator prompt using the same diagnosis stack."""
+    def answer_operator_prompt(self, conversation_key: str, prompt: str, status_snapshot: str) -> str:
+        """Answer a Discord operator prompt strictly through the LLM path."""
 
-        if self._config.openhands_enabled and self._config.openhands_api_key:
-            try:
-                logger.info("Running OpenHands operator reply chars=%s model=%s", len(prompt), self._config.openhands_model)
-                return self._run_openhands_operator_prompt(prompt, status_snapshot)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("OpenHands operator reply failed: %s", exc)
-        return (
-            "I am online, but rich conversation needs the OpenHands API key path to be healthy.\n"
-            f"{status_snapshot}"
-        )[:2000]
+        if not self._config.openhands_enabled:
+            logger.warning("Operator prompt rejected because OpenHands is disabled")
+            return "LLM conversation is currently disabled because OPENHANDS_ENABLED is false."
+        if not self._config.openhands_api_key:
+            logger.warning("Operator prompt rejected because OPENHANDS_LLM_API_KEY is missing")
+            return "LLM conversation is currently unavailable because OPENHANDS_LLM_API_KEY is missing."
+        try:
+            logger.info(
+                "Running OpenHands operator reply chars=%s model=%s conversation_key=%s",
+                len(prompt),
+                self._config.openhands_model,
+                conversation_key,
+            )
+            return self._run_openhands_operator_prompt(conversation_key, prompt, status_snapshot)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("OpenHands operator reply failed: %s", exc)
+            return "LLM conversation is currently unavailable because the OpenHands reply path failed. Check the agent logs."
 
     def _run_openhands(self, incident: dict) -> str:
         """Run OpenHands against a workspace containing the incident bundle."""
@@ -111,20 +120,22 @@ class Diagnoser:
         logger.warning("OpenHands diagnosis file missing run_id=%s path=%s", incident["run"]["id"], diagnosis_path)
         return self._heuristic_summary(incident)
 
-    def _run_openhands_operator_prompt(self, prompt: str, status_snapshot: str) -> str:
-        """Run a short OpenHands conversation for an operator's Discord question."""
+    def _run_openhands_operator_prompt(self, conversation_key: str, prompt: str, status_snapshot: str) -> str:
+        """Run a thread-scoped OpenHands conversation for an operator's Discord question."""
 
         from openhands.sdk import Agent, Conversation, LLM
         from openhands.tools.file_editor import FileEditorTool
         from openhands.tools.task_tracker import TaskTrackerTool
         from openhands.tools.terminal import TerminalTool
 
-        workspace = self._config.state_dir / "discord-operator-chat"
+        workspace = self._operator_workspace(conversation_key)
         workspace.mkdir(parents=True, exist_ok=True)
         (workspace / "STATUS.md").write_text(status_snapshot, encoding="utf-8")
+        self._append_operator_event(workspace, "user", prompt)
         operator_prompt = (
             "You are a concise control-plane triage assistant responding inside Discord. "
             "Use STATUS.md as runtime context. "
+            "Use HISTORY.md as the running conversation history for this Discord thread or channel. "
             "Answer the operator's message directly, briefly, and practically. "
             "If you are unsure, say what you can observe and what to check next. "
             "Write the final answer to REPLY.md.\n\n"
@@ -143,5 +154,21 @@ class Diagnoser:
 
         reply_path = workspace / "REPLY.md"
         if reply_path.exists():
-            return reply_path.read_text(encoding="utf-8")[:2000]
+            reply = reply_path.read_text(encoding="utf-8")[:2000]
+            self._append_operator_event(workspace, "assistant", reply)
+            return reply
         return "I could not produce a reply file, but I am online and still processing operator prompts."
+
+    def _operator_workspace(self, conversation_key: str):
+        """Resolve a stable workspace path for one Discord thread/channel conversation."""
+
+        safe_key = re.sub(r"[^a-zA-Z0-9._-]+", "-", conversation_key).strip("-") or "default"
+        return self._config.state_dir / "discord-operator-chat" / safe_key
+
+    def _append_operator_event(self, workspace, role: str, content: str) -> None:
+        """Persist a lightweight event log so OpenHands can reuse thread history."""
+
+        history_path = workspace / "HISTORY.md"
+        timestamp = datetime.now(UTC).isoformat()
+        with history_path.open("a", encoding="utf-8") as history_file:
+            history_file.write(f"\n## {timestamp} {role}\n\n{content.strip()}\n")

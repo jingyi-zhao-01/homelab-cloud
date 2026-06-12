@@ -5,25 +5,30 @@ from __future__ import annotations
 This module wires together:
 - GitHub run polling
 - deduplication state
-- Kubernetes snapshot collection
-- diagnosis generation
-- Discord delivery
+- event publication
+- operator-facing status/chat entrypoints
 
-It should contain the high-level control flow, while concrete integrations live
-under `functions/` and durable process state lives under `core/`.
+It should contain the high-level control flow and event publication, while
+side-effecting reactions live in dedicated event handlers under `run_time/`.
 """
 
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
 
 from core.config import Config, WatchTarget
+from core.event_bus import AsyncEventBus
+from core.events import IncidentAssembled, IncidentDiagnosed, WorkflowRunDetected
 from core.state import StateStore
 from functions.diagnoser import Diagnoser
 from functions.discord import DiscordNotifier
-from functions.github_actions import GitHubActionsClient, extract_failure_excerpt, match_runs
+from functions.github_actions import GitHubActionsClient, match_runs
 from functions.kubernetes_triage import KubernetesTriage
+from run_time.event_handlers import (
+    IncidentDiagnosisEventHandler,
+    IncidentNotificationEventHandler,
+    WorkflowRunEventHandler,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +43,23 @@ class TriageService:
         self._state = StateStore(config.state_dir)
         self._diagnoser = Diagnoser(config)
         self._k8s = KubernetesTriage()
+        self._event_bus = AsyncEventBus()
+        self._workflow_handler = WorkflowRunEventHandler(
+            state=self._state,
+            github=self._github,
+            kubernetes_triage=self._k8s,
+            event_bus=self._event_bus,
+        )
+        self._diagnosis_handler = IncidentDiagnosisEventHandler(
+            diagnoser=self._diagnoser,
+            event_bus=self._event_bus,
+        )
+        self._notification_handler = IncidentNotificationEventHandler(
+            config=self._config,
+            state=self._state,
+            notifier=notifier,
+        )
+        self._attach_default_handlers()
         logger.info(
             "Initialized triage service poll_interval_seconds=%s lookback_minutes=%s max_runs_per_repo=%s "
             "watch_targets=%s openhands_enabled=%s state_dir=%s",
@@ -90,96 +112,14 @@ class TriageService:
                     if self._state.has_seen(run_id):
                         logger.info("Skipping previously triaged run_id=%s repository=%s", run_id, repository)
                         continue
-                    logger.info("Triaging failed run %s for %s", run_id, repository)
-                    incident = await self._build_incident(repository, target, run)
-                    diagnosis = await asyncio.to_thread(self._diagnoser.diagnose, incident)
-                    message = self._render_message(incident, diagnosis)
-                    if self._notifier is None:
-                        raise RuntimeError("Discord notifier is not configured")
-                    await asyncio.to_thread(self._notifier.send, message)
-                    await asyncio.to_thread(self._state.mark_seen, run_id)
-                    logger.info("Completed triage for run_id=%s repository=%s", run_id, repository)
-
-    async def _build_incident(self, repository: str, target: WatchTarget, run: dict) -> dict:
-        """Assemble the full incident payload used by diagnosers and notifiers."""
-
-        run_id = int(run["id"])
-        logger.info(
-            "Building incident run_id=%s repository=%s workflow=%s namespace=%s",
-            run_id,
-            repository,
-            run.get("name"),
-            target.namespace,
-        )
-        jobs, logs = await asyncio.gather(
-            self._github.list_jobs(repository=repository, run_id=run_id),
-            self._github.download_run_logs(repository=repository, run_id=run_id),
-        )
-        snapshot = (
-            await asyncio.to_thread(self._k8s.collect_namespace_snapshot, target.namespace)
-            if target.namespace
-            else None
-        )
-        log_excerpt = extract_failure_excerpt(logs)
-        logger.info(
-            "Built incident run_id=%s repository=%s jobs=%s log_files=%s namespace_snapshot=%s excerpt_chars=%s",
-            run_id,
-            repository,
-            len(jobs),
-            len(logs),
-            bool(snapshot),
-            len(log_excerpt),
-        )
-        return {
-            "detected_at": datetime.now(timezone.utc).isoformat(),
-            "repository": repository,
-            "target": {
-                "namespace": target.namespace,
-                "branch": target.branch,
-                "workflow_names": list(target.workflow_names),
-                "workflow_ids": list(target.workflow_ids),
-            },
-            "run": run,
-            "jobs": jobs,
-            "log_excerpt": log_excerpt,
-            "namespace_snapshot": snapshot,
-        }
-
-    def _render_message(self, incident: dict, diagnosis: str) -> str:
-        """Render the final Discord message payload for one triaged incident."""
-
-        run = incident["run"]
-        lines = [
-            "❌ control-plane-triage-agent detected a failed pipeline",
-            f"repo: `{incident['repository']}`",
-            f"workflow: `{run.get('name')}`",
-            f"run id: `{run.get('id')}`",
-            f"branch: `{run.get('head_branch')}`",
-            f"conclusion: `{run.get('conclusion')}`",
-            f"url: {run.get('html_url')}",
-        ]
-        if incident.get("target", {}).get("namespace"):
-            lines.append(f"namespace: `{incident['target']['namespace']}`")
-        excerpt = incident.get("log_excerpt")
-        if excerpt:
-            lines.append("log excerpt:")
-            lines.append("```text")
-            lines.append(excerpt[:700])
-            lines.append("```")
-        if diagnosis:
-            lines.append("diagnosis:")
-            lines.append("```markdown")
-            lines.append(diagnosis[:900])
-            lines.append("```")
-        content = "\n".join(lines)
-        logger.info(
-            "Rendered Discord message run_id=%s repository=%s chars=%s diagnosis_chars=%s",
-            run.get("id"),
-            incident["repository"],
-            len(content),
-            len(diagnosis),
-        )
-        return content[: self._config.max_discord_chars]
+                    logger.info("Publishing workflow event run_id=%s repository=%s", run_id, repository)
+                    await self._event_bus.publish(
+                        WorkflowRunDetected(
+                            repository=repository,
+                            target=target,
+                            run=run,
+                        )
+                    )
 
     def render_status(self) -> str:
         """Render a short operator-facing status snapshot for Discord mentions."""
@@ -191,12 +131,29 @@ class TriageService:
             f"- poll interval seconds: {self._config.poll_interval_seconds}"
         )
 
-    def answer_operator_prompt(self, prompt: str) -> str:
+    def answer_operator_prompt(self, conversation_key: str, prompt: str) -> str:
         """Answer a Discord mention using a compact runtime summary plus LLM fallback."""
 
-        return self._diagnoser.answer_operator_prompt(prompt, self.render_status())
+        return self._diagnoser.answer_operator_prompt(conversation_key, prompt, self.render_status())
 
     def set_notifier(self, notifier: DiscordNotifier) -> None:
         """Attach the Discord notifier after service construction when needed."""
 
         self._notifier = notifier
+        self._notification_handler.set_notifier(notifier)
+
+    def _attach_default_handlers(self) -> None:
+        """Bind the default workflow triage handler to the in-process event bus."""
+
+        self._event_bus.subscribe(
+            WorkflowRunDetected,
+            self._workflow_handler.handle_workflow_run_detected,
+        )
+        self._event_bus.subscribe(
+            IncidentAssembled,
+            self._diagnosis_handler.handle_incident_assembled,
+        )
+        self._event_bus.subscribe(
+            IncidentDiagnosed,
+            self._notification_handler.handle_incident_diagnosed,
+        )
