@@ -50,13 +50,13 @@ runs:
         fi
 
     - name: Terraform Apply
-      if: inputs.action == 'apply'
+      if: ${{ inputs.action == 'apply' }}
       shell: bash
       working-directory: ${{ inputs.working_directory }}
       run: terraform apply -auto-approve -input=false
 
     - name: Terraform Destroy
-      if: inputs.action == 'destroy'
+      if: ${{ inputs.action == 'destroy' }}
       shell: bash
       working-directory: ${{ inputs.working_directory }}
       run: terraform destroy -auto-approve -input=false
