@@ -61,5 +61,5 @@ variable "discord_webhook_url_parameter_name" {
 variable "openrouter_api_key_parameter_name" {
   description = "Global SSM parameter name containing the source OpenRouter API key used to seed the control-plane triage agent secret."
   type        = string
-  default     = "/openrouter/OPEN_ROUTER_API_KEY"
+  default     = "/codex/OPEN_ROUTER_API_KEY"
 }
