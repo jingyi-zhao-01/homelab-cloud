@@ -22,11 +22,13 @@ data "aws_ssm_parameter" "openrouter_api_key" {
 }
 
 locals {
-  ssm_prefix                = "/${var.ssm_path_prefix}"
-  effective_openrouter_key = var.openrouter_api_key != "" ? var.openrouter_api_key : data.aws_ssm_parameter.openrouter_api_key[0].value
+  ssm_prefix               = "/${var.ssm_path_prefix}"
+  effective_openrouter_key = var.openrouter_api_key != "" ? var.openrouter_api_key : try(data.aws_ssm_parameter.openrouter_api_key[0].value, "")
 }
 
 resource "aws_ssm_parameter" "openhands_llm_api_key" {
+  count = local.effective_openrouter_key != "" ? 1 : 0
+
   name        = "${local.ssm_prefix}/OPENHANDS_LLM_API_KEY"
   description = "OpenRouter API key consumed by the control-plane triage agent via the OpenHands SDK"
   type        = "SecureString"
