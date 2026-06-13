@@ -1,0 +1,28 @@
+{{- if and .Values.workloads.server.enabled .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "leetcode-intelligence.fullname" . }}-ingress
+  namespace: {{ include "leetcode-intelligence.namespace" . }}
+  labels:
+    {{- include "leetcode-intelligence.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer | quote }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: {{ .Values.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "leetcode-intelligence.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+{{- end }}

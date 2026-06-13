@@ -98,6 +98,18 @@ service:
   type: ClusterIP
   port: 8030
 
+## Public ingress for the server workload
+ingress:
+  enabled: true
+  className: traefik
+  host: leetcode-intelligence-service.jzhao62.com
+  path: /
+  pathType: Prefix
+  tls:
+    enabled: true
+    secretName: leetcode-intelligence-tls
+    clusterIssuer: letsencrypt-production
+
 ## Server autoscaling (used when enabled)
 autoscaling:
   enabled: false

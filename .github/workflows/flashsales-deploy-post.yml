@@ -22,7 +22,7 @@ on:
         description: Run the app-owned perf cadence.
         required: false
         type: boolean
-        default: true
+        default: false
   workflow_call:
     inputs:
       flashsale_source_ref:
@@ -40,7 +40,7 @@ on:
       run_perf:
         required: false
         type: boolean
-        default: true
+        default: false
 
 concurrency:
   group: flashsales-deploy-post-${{ github.ref }}

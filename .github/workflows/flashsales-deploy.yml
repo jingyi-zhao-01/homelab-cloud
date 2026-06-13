@@ -2,6 +2,12 @@ name: Flashsales Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      run_perf:
+        description: Run the app-owned perf cadence in post deploy checks.
+        required: false
+        type: boolean
+        default: false
   repository_dispatch:
     types:
       - flashsale-release-ready
@@ -201,6 +207,7 @@ jobs:
       flashsale_source_ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_ref || github.ref_name }}
       flashsale_source_sha: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_sha || github.sha }}
       flashsale_image_tag: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_image_tag || 'latest' }}
+      run_perf: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_perf || false }}
     secrets: inherit
 
   notify-discord:
