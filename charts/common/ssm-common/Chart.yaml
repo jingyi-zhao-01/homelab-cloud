@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ssm-common
+description: Shared SSM parameter definitions for platform charts
+type: library
+version: 0.1.0
+appVersion: "0.1.0"

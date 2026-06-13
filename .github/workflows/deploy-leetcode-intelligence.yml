@@ -88,6 +88,7 @@ jobs:
       - name: Deploy intelligence service via Helm
         run: |
           helm upgrade --install leetcode-intelligence \
+            --dependency-update \
             charts/leetcode-intelligence/ \
             -n "$NAMESPACE" \
             --create-namespace \

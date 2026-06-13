@@ -59,6 +59,7 @@ jobs:
       - name: Deploy Strategy Tester via Helm
         run: |
           helm upgrade --install strategy-tester \
+            --dependency-update \
             charts/strategy-tester/ \
             -n "$NAMESPACE" \
             --create-namespace \

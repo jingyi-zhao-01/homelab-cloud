@@ -24,18 +24,32 @@ RECOMMEND_DISCORD_CHANNEL_ID:
   path: /leetcode-intelligence/prod/RECOMMEND_DISCORD_CHANNEL_ID
   optional: false
 
-OTEL_EXPORTER_OTLP_ENDPOINT:
-  path: /grafana/OTEL_EXPORTER_OTLP_ENDPOINT
-  optional: false
-
-OTEL_EXPORTER_OTLP_HEADERS:
-  path: /grafana/OTEL_EXPORTER_OTLP_HEADERS
-  optional: false
-
 BFF_TOKEN:
   path: /leetcode-intelligence/BFF_TOKEN
   optional: false
+  vercelClient: true
 
 BFF_SERVICE_URL:
   path: /leetcode-intelligence/BFF_SERVICE_URL
   optional: false
+  vercelClient: true
+
+NON_ADMIN_RATE_LIMIT_MAX_REQUESTS:
+  path: /leetcode-intelligence/NON_ADMIN_RATE_LIMIT_MAX_REQUESTS
+  optional: false
+  vercelClient: true
+
+NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS:
+  path: /leetcode-intelligence/NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS
+  optional: false
+  vercelClient: true
+
+UPSTASH_REDIS_REST_TOKEN:
+  path: /leetcode-intelligence/UPSTASH_REDIS_REST_TOKEN
+  optional: false
+  vercelClient: true
+
+UPSTASH_REDIS_REST_URL:
+  path: /leetcode-intelligence/UPSTASH_REDIS_REST_URL
+  optional: false
+  vercelClient: true

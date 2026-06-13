@@ -17,14 +17,6 @@ DATABASE_URL:
   path: /flashsales/prod/DATABASE_URL
   optional: false
 
-OTEL_EXPORTER_OTLP_ENDPOINT:
-  path: /grafana/OTEL_EXPORTER_OTLP_ENDPOINT
-  optional: false
-
-OTEL_EXPORTER_OTLP_HEADERS:
-  path: /grafana/OTEL_EXPORTER_OTLP_HEADERS
-  optional: false
-
 REDIS_URL:
   path: /flashsales/prod/REDIS_URL
   optional: false

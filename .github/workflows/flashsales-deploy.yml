@@ -154,6 +154,7 @@ jobs:
           set -euo pipefail
           IMAGE_TAG="${FLASHSALE_IMAGE_TAG}"
           helm upgrade --install "$RELEASE" "$CHART_PATH" \
+            --dependency-update \
             -n "$NAMESPACE" \
             --create-namespace \
             -f "$CHART_PATH/values.yaml" \

@@ -79,6 +79,7 @@ jobs:
       - name: Deploy triage agent via Helm
         run: |
           helm upgrade --install control-plane-triage-agent \
+            --dependency-update \
             charts/control-plane-triage-agent/ \
             -n "$NAMESPACE" \
             --create-namespace \

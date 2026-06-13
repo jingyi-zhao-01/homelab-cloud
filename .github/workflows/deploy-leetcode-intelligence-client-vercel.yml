@@ -26,12 +26,6 @@ env:
   VERCEL_ORG_ID_SSM_NAME: ${{ vars.VERCEL_ORG_ID_SSM_NAME || '/vercel/VERCEL_ORG_ID' }}
   VERCEL_TOKEN_SSM_NAME: ${{ vars.VERCEL_TOKEN_SSM_NAME || '/vercel/VERCEL_TOKEN' }}
   VERCEL_PROJECT_ID_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_VERCEL_PROJECT_ID_SSM_NAME || '/leetcode-intelligence/VERCEL_PROJECT_ID' }}
-  BFF_TOKEN_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_BFF_TOKEN_SSM_NAME || '/leetcode-intelligence/BFF_TOKEN' }}
-  BFF_SERVICE_URL_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_BFF_SERVICE_URL_SSM_NAME || '' }}
-  UPSTASH_REDIS_REST_URL_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_REDIS_REST_URL_SSM_NAME || '/leetcode-intelligence/UPSTASH_REDIS_REST_URL' }}
-  UPSTASH_REDIS_REST_TOKEN_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_REDIS_REST_TOKEN_SSM_NAME || '/leetcode-intelligence/UPSTASH_REDIS_REST_TOKEN' }}
-  NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME || '/leetcode-intelligence/NON_ADMIN_RATE_LIMIT_MAX_REQUESTS' }}
-  NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME || '/leetcode-intelligence/NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS' }}
 
 jobs:
   deploy:
@@ -44,27 +38,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Resolve SSM defaults from chart keys
+      - name: Resolve Vercel client env SSM mappings from chart config
         run: |
           set -euo pipefail
 
-          resolve_ssm_path() {
-            local key=$1
-            awk -v key="$key" '
-              $1 == key ":" { getline; if ($0 ~ /path:/) { sub(/^[ \t]*path:[ \t]*/, "", $0); print $0; exit } }
-            ' charts/leetcode-intelligence/ssm-parameter-keys.yaml | tr -d '"'
-          }
-
-          if [ -z "${BFF_SERVICE_URL_SSM_NAME:-}" ]; then
-            BFF_SERVICE_URL_SSM_NAME="$(resolve_ssm_path BFF_SERVICE_URL)"
-          fi
-
-          if [ -z "${BFF_SERVICE_URL_SSM_NAME:-}" ]; then
-            echo "Failed to resolve BFF_SERVICE_URL path from charts/leetcode-intelligence/ssm-parameter-keys.yaml" >&2
-            exit 1
-          fi
-
-          echo "BFF_SERVICE_URL_SSM_NAME=$BFF_SERVICE_URL_SSM_NAME" >> "$GITHUB_ENV"
+          bash .github/scripts/resolve-ssm-key-map.sh \
+            --ssm-keys-file charts/leetcode-intelligence/ssm-parameter-keys.yaml \
+            --namespace-prefix LEETCODE_INTELLIGENCE \
+            --marker-key vercelClient \
+            --mappings-var LEETCODE_INTELLIGENCE_CLIENT_VERCEL_SSM_MAPPINGS \
+            --env-vars-var LEETCODE_INTELLIGENCE_CLIENT_VERCEL_ENV_VARS \
+            --github-env "$GITHUB_ENV"
 
       - name: Validate AWS configuration
         run: |
@@ -100,33 +84,8 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${BFF_TOKEN_SSM_NAME:-}" ]; then
-            echo "BFF_TOKEN_SSM_NAME is missing"
-            exit 1
-          fi
-
-          if [ -z "${BFF_SERVICE_URL_SSM_NAME:-}" ]; then
-            echo "BFF_SERVICE_URL_SSM_NAME is missing"
-            exit 1
-          fi
-
-          if [ -z "${UPSTASH_REDIS_REST_URL_SSM_NAME:-}" ]; then
-            echo "UPSTASH_REDIS_REST_URL_SSM_NAME is missing"
-            exit 1
-          fi
-
-          if [ -z "${UPSTASH_REDIS_REST_TOKEN_SSM_NAME:-}" ]; then
-            echo "UPSTASH_REDIS_REST_TOKEN_SSM_NAME is missing"
-            exit 1
-          fi
-
-          if [ -z "${NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME:-}" ]; then
-            echo "NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME is missing"
-            exit 1
-          fi
-
-          if [ -z "${NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME:-}" ]; then
-            echo "NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME is missing"
+          if [ -z "${LEETCODE_INTELLIGENCE_CLIENT_VERCEL_SSM_MAPPINGS:-}" ]; then
+            echo "LEETCODE_INTELLIGENCE_CLIENT_VERCEL_SSM_MAPPINGS is missing"
             exit 1
           fi
 
@@ -147,12 +106,11 @@ jobs:
             VERCEL_ORG_ID="$VERCEL_ORG_ID_SSM_NAME" \
             VERCEL_TOKEN="$VERCEL_TOKEN_SSM_NAME" \
             VERCEL_PROJECT_ID="$VERCEL_PROJECT_ID_SSM_NAME" \
-            BFF_TOKEN="$BFF_TOKEN_SSM_NAME" \
-            BFF_SERVICE_URL="$BFF_SERVICE_URL_SSM_NAME" \
-            UPSTASH_REDIS_REST_URL="$UPSTASH_REDIS_REST_URL_SSM_NAME" \
-            UPSTASH_REDIS_REST_TOKEN="$UPSTASH_REDIS_REST_TOKEN_SSM_NAME" \
-            NON_ADMIN_RATE_LIMIT_MAX_REQUESTS="$NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME" \
-            NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS="$NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS_SSM_NAME"
+            $(while IFS='=' read -r name path; do
+                if [ -n "$name" ] && [ -n "$path" ]; then
+                  printf '%s=%s ' "$name" "$path"
+                fi
+              done <<< "${LEETCODE_INTELLIGENCE_CLIENT_VERCEL_SSM_MAPPINGS}")
 
       - name: Sync production env to Vercel
         working-directory: application/leetcode-intelligence/client
@@ -187,12 +145,16 @@ jobs:
             exit 1
           }
 
-          upsert_env BFF_SERVICE_URL "$BFF_SERVICE_URL"
-          upsert_env BFF_TOKEN "$BFF_TOKEN"
-          upsert_env UPSTASH_REDIS_REST_URL "$UPSTASH_REDIS_REST_URL"
-          upsert_env UPSTASH_REDIS_REST_TOKEN "$UPSTASH_REDIS_REST_TOKEN"
-          upsert_env NON_ADMIN_RATE_LIMIT_MAX_REQUESTS "$NON_ADMIN_RATE_LIMIT_MAX_REQUESTS"
-          upsert_env NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS "$NON_ADMIN_RATE_LIMIT_WINDOW_SECONDS"
+          while IFS= read -r env_name; do
+            if [ -z "$env_name" ]; then
+              continue
+            fi
+            if [ -z "${!env_name:-}" ]; then
+              echo "Resolved value missing for $env_name" >&2
+              exit 1
+            fi
+            upsert_env "$env_name" "${!env_name}"
+          done <<< "${LEETCODE_INTELLIGENCE_CLIENT_VERCEL_ENV_VARS}"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

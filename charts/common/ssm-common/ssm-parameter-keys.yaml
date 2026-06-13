@@ -1,0 +1,9 @@
+# Shared SSM parameter definitions used by multiple charts.
+
+OTEL_EXPORTER_OTLP_ENDPOINT:
+  path: /grafana/OTEL_EXPORTER_OTLP_ENDPOINT
+  optional: false
+
+OTEL_EXPORTER_OTLP_HEADERS:
+  path: /grafana/OTEL_EXPORTER_OTLP_HEADERS
+  optional: false

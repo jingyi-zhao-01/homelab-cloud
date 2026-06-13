@@ -4,3 +4,8 @@ description: LeetCode intelligence service chart for k3s
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+
+dependencies:
+  - name: ssm-common
+    version: 0.1.0
+    repository: file://../common/ssm-common

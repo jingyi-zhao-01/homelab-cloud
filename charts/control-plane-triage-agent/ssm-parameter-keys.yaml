@@ -17,11 +17,3 @@ DISCORD_CHANNEL_ID:
 OPENHANDS_LLM_API_KEY:
   path: /openrouter/OPEN_ROUTER_API_KEY
   optional: true
-
-OTEL_EXPORTER_OTLP_ENDPOINT:
-  path: /grafana/OTEL_EXPORTER_OTLP_ENDPOINT
-  optional: false
-
-OTEL_EXPORTER_OTLP_HEADERS:
-  path: /grafana/OTEL_EXPORTER_OTLP_HEADERS
-  optional: false
