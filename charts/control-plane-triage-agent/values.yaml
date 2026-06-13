@@ -11,7 +11,8 @@ image:
 deploymentMetadata:
   gitSha: ""
 
-replicaCount: 1
+# Keep the agent disabled by default until we intentionally re-enable it.
+replicaCount: 0
 
 resources:
   requests:
