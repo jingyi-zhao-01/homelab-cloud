@@ -20,6 +20,7 @@ spec:
       parallelism: {{ .Values.optionIngestor.cronJob.parallelism }}
       completions: {{ .Values.optionIngestor.cronJob.completions }}
       backoffLimit: {{ .Values.optionIngestor.cronJob.backoffLimit }}
+      ttlSecondsAfterFinished: {{ .Values.optionIngestor.cronJob.ttlSecondsAfterFinished }}
       template:
         metadata:
           labels:

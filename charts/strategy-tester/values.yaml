@@ -67,6 +67,7 @@ optionIngestor:
     completions: 1
     restartPolicy: OnFailure
     backoffLimit: 1
+    ttlSecondsAfterFinished: 3600
 
 snapshotIngestor:
   replicaCount: 1
@@ -111,3 +112,4 @@ snapshotIngestor:
     completions: 1
     restartPolicy: OnFailure
     backoffLimit: 1
+    ttlSecondsAfterFinished: 3600
