@@ -631,6 +631,9 @@ dependencies = [
     { name = "kubernetes" },
     { name = "openhands-sdk" },
     { name = "openhands-tools" },
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-sdk" },
     { name = "requests" },
 ]
 
@@ -641,6 +644,9 @@ requires-dist = [
     { name = "kubernetes", specifier = ">=30.1.0" },
     { name = "openhands-sdk", specifier = ">=1.28.1" },
     { name = "openhands-tools", specifier = ">=1.28.1" },
+    { name = "opentelemetry-api", specifier = ">=1.35.0" },
+    { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.35.0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.35.0" },
     { name = "requests", specifier = ">=2.32.3" },
 ]
 
