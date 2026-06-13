@@ -31,3 +31,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT:
 OTEL_EXPORTER_OTLP_HEADERS:
   path: /grafana/OTEL_EXPORTER_OTLP_HEADERS
   optional: false
+
+BFF_TOKEN:
+  path: /leetcode-intelligence/BFF_TOKEN
+  optional: false
