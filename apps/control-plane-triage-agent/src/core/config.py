@@ -59,6 +59,9 @@ class Config:
     max_log_bytes: int
     max_discord_chars: int
     state_dir: Path
+    triage_max_attempts: int
+    triage_retry_initial_backoff_seconds: int
+    triage_retry_max_backoff_seconds: int
     openhands_enabled: bool
     openhands_model: str
     openhands_api_key: str | None
@@ -107,7 +110,7 @@ def _validate_openhands_model(model: str) -> str:
         raise ValueError(
             "OpenHands model configuration is invalid. "
             "The configured model needs an explicit provider prefix, for example "
-            "`openrouter/free`. "
+            "`openhands/claude-sonnet-4-5-20250929`. "
             f"Configured model: `{model}`. Supported provider prefixes: {supported}"
         )
     return model
@@ -158,6 +161,13 @@ def load_config() -> Config:
         max_log_bytes=int(os.environ.get("MAX_LOG_BYTES", str(512 * 1024))),
         max_discord_chars=int(os.environ.get("MAX_DISCORD_CHARS", "1800")),
         state_dir=state_dir,
+        triage_max_attempts=int(os.environ.get("TRIAGE_MAX_ATTEMPTS", "3")),
+        triage_retry_initial_backoff_seconds=int(
+            os.environ.get("TRIAGE_RETRY_INITIAL_BACKOFF_SECONDS", "300")
+        ),
+        triage_retry_max_backoff_seconds=int(
+            os.environ.get("TRIAGE_RETRY_MAX_BACKOFF_SECONDS", "3600")
+        ),
         openhands_enabled=openhands_enabled,
         openhands_model=openhands_model,
         openhands_api_key=openhands_api_key,

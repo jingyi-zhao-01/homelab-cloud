@@ -23,9 +23,25 @@ Provision these into AWS SSM under `/control-plane-triage-agent/prod`:
 Important defaults:
 
 - `OPENHANDS_ENABLED=true`
-- `OPENHANDS_MODEL=openrouter/free`
+- `OPENHANDS_MODEL=openhands/claude-sonnet-4-5-20250929`
+- `TRIAGE_MAX_ATTEMPTS=3`
+- `TRIAGE_RETRY_INITIAL_BACKOFF_SECONDS=300`
+- `TRIAGE_RETRY_MAX_BACKOFF_SECONDS=3600`
 
-The model name must include an explicit provider prefix such as `openrouter/...`.
+The model name must include an explicit provider prefix such as `openhands/...`
+or `openrouter/...`.
+
+For this agent, provider qualification alone is not enough. The resolved model
+also needs to support the tool-use path required by OpenHands. Avoid using
+generic routes like `openrouter/free` here because they may resolve to
+endpoints that cannot satisfy the agent's diagnosis flow.
+
+Retry behavior is bounded:
+
+- failed triage attempts are retried with backoff
+- the same run is not retried forever
+- after the attempt limit is hit, the run is recorded as `seen_with_failure`
+  and dropped from future poll cycles
 
 `WATCH_TARGETS_JSON` is a JSON array.
 

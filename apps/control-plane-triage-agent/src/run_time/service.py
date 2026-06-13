@@ -64,13 +64,17 @@ class TriageService:
         self._attach_default_handlers()
         logger.info(
             "Initialized triage service poll_interval_seconds=%s lookback_minutes=%s max_runs_per_repo=%s "
-            "watch_targets=%s openhands_enabled=%s state_dir=%s",
+            "watch_targets=%s openhands_enabled=%s state_dir=%s triage_max_attempts=%s "
+            "triage_retry_initial_backoff_seconds=%s triage_retry_max_backoff_seconds=%s",
             config.poll_interval_seconds,
             config.lookback_minutes,
             config.max_runs_per_repo,
             len(config.watch_targets),
             config.openhands_enabled and bool(config.openhands_api_key),
             config.state_dir,
+            config.triage_max_attempts,
+            config.triage_retry_initial_backoff_seconds,
+            config.triage_retry_max_backoff_seconds,
         )
 
     def run_forever(self) -> None:
@@ -124,25 +128,77 @@ class TriageService:
                         )
                         for run in matched_runs:
                             run_id = int(run["id"])
-                            if self._state.has_seen(run_id):
-                                logger.info("Skipping previously triaged run_id=%s repository=%s", run_id, repository)
+                            decision = self._state.get_retry_decision(run_id)
+                            if not decision.should_process:
+                                if decision.reason == "backoff":
+                                    logger.info(
+                                        "Skipping run_id=%s repository=%s reason=%s attempt_count=%s next_retry_at=%s",
+                                        run_id,
+                                        repository,
+                                        decision.reason,
+                                        decision.attempt_count,
+                                        decision.next_retry_at,
+                                    )
+                                else:
+                                    logger.info(
+                                        "Skipping run_id=%s repository=%s reason=%s status=%s attempt_count=%s",
+                                        run_id,
+                                        repository,
+                                        decision.reason,
+                                        decision.status,
+                                        decision.attempt_count,
+                                    )
                                 continue
-                            logger.info("Publishing workflow event run_id=%s repository=%s", run_id, repository)
-                            await self._event_bus.publish(
-                                WorkflowRunDetected(
-                                    repository=repository,
-                                    target=target,
-                                    run=run,
-                                )
+                            logger.info(
+                                "Publishing workflow event run_id=%s repository=%s reason=%s attempt_count=%s",
+                                run_id,
+                                repository,
+                                decision.reason,
+                                decision.attempt_count,
                             )
+                            try:
+                                await self._event_bus.publish(
+                                    WorkflowRunDetected(
+                                        repository=repository,
+                                        target=target,
+                                        run=run,
+                                    )
+                                )
+                            except Exception as exc:  # noqa: BLE001
+                                outcome = self._state.record_failed_attempt(
+                                    run_id,
+                                    error_message=f"{type(exc).__name__}: {exc}",
+                                    max_attempts=self._config.triage_max_attempts,
+                                    initial_backoff_seconds=self._config.triage_retry_initial_backoff_seconds,
+                                    max_backoff_seconds=self._config.triage_retry_max_backoff_seconds,
+                                )
+                                if outcome.terminal:
+                                    logger.exception(
+                                        "Triage failed and terminalized run_id=%s repository=%s attempt_count=%s status=%s",
+                                        run_id,
+                                        repository,
+                                        outcome.attempt_count,
+                                        outcome.status,
+                                    )
+                                else:
+                                    logger.exception(
+                                        "Triage failed run_id=%s repository=%s attempt_count=%s next_retry_at=%s",
+                                        run_id,
+                                        repository,
+                                        outcome.attempt_count,
+                                        outcome.next_retry_at,
+                                    )
 
     def render_status(self) -> str:
         """Render a short operator-facing status snapshot for Discord mentions."""
 
+        counts = self._state.get_status_counts()
         return (
             "control-plane-triage-agent is online.\n"
             f"- watch targets: {len(self._config.watch_targets)}\n"
-            f"- seen failed runs: {len(self._state._data.get('seen_run_ids', []))}\n"
+            f"- seen failed runs: {counts['seen']}\n"
+            f"- retry scheduled runs: {counts['retry_scheduled']}\n"
+            f"- terminal failure-seen runs: {counts['seen_with_failure']}\n"
             f"- poll interval seconds: {self._config.poll_interval_seconds}"
         )
 
