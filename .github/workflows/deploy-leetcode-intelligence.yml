@@ -5,6 +5,7 @@ on:
     branches:
       - main
     paths:
+      - 'application/leetcode-intelligence/**'
       - 'charts/leetcode-intelligence/**'
       - '.github/workflows/deploy-leetcode-intelligence.yml'
   workflow_dispatch:
