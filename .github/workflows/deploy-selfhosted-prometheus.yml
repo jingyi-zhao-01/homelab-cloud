@@ -3,15 +3,14 @@ name: Deploy Self-Hosted Prometheus
 on:
   workflow_dispatch:
     inputs:
-      action:
-        description: "Helm action to run for the self-hosted Prometheus release"
+      desired_state:
+        description: "Whether to keep self-hosted Prometheus enabled or disabled"
         required: true
-        default: install
+        default: enable
         type: choice
         options:
-          - install
-          - upgrade
-          - uninstall
+          - enable
+          - disable
       namespace:
         description: "Namespace that owns the Prometheus release"
         required: true
@@ -42,7 +41,7 @@ env:
 
 jobs:
   deploy:
-    name: ${{ github.event.inputs.action == 'uninstall' && 'Uninstall' || 'Deploy' }} self-hosted Prometheus
+    name: ${{ github.event.inputs.desired_state == 'disable' && 'Disable' || 'Enable' }} self-hosted Prometheus
     runs-on: ubuntu-latest
     env:
       NAMESPACE: ${{ github.event.inputs.namespace }}
@@ -77,7 +76,7 @@ jobs:
           fi
 
       - name: Install or upgrade self-hosted Prometheus
-        if: ${{ github.event.inputs.action != 'uninstall' }}
+        if: ${{ github.event.inputs.desired_state == 'enable' }}
         run: |
           set -euo pipefail
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
@@ -88,13 +87,13 @@ jobs:
             -f "$VALUES_FILE"
 
       - name: Uninstall self-hosted Prometheus
-        if: ${{ github.event.inputs.action == 'uninstall' }}
+        if: ${{ github.event.inputs.desired_state == 'disable' }}
         run: |
           set -euo pipefail
           helm uninstall "$RELEASE_NAME" -n "$NAMESPACE" || true
 
       - name: Show Prometheus status
-        if: ${{ github.event.inputs.action != 'uninstall' }}
+        if: ${{ github.event.inputs.desired_state == 'enable' }}
         run: |
           kubectl get pods,svc,pvc,ingress -n "$NAMESPACE"
           kubectl get certificate -n "$NAMESPACE" || true
