@@ -26,6 +26,8 @@ env:
   VERCEL_ORG_ID_SSM_NAME: ${{ vars.VERCEL_ORG_ID_SSM_NAME || '/vercel/VERCEL_ORG_ID' }}
   VERCEL_TOKEN_SSM_NAME: ${{ vars.VERCEL_TOKEN_SSM_NAME || '/vercel/VERCEL_TOKEN' }}
   VERCEL_PROJECT_ID_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_VERCEL_PROJECT_ID_SSM_NAME || '/leetcode-intelligence/VERCEL_PROJECT_ID' }}
+  BFF_TOKEN_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_BFF_TOKEN_SSM_NAME || '/leetcode-intelligence/BFF_TOKEN' }}
+  BFF_SERVICE_URL: ${{ vars.LEETCODE_INTELLIGENCE_BFF_SERVICE_URL || '' }}
   UPSTASH_REDIS_REST_URL_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_REDIS_REST_URL_SSM_NAME || '/leetcode-intelligence/UPSTASH_REDIS_REST_URL' }}
   UPSTASH_REDIS_REST_TOKEN_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_REDIS_REST_TOKEN_SSM_NAME || '/leetcode-intelligence/UPSTASH_REDIS_REST_TOKEN' }}
   NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME || '/leetcode-intelligence/NON_ADMIN_RATE_LIMIT_MAX_REQUESTS' }}
@@ -76,6 +78,16 @@ jobs:
             exit 1
           fi
 
+          if [ -z "${BFF_TOKEN_SSM_NAME:-}" ]; then
+            echo "BFF_TOKEN_SSM_NAME is missing"
+            exit 1
+          fi
+
+          if [ -z "${BFF_SERVICE_URL:-}" ]; then
+            echo "LEETCODE_INTELLIGENCE_BFF_SERVICE_URL repository variable is missing"
+            exit 1
+          fi
+
           if [ -z "${UPSTASH_REDIS_REST_URL_SSM_NAME:-}" ]; then
             echo "UPSTASH_REDIS_REST_URL_SSM_NAME is missing"
             exit 1
@@ -113,6 +125,7 @@ jobs:
             VERCEL_ORG_ID="$VERCEL_ORG_ID_SSM_NAME" \
             VERCEL_TOKEN="$VERCEL_TOKEN_SSM_NAME" \
             VERCEL_PROJECT_ID="$VERCEL_PROJECT_ID_SSM_NAME" \
+            BFF_TOKEN="$BFF_TOKEN_SSM_NAME" \
             UPSTASH_REDIS_REST_URL="$UPSTASH_REDIS_REST_URL_SSM_NAME" \
             UPSTASH_REDIS_REST_TOKEN="$UPSTASH_REDIS_REST_TOKEN_SSM_NAME" \
             NON_ADMIN_RATE_LIMIT_MAX_REQUESTS="$NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME" \
@@ -151,6 +164,8 @@ jobs:
             exit 1
           }
 
+          upsert_env BFF_SERVICE_URL "$BFF_SERVICE_URL"
+          upsert_env BFF_TOKEN "$BFF_TOKEN"
           upsert_env UPSTASH_REDIS_REST_URL "$UPSTASH_REDIS_REST_URL"
           upsert_env UPSTASH_REDIS_REST_TOKEN "$UPSTASH_REDIS_REST_TOKEN"
           upsert_env NON_ADMIN_RATE_LIMIT_MAX_REQUESTS "$NON_ADMIN_RATE_LIMIT_MAX_REQUESTS"
