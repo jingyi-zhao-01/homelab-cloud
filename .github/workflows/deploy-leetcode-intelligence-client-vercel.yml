@@ -27,7 +27,7 @@ env:
   VERCEL_TOKEN_SSM_NAME: ${{ vars.VERCEL_TOKEN_SSM_NAME || '/vercel/VERCEL_TOKEN' }}
   VERCEL_PROJECT_ID_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_VERCEL_PROJECT_ID_SSM_NAME || '/leetcode-intelligence/VERCEL_PROJECT_ID' }}
   BFF_TOKEN_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_BFF_TOKEN_SSM_NAME || '/leetcode-intelligence/BFF_TOKEN' }}
-  BFF_SERVICE_URL: ${{ vars.LEETCODE_INTELLIGENCE_BFF_SERVICE_URL || '' }}
+  BFF_SERVICE_URL_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_BFF_SERVICE_URL_SSM_NAME || '' }}
   UPSTASH_REDIS_REST_URL_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_REDIS_REST_URL_SSM_NAME || '/leetcode-intelligence/UPSTASH_REDIS_REST_URL' }}
   UPSTASH_REDIS_REST_TOKEN_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_UPSTASH_REDIS_REST_TOKEN_SSM_NAME || '/leetcode-intelligence/UPSTASH_REDIS_REST_TOKEN' }}
   NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME: ${{ vars.LEETCODE_INTELLIGENCE_NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME || '/leetcode-intelligence/NON_ADMIN_RATE_LIMIT_MAX_REQUESTS' }}
@@ -43,6 +43,28 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Resolve SSM defaults from chart keys
+        run: |
+          set -euo pipefail
+
+          resolve_ssm_path() {
+            local key=$1
+            awk -v key="$key" '
+              $1 == key ":" { getline; if ($0 ~ /path:/) { sub(/^[ \t]*path:[ \t]*/, "", $0); print $0; exit } }
+            ' charts/leetcode-intelligence/ssm-parameter-keys.yaml | tr -d '"'
+          }
+
+          if [ -z "${BFF_SERVICE_URL_SSM_NAME:-}" ]; then
+            BFF_SERVICE_URL_SSM_NAME="$(resolve_ssm_path BFF_SERVICE_URL)"
+          fi
+
+          if [ -z "${BFF_SERVICE_URL_SSM_NAME:-}" ]; then
+            echo "Failed to resolve BFF_SERVICE_URL path from charts/leetcode-intelligence/ssm-parameter-keys.yaml" >&2
+            exit 1
+          fi
+
+          echo "BFF_SERVICE_URL_SSM_NAME=$BFF_SERVICE_URL_SSM_NAME" >> "$GITHUB_ENV"
 
       - name: Validate AWS configuration
         run: |
@@ -83,8 +105,8 @@ jobs:
             exit 1
           fi
 
-          if [ -z "${BFF_SERVICE_URL:-}" ]; then
-            echo "LEETCODE_INTELLIGENCE_BFF_SERVICE_URL repository variable is missing"
+          if [ -z "${BFF_SERVICE_URL_SSM_NAME:-}" ]; then
+            echo "BFF_SERVICE_URL_SSM_NAME is missing"
             exit 1
           fi
 
@@ -126,6 +148,7 @@ jobs:
             VERCEL_TOKEN="$VERCEL_TOKEN_SSM_NAME" \
             VERCEL_PROJECT_ID="$VERCEL_PROJECT_ID_SSM_NAME" \
             BFF_TOKEN="$BFF_TOKEN_SSM_NAME" \
+            BFF_SERVICE_URL="$BFF_SERVICE_URL_SSM_NAME" \
             UPSTASH_REDIS_REST_URL="$UPSTASH_REDIS_REST_URL_SSM_NAME" \
             UPSTASH_REDIS_REST_TOKEN="$UPSTASH_REDIS_REST_TOKEN_SSM_NAME" \
             NON_ADMIN_RATE_LIMIT_MAX_REQUESTS="$NON_ADMIN_RATE_LIMIT_MAX_REQUESTS_SSM_NAME" \

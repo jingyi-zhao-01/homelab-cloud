@@ -35,3 +35,7 @@ OTEL_EXPORTER_OTLP_HEADERS:
 BFF_TOKEN:
   path: /leetcode-intelligence/BFF_TOKEN
   optional: false
+
+BFF_SERVICE_URL:
+  path: /leetcode-intelligence/BFF_SERVICE_URL
+  optional: false
