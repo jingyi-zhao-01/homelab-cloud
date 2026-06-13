@@ -11,34 +11,10 @@ repos:
 
   - repo: local
     hooks:
-      - id: helm-lint-flashsales
-        name: Helm Lint - flashsales
-        entry: bash .github/scripts/helm-lint-with-deps.sh charts/flashsales
+      - id: helm-lint-charts
+        name: Helm Lint - charts
+        entry: bash .github/scripts/helm-lint-charts.sh
         language: system
-        files: charts/flashsales/
-        stages: [pre-commit]
-        pass_filenames: false
-
-      - id: helm-lint-strategy-tester
-        name: Helm Lint - strategy-tester
-        entry: bash .github/scripts/helm-lint-with-deps.sh charts/strategy-tester
-        language: system
-        files: charts/strategy-tester/
-        stages: [pre-commit]
-        pass_filenames: false
-
-      - id: helm-lint-control-plane-triage-agent
-        name: Helm Lint - control-plane-triage-agent
-        entry: bash .github/scripts/helm-lint-with-deps.sh charts/control-plane-triage-agent
-        language: system
-        files: charts/control-plane-triage-agent/
-        stages: [pre-commit]
-        pass_filenames: false
-
-      - id: helm-lint-leetcode-intelligence
-        name: Helm Lint - leetcode-intelligence
-        entry: bash .github/scripts/helm-lint-with-deps.sh charts/leetcode-intelligence
-        language: system
-        files: charts/leetcode-intelligence/
+        files: ^charts/
         stages: [pre-commit]
         pass_filenames: false
