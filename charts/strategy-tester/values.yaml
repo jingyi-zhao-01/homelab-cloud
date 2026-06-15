@@ -31,6 +31,10 @@ externalSecrets:
 
 optionIngestor:
   replicaCount: 1
+  nodeSelector:
+    node-purpose: worker
+  tolerations: []
+  affinity: {}
   autoscaling:
     enabled: false
     minReplicas: 1
@@ -71,6 +75,10 @@ optionIngestor:
 
 snapshotIngestor:
   replicaCount: 1
+  nodeSelector:
+    node-purpose: worker
+  tolerations: []
+  affinity: {}
   autoscaling:
     enabled: false
     minReplicas: 1
