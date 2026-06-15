@@ -1,0 +1,6 @@
+dependencies:
+- name: ssm-common
+  repository: file://../common/ssm-common
+  version: 0.1.0
+digest: sha256:8cd7399987e50837f9afdc711af5d6759930469afe140fb9f9e7e67cbe9f51e9
+generated: "2026-06-14T21:30:38.203606408-07:00"
