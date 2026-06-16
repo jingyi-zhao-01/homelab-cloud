@@ -82,6 +82,8 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
 
       - name: Validate required secrets
         env:
@@ -184,16 +186,23 @@ jobs:
         run: |
           set -euo pipefail
 
+          has_state_address() {
+            local address="$1"
+            local state_list
+            state_list="$(terraform state list 2>/dev/null || true)"
+            printf '%s\n' "$state_list" | grep -Fxq -- "$address"
+          }
+
           move_state() {
             local from="$1"
             local to="$2"
 
-            if terraform state list | grep -Fxq "$to"; then
+            if has_state_address "$to"; then
               echo "${to} already exists in Terraform state"
               return 0
             fi
 
-            if terraform state list | grep -Fxq "$from"; then
+            if has_state_address "$from"; then
               echo "Moving Terraform state ${from} -> ${to}"
               terraform state mv "$from" "$to"
               return 0
