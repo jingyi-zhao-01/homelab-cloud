@@ -48,6 +48,61 @@ output "upstash_redis_read_only_rest_token_arn" {
   value       = try(aws_ssm_parameter.upstash_redis_read_only_rest_token[0].arn, null)
 }
 
+output "kafka_bootstrap_servers_arn" {
+  description = "ARN of the KAFKA_BOOTSTRAP_SERVERS SSM parameter"
+  value       = try(aws_ssm_parameter.kafka_bootstrap_servers[0].arn, null)
+}
+
+output "kafka_service_uri_arn" {
+  description = "ARN of the KAFKA_SERVICE_URI SSM parameter"
+  value       = try(aws_ssm_parameter.kafka_service_uri[0].arn, null)
+}
+
+output "kafka_security_protocol_arn" {
+  description = "ARN of the KAFKA_SECURITY_PROTOCOL SSM parameter"
+  value       = try(aws_ssm_parameter.kafka_security_protocol[0].arn, null)
+}
+
+output "kafka_username_arn" {
+  description = "ARN of the KAFKA_USERNAME SSM parameter"
+  value       = try(aws_ssm_parameter.kafka_username[0].arn, null)
+}
+
+output "kafka_password_arn" {
+  description = "ARN of the KAFKA_PASSWORD SSM parameter"
+  value       = try(aws_ssm_parameter.kafka_password[0].arn, null)
+}
+
+output "kafka_access_cert_arn" {
+  description = "ARN of the KAFKA_ACCESS_CERT SSM parameter"
+  value       = try(aws_ssm_parameter.kafka_access_cert[0].arn, null)
+}
+
+output "kafka_access_key_arn" {
+  description = "ARN of the KAFKA_ACCESS_KEY SSM parameter"
+  value       = try(aws_ssm_parameter.kafka_access_key[0].arn, null)
+}
+
+output "kafka_terminalization_topic_arn" {
+  description = "ARN of the KAFKA_TERMINALIZATION_TOPIC SSM parameter"
+  value       = try(aws_ssm_parameter.kafka_terminalization_topic[0].arn, null)
+}
+
+output "kafka_terminalization_retry_topic_arn" {
+  description = "ARN of the KAFKA_TERMINALIZATION_RETRY_TOPIC SSM parameter"
+  value       = try(aws_ssm_parameter.kafka_terminalization_retry_topic[0].arn, null)
+}
+
+output "kafka_terminalization_dlq_topic_arn" {
+  description = "ARN of the KAFKA_TERMINALIZATION_DLQ_TOPIC SSM parameter"
+  value       = try(aws_ssm_parameter.kafka_terminalization_dlq_topic[0].arn, null)
+}
+
+output "kafka_terminalization_consumer_group_arn" {
+  description = "ARN of the KAFKA_TERMINALIZATION_CONSUMER_GROUP SSM parameter"
+  value       = try(aws_ssm_parameter.kafka_terminalization_consumer_group[0].arn, null)
+}
+
 output "parameter_path_prefix" {
   description = "SSM path prefix under which all parameters are stored"
   value       = "/${var.ssm_path_prefix}"

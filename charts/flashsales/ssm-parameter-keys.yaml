@@ -40,3 +40,47 @@ UPSTASH_REDIS_REST_TOKEN:
 UPSTASH_REDIS_READ_ONLY_REST_TOKEN:
   path: /flashsales/prod/UPSTASH_REDIS_READ_ONLY_REST_TOKEN
   optional: false
+
+KAFKA_BOOTSTRAP_SERVERS:
+  path: /flashsales/prod/KAFKA_BOOTSTRAP_SERVERS
+  optional: false
+
+KAFKA_SERVICE_URI:
+  path: /flashsales/prod/KAFKA_SERVICE_URI
+  optional: false
+
+KAFKA_SECURITY_PROTOCOL:
+  path: /flashsales/prod/KAFKA_SECURITY_PROTOCOL
+  optional: false
+
+KAFKA_USERNAME:
+  path: /flashsales/prod/KAFKA_USERNAME
+  optional: false
+
+KAFKA_PASSWORD:
+  path: /flashsales/prod/KAFKA_PASSWORD
+  optional: false
+
+KAFKA_ACCESS_CERT:
+  path: /flashsales/prod/KAFKA_ACCESS_CERT
+  optional: false
+
+KAFKA_ACCESS_KEY:
+  path: /flashsales/prod/KAFKA_ACCESS_KEY
+  optional: false
+
+KAFKA_TERMINALIZATION_TOPIC:
+  path: /flashsales/prod/KAFKA_TERMINALIZATION_TOPIC
+  optional: false
+
+KAFKA_TERMINALIZATION_RETRY_TOPIC:
+  path: /flashsales/prod/KAFKA_TERMINALIZATION_RETRY_TOPIC
+  optional: false
+
+KAFKA_TERMINALIZATION_DLQ_TOPIC:
+  path: /flashsales/prod/KAFKA_TERMINALIZATION_DLQ_TOPIC
+  optional: false
+
+KAFKA_TERMINALIZATION_CONSUMER_GROUP:
+  path: /flashsales/prod/KAFKA_TERMINALIZATION_CONSUMER_GROUP
+  optional: false

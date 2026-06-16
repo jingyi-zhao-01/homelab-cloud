@@ -10,6 +10,7 @@ grafana_auth         = "YOUR_GRAFANA_API_TOKEN"
 neon_datasource_uid  = "flashsale-neon"
 loki_datasource_uid  = "loki"
 tempo_datasource_uid = "tempo"
+prometheus_datasource_uid = "prometheus"
 
 # Optional direct overrides. If left empty, Terraform reads provider bootstrap
 # credentials from SSM:
@@ -20,3 +21,22 @@ tempo_datasource_uid = "tempo"
 upstash_redis_region = "us-west-1"
 upstash_redis_tls    = true
 upstash_redis_budget = 20
+
+# Aiven Kafka provider bootstrap is read from SSM by default:
+#   /avien/api_token
+# aiven_api_token_parameter_name = "/avien/api_token"
+# aiven_api_token                = "YOUR_AIVEN_API_TOKEN"
+aiven_project_name        = "flashsale"
+aiven_kafka_service_name  = "flashsale-kafka"
+aiven_kafka_plan          = "free-0"
+aiven_kafka_version       = "4.0"
+aiven_kafka_topic_partitions = 2
+aiven_kafka_topic_replication = 1
+
+# Optional. Leave empty to let Aiven choose the free-tier cloud placement.
+# aiven_kafka_cloud_name = ""
+
+kafka_terminalization_topic          = "flashsale.order.terminalization.v1"
+kafka_terminalization_retry_topic    = "flashsale.order.terminalization.retry.v1"
+kafka_terminalization_dlq_topic      = "flashsale.order.terminalization.dlq.v1"
+kafka_terminalization_consumer_group = "flashsale-order-terminalization-worker"

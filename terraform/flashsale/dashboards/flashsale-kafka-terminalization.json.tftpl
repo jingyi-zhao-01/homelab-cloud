@@ -1,0 +1,342 @@
+{
+  "uid": "flashsale-kafka-terminalization",
+  "title": "Flashsale Kafka Terminalization",
+  "tags": ["flashsale", "kafka", "aiven", "terminalization"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "kafka_service",
+        "type": "constant",
+        "label": "Aiven Kafka Service",
+        "query": "${kafka_service_name}",
+        "current": { "text": "${kafka_service_name}", "value": "${kafka_service_name}" }
+      },
+      {
+        "name": "consumer_group",
+        "type": "constant",
+        "label": "Consumer Group",
+        "query": "${consumer_group}",
+        "current": { "text": "${consumer_group}", "value": "${consumer_group}" }
+      },
+      {
+        "name": "topics",
+        "type": "constant",
+        "label": "Terminalization Topics",
+        "query": "${terminalization_topic}|${retry_topic}|${dlq_topic}",
+        "current": {
+          "text": "${terminalization_topic}|${retry_topic}|${dlq_topic}",
+          "value": "${terminalization_topic}|${retry_topic}|${dlq_topic}"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Consumer Group Lag",
+      "description": "为什么重要：Kafka migration 后，这就是 terminalization worker 是否追得上生产速度的第一信号。怎么看：短暂 spike 可以接受；持续不回落说明 worker、下游 product-service 或 Kafka consumer 配置需要处理。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(kafka_consumer_group_rep_lag{service_name=\"$kafka_service\", group=\"$consumer_group\", topic=~\"$topics\"})",
+          "legendFormat": "lag",
+          "range": true
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 1000 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Produce Rate",
+      "description": "为什么重要：确认 order-service 是否正在往 Kafka 写 terminalization commands。怎么看：压测或真实流量期间这条应该跟订单创建/取消路径同步抬升。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(kafka_server_BrokerTopicMetrics_MessagesInPerSec_Count{service_name=\"$kafka_service\", topic=~\"$topics\"}[5m]))",
+          "legendFormat": "messages/s",
+          "range": true
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Failed Produce Requests",
+      "description": "为什么重要：如果 order-service 写 Kafka 出问题，这里会先亮。怎么看：任何持续非零都应该结合 order-service logs 和 Aiven broker health 一起看。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(kafka_server_BrokerTopicMetrics_FailedProduceRequestsPerSec_Count{service_name=\"$kafka_service\", topic=~\"$topics\"}[5m]))",
+          "legendFormat": "failed produce/s",
+          "range": true
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Under Replicated Partitions",
+      "description": "为什么重要：broker replication health 出问题时，terminalization 会变成 Kafka 侧风险，而不是 app 侧风险。怎么看：free tier replication factor 可能较低；非零时优先看 Aiven service health。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(kafka_server_ReplicaManager_UnderReplicatedPartitions_Value{service_name=\"$kafka_service\"})",
+          "legendFormat": "under replicated",
+          "range": true
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Consumer Group Lag By Topic",
+      "description": "为什么重要：把 primary/retry/DLQ 的压力拆开看。怎么看：primary lag 高说明正常消费跟不上；retry lag 高说明失败重试在积压；DLQ 有 lag 或写入说明需要人工排障。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (topic) (kafka_consumer_group_rep_lag{service_name=\"$kafka_service\", group=\"$consumer_group\", topic=~\"$topics\"})",
+          "legendFormat": "{{topic}}",
+          "range": true
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Consumer Group Lag By Partition",
+      "description": "为什么重要：看是否只有某个 partition 卡住。怎么看：单 partition 长期高，通常是 key 分布、worker 处理单点热点或某条 poison message 的线索。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 6 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (topic, partition) (kafka_consumer_group_rep_lag{service_name=\"$kafka_service\", group=\"$consumer_group\", topic=~\"$topics\"})",
+          "legendFormat": "{{topic}} p{{partition}}",
+          "range": true
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Messages In By Topic",
+      "description": "为什么重要：这是 Kafka broker 看到的 topic 写入速率，可以和 app logs 里的 publish rate 对齐。怎么看：有订单流量但这里为零，说明 producer 没有真正写到 Aiven Kafka。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 15 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (topic) (rate(kafka_server_BrokerTopicMetrics_MessagesInPerSec_Count{service_name=\"$kafka_service\", topic=~\"$topics\"}[5m]))",
+          "legendFormat": "{{topic}}",
+          "range": true
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Bytes In/Out By Topic",
+      "description": "为什么重要：看 topic payload volume 和消费流量是否匹配。怎么看：bytes in 长期高于 bytes out，且 lag 同时上升，说明消费者吞吐不足。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 15 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (topic) (rate(kafka_server_BrokerTopicMetrics_BytesInPerSec_Count{service_name=\"$kafka_service\", topic=~\"$topics\"}[5m]))",
+          "legendFormat": "{{topic}} in",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (topic) (rate(kafka_server_BrokerTopicMetrics_BytesOutPerSec_Count{service_name=\"$kafka_service\", topic=~\"$topics\"}[5m]))",
+          "legendFormat": "{{topic}} out",
+          "range": true
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Consumer Group Committed Offset",
+      "description": "为什么重要：确认 consumer group 是否还在推进 offset。怎么看：如果 offset 不动但 messages in 还在涨，worker 很可能挂住、认证失败或消费 loop 退出。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (topic, partition) (kafka_consumer_group_offset{service_name=\"$kafka_service\", group=\"$consumer_group\", topic=~\"$topics\"})",
+          "legendFormat": "{{topic}} p{{partition}}",
+          "range": true
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Failed Fetch/Produce Requests",
+      "description": "为什么重要：区分 producer 写入失败和 consumer fetch 失败。怎么看：produce failure 看 order-service producer；fetch failure 看 worker consumer、ACL、cert/SASL 和 broker health。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (topic) (rate(kafka_server_BrokerTopicMetrics_FailedProduceRequestsPerSec_Count{service_name=\"$kafka_service\", topic=~\"$topics\"}[5m]))",
+          "legendFormat": "{{topic}} failed produce",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (topic) (rate(kafka_server_BrokerTopicMetrics_FailedFetchRequestsPerSec_Count{service_name=\"$kafka_service\", topic=~\"$topics\"}[5m]))",
+          "legendFormat": "{{topic}} failed fetch",
+          "range": true
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Offline Partitions",
+      "description": "为什么重要：这是 broker/topic 可用性的硬故障信号。怎么看：任何非零都说明 Kafka service 本身需要优先处理。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 33 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(kafka_controller_KafkaController_OfflinePartitionsCount_Value{service_name=\"$kafka_service\"})",
+          "legendFormat": "offline partitions",
+          "range": true
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Request Latency P95",
+      "description": "为什么重要：Kafka broker 请求延迟上升会直接放大 producer publish 和 worker poll 的尾延迟。怎么看：produce/fetch request p95 抬升时，结合 bytes、lag 和 Aiven service health 判断是负载还是 broker 问题。",
+      "datasource": { "type": "prometheus", "uid": "${prometheus_datasource_uid}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 33 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (request) (kafka_network_RequestMetrics_TotalTimeMs_95thPercentile{service_name=\"$kafka_service\", request=~\"Produce|FetchConsumer\"})",
+          "legendFormat": "{{request}}",
+          "range": true
+        }
+      ],
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] }
+    }
+  ]
+}

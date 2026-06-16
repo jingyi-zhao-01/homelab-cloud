@@ -141,3 +141,146 @@ resource "aws_ssm_parameter" "upstash_redis_read_only_rest_token" {
 
   tags = var.tags
 }
+
+resource "aws_ssm_parameter" "kafka_bootstrap_servers" {
+  count = var.include_aiven_kafka_runtime ? 1 : 0
+
+  name        = "${local.prefix}/KAFKA_BOOTSTRAP_SERVERS"
+  description = "Kafka bootstrap servers for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.kafka_bootstrap_servers
+  key_id      = var.kms_key_id
+  overwrite   = true
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "kafka_service_uri" {
+  count = var.include_aiven_kafka_runtime ? 1 : 0
+
+  name        = "${local.prefix}/KAFKA_SERVICE_URI"
+  description = "Full Kafka service URI for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.kafka_service_uri
+  key_id      = var.kms_key_id
+  overwrite   = true
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "kafka_security_protocol" {
+  count = var.include_aiven_kafka_runtime ? 1 : 0
+
+  name        = "${local.prefix}/KAFKA_SECURITY_PROTOCOL"
+  description = "Kafka security protocol for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.kafka_security_protocol
+  key_id      = var.kms_key_id
+  overwrite   = true
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "kafka_username" {
+  count = var.include_aiven_kafka_runtime ? 1 : 0
+
+  name        = "${local.prefix}/KAFKA_USERNAME"
+  description = "Kafka runtime username for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.kafka_username
+  key_id      = var.kms_key_id
+  overwrite   = true
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "kafka_password" {
+  count = var.include_aiven_kafka_runtime ? 1 : 0
+
+  name        = "${local.prefix}/KAFKA_PASSWORD"
+  description = "Kafka runtime password for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.kafka_password
+  key_id      = var.kms_key_id
+  overwrite   = true
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "kafka_access_cert" {
+  count = var.include_aiven_kafka_runtime ? 1 : 0
+
+  name        = "${local.prefix}/KAFKA_ACCESS_CERT"
+  description = "Kafka runtime client certificate for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.kafka_access_cert
+  key_id      = var.kms_key_id
+  overwrite   = true
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "kafka_access_key" {
+  count = var.include_aiven_kafka_runtime ? 1 : 0
+
+  name        = "${local.prefix}/KAFKA_ACCESS_KEY"
+  description = "Kafka runtime client private key for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.kafka_access_key
+  key_id      = var.kms_key_id
+  overwrite   = true
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "kafka_terminalization_topic" {
+  count = var.include_aiven_kafka_runtime ? 1 : 0
+
+  name        = "${local.prefix}/KAFKA_TERMINALIZATION_TOPIC"
+  description = "Kafka primary terminalization topic for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.kafka_terminalization_topic
+  key_id      = var.kms_key_id
+  overwrite   = true
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "kafka_terminalization_retry_topic" {
+  count = var.include_aiven_kafka_runtime ? 1 : 0
+
+  name        = "${local.prefix}/KAFKA_TERMINALIZATION_RETRY_TOPIC"
+  description = "Kafka terminalization retry topic for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.kafka_terminalization_retry_topic
+  key_id      = var.kms_key_id
+  overwrite   = true
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "kafka_terminalization_dlq_topic" {
+  count = var.include_aiven_kafka_runtime ? 1 : 0
+
+  name        = "${local.prefix}/KAFKA_TERMINALIZATION_DLQ_TOPIC"
+  description = "Kafka terminalization dead-letter topic for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.kafka_terminalization_dlq_topic
+  key_id      = var.kms_key_id
+  overwrite   = true
+
+  tags = var.tags
+}
+
+resource "aws_ssm_parameter" "kafka_terminalization_consumer_group" {
+  count = var.include_aiven_kafka_runtime ? 1 : 0
+
+  name        = "${local.prefix}/KAFKA_TERMINALIZATION_CONSUMER_GROUP"
+  description = "Kafka terminalization consumer group for ${var.ssm_path_prefix}"
+  type        = "SecureString"
+  value       = var.kafka_terminalization_consumer_group
+  key_id      = var.kms_key_id
+  overwrite   = true
+
+  tags = var.tags
+}

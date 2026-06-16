@@ -146,6 +146,7 @@ orderService:
     maxInflightOrders: "64"
     reserveAdmissionMaxInflight: "2"
     reserveAdmissionPermitTtlSeconds: "15"
+    terminalizationQueueBackend: database
     dbHost: ""
     dbPort: ""
     dbName: ""
@@ -202,6 +203,7 @@ externalSecrets:
   apiVersion: external-secrets.io/v1beta1
   enabled: true
   includeUpstashRedis: true
+  includeAivenKafka: false
   refreshInterval: 1h
   targetSecretName: flashsales-postgres-auth
   parameterMapFile: ssm-parameter-keys.yaml

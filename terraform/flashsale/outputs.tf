@@ -34,32 +34,37 @@ output "database_name" {
 
 output "flashsale_dashboard_folder_uid" {
   description = "UID of the Grafana folder containing flashsale dashboards."
-  value       = module.grafana_dashboards.flashsale_dashboard_folder_uid
+  value       = grafana_folder.flashsale.uid
 }
 
 output "flashsale_order_service_dashboard_url" {
   description = "Direct URL for the Flashsale Order Service dashboard."
-  value       = module.grafana_dashboards.flashsale_order_service_dashboard_url
+  value       = grafana_dashboard.flashsale_order_service.url
 }
 
 output "flashsale_product_service_dashboard_url" {
   description = "Direct URL for the Flashsale Product Service dashboard."
-  value       = module.grafana_dashboards.flashsale_product_service_dashboard_url
+  value       = grafana_dashboard.flashsale_product_service.url
 }
 
 output "flashsale_terminalization_queue_health_dashboard_url" {
   description = "Direct URL for the Flashsale Terminalization Queue Health dashboard."
-  value       = module.grafana_dashboards.flashsale_terminalization_queue_health_dashboard_url
+  value       = grafana_dashboard.flashsale_terminalization_queue_health.url
 }
 
 output "flashsale_terminalization_outcomes_dashboard_url" {
   description = "Direct URL for the Flashsale Terminalization Outcomes dashboard."
-  value       = module.grafana_dashboards.flashsale_terminalization_outcomes_dashboard_url
+  value       = grafana_dashboard.flashsale_terminalization_outcomes.url
 }
 
 output "flashsale_distributed_traces_dashboard_url" {
   description = "Direct URL for the Flashsale Distributed Traces dashboard."
-  value       = module.grafana_dashboards.flashsale_distributed_traces_dashboard_url
+  value       = grafana_dashboard.flashsale_distributed_traces.url
+}
+
+output "flashsale_kafka_terminalization_dashboard_url" {
+  description = "Direct URL for the Flashsale Kafka Terminalization dashboard."
+  value       = grafana_dashboard.flashsale_kafka_terminalization.url
 }
 
 output "upstash_redis_database_id" {
@@ -104,4 +109,45 @@ output "upstash_redis_url" {
 output "ssm_parameter_path_prefix" {
   description = "SSM path prefix under which flashsale secrets are stored."
   value       = module.ssm.parameter_path_prefix
+}
+
+output "aiven_kafka_service_name" {
+  description = "Aiven Kafka service name for flashsale terminalization."
+  value       = aiven_kafka.flashsale.service_name
+}
+
+output "aiven_kafka_bootstrap_servers" {
+  description = "Kafka bootstrap servers for flashsale workloads."
+  value       = local.aiven_kafka_bootstrap_servers
+}
+
+output "aiven_kafka_service_uri" {
+  description = "Aiven Kafka service URI."
+  value       = aiven_kafka.flashsale.service_uri
+  sensitive   = true
+}
+
+output "aiven_kafka_order_service_username" {
+  description = "Kafka username for flashsale order-service and order-worker."
+  value       = aiven_kafka_user.order_service.username
+}
+
+output "kafka_terminalization_topic" {
+  description = "Primary flashsale order terminalization Kafka topic."
+  value       = aiven_kafka_topic.terminalization.topic_name
+}
+
+output "kafka_terminalization_retry_topic" {
+  description = "Retry flashsale order terminalization Kafka topic."
+  value       = aiven_kafka_topic.terminalization_retry.topic_name
+}
+
+output "kafka_terminalization_dlq_topic" {
+  description = "Dead-letter flashsale order terminalization Kafka topic."
+  value       = aiven_kafka_topic.terminalization_dlq.topic_name
+}
+
+output "kafka_terminalization_consumer_group" {
+  description = "Kafka consumer group used by the flashsale terminalization worker."
+  value       = var.kafka_terminalization_consumer_group
 }

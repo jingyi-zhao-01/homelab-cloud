@@ -57,11 +57,17 @@ jobs:
       TF_VAR_neon_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_NEON_DATASOURCE_UID }}
       TF_VAR_loki_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_LOKI_DATASOURCE_UID }}
       TF_VAR_tempo_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_TEMPO_DATASOURCE_UID }}
+      TF_VAR_prometheus_datasource_uid: ${{ vars.FLASHSALE_GRAFANA_PROMETHEUS_DATASOURCE_UID || 'prometheus' }}
       TF_VAR_flashsale_namespace: ${{ vars.FLASHSALE_NAMESPACE || 'flashsales' }}
       TF_VAR_processing_sla_minutes: ${{ vars.FLASHSALE_GRAFANA_PROCESSING_SLA_MINUTES || '5' }}
       TF_VAR_grafana_folder_title: ${{ vars.FLASHSALE_GRAFANA_FOLDER_TITLE || 'Flashsale' }}
       TF_VAR_grafana_folder_uid: ${{ vars.FLASHSALE_GRAFANA_FOLDER_UID || 'flashsale-folder' }}
       TF_VAR_upstash_redis_budget: ${{ vars.FLASHSALE_UPSTASH_REDIS_BUDGET || '20' }}
+      TF_VAR_aiven_api_token_parameter_name: ${{ vars.FLASHSALE_AIVEN_API_TOKEN_PARAMETER_NAME || '/avien/api_token' }}
+      TF_VAR_aiven_project_name: ${{ vars.FLASHSALE_AIVEN_PROJECT_NAME || 'flashsale' }}
+      TF_VAR_aiven_kafka_service_name: ${{ vars.FLASHSALE_AIVEN_KAFKA_SERVICE_NAME || 'flashsale-kafka' }}
+      TF_VAR_aiven_kafka_plan: ${{ vars.FLASHSALE_AIVEN_KAFKA_PLAN || 'free-0' }}
+      TF_VAR_aiven_kafka_cloud_name: ${{ vars.FLASHSALE_AIVEN_KAFKA_CLOUD_NAME || '' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}
@@ -138,6 +144,11 @@ jobs:
             echo "FLASHSALE_GRAFANA_TEMPO_DATASOURCE_UID variable is missing"
             exit 1
           fi
+          if [ -z "${TF_VAR_aiven_api_token:-}" ]; then
+            aws ssm get-parameter \
+              --name "${TF_VAR_aiven_api_token_parameter_name:-/avien/api_token}" \
+              --with-decryption >/dev/null
+          fi
 
       - name: Import existing project into Terraform state
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
@@ -171,13 +182,13 @@ jobs:
       - name: Import existing Grafana folder into Terraform state
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         run: |
-          if terraform state show module.grafana_dashboards.grafana_folder.flashsale >/dev/null 2>&1; then
-            echo "module.grafana_dashboards.grafana_folder.flashsale already managed by Terraform"
+          if terraform state show grafana_folder.flashsale >/dev/null 2>&1; then
+            echo "grafana_folder.flashsale already managed by Terraform"
             exit 0
           fi
 
           echo "Importing existing Grafana folder ${TF_VAR_grafana_folder_uid}"
-          terraform import -input=false module.grafana_dashboards.grafana_folder.flashsale "${TF_VAR_grafana_folder_uid}"
+          terraform import -input=false grafana_folder.flashsale "${TF_VAR_grafana_folder_uid}"
 
       - name: Terraform Validate
         run: terraform validate

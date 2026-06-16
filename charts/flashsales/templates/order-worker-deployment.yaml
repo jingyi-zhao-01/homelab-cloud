@@ -76,6 +76,63 @@ spec:
                   name: {{ .Values.externalSecrets.targetSecretName }}
                   key: REDIS_URL
                   optional: true
+            {{- if .Values.externalSecrets.includeAivenKafka }}
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_BOOTSTRAP_SERVERS
+            - name: KAFKA_SERVICE_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_SERVICE_URI
+            - name: KAFKA_SECURITY_PROTOCOL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_SECURITY_PROTOCOL
+            - name: KAFKA_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_USERNAME
+            - name: KAFKA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_PASSWORD
+            - name: KAFKA_ACCESS_CERT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_ACCESS_CERT
+            - name: KAFKA_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_ACCESS_KEY
+            - name: KAFKA_TERMINALIZATION_TOPIC
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_TERMINALIZATION_TOPIC
+            - name: KAFKA_TERMINALIZATION_RETRY_TOPIC
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_TERMINALIZATION_RETRY_TOPIC
+            - name: KAFKA_TERMINALIZATION_DLQ_TOPIC
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_TERMINALIZATION_DLQ_TOPIC
+            - name: KAFKA_TERMINALIZATION_CONSUMER_GROUP
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_TERMINALIZATION_CONSUMER_GROUP
+            {{- end }}
             {{- if .Values.observability.tracing.existingSecretName }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               valueFrom:

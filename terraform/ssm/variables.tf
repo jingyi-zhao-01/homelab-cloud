@@ -53,6 +53,12 @@ variable "include_upstash_runtime" {
   default     = false
 }
 
+variable "include_aiven_kafka_runtime" {
+  description = "Whether to create Aiven Kafka-derived SSM parameters for this stack."
+  type        = bool
+  default     = false
+}
+
 variable "upstash_redis_endpoint" {
   description = "Upstash Redis endpoint hostname"
   type        = string
@@ -84,6 +90,78 @@ variable "upstash_redis_read_only_rest_token" {
   description = "Upstash Redis read-only REST token"
   type        = string
   sensitive   = true
+  default     = ""
+}
+
+variable "kafka_bootstrap_servers" {
+  description = "Kafka bootstrap servers for flashsale order-service and order-worker"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "kafka_service_uri" {
+  description = "Full Kafka service URI"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "kafka_security_protocol" {
+  description = "Kafka security protocol"
+  type        = string
+  default     = "SSL"
+}
+
+variable "kafka_username" {
+  description = "Kafka runtime username"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "kafka_password" {
+  description = "Kafka runtime password"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "kafka_access_cert" {
+  description = "Kafka runtime client certificate"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "kafka_access_key" {
+  description = "Kafka runtime client private key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "kafka_terminalization_topic" {
+  description = "Primary Kafka topic for order terminalization commands"
+  type        = string
+  default     = ""
+}
+
+variable "kafka_terminalization_retry_topic" {
+  description = "Kafka topic for terminalization retry commands"
+  type        = string
+  default     = ""
+}
+
+variable "kafka_terminalization_dlq_topic" {
+  description = "Kafka topic for terminalization dead-letter commands"
+  type        = string
+  default     = ""
+}
+
+variable "kafka_terminalization_consumer_group" {
+  description = "Kafka consumer group for order terminalization workers"
+  type        = string
   default     = ""
 }
 

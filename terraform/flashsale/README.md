@@ -7,6 +7,7 @@ It composes the flashsale-specific pieces that used to live in separate director
 - Neon PostgreSQL provisioning
 - Grafana dashboard provisioning
 - Upstash Redis provisioning
+- Aiven Kafka provisioning for order terminalization
 - AWS SSM Parameter Store secret sync
 
 ## Scope
@@ -16,7 +17,8 @@ The stack currently manages:
 - a Neon project for the shared flashsale PostgreSQL database
 - the Grafana folder and dashboards for flashsale observability
 - an Upstash Redis database suitable for `order-service` caching, idempotency, or queue-adjacent coordination
-- SSM `SecureString` parameters for database and Upstash connection material
+- an Aiven Kafka service, terminalization topics, and an order-service Kafka user
+- SSM `SecureString` parameters for database, Upstash, and Kafka connection material
 
 ## Layout
 
@@ -34,6 +36,7 @@ Flashsale is no longer just "a Neon database". The workload now has three operat
 - PostgreSQL in Neon
 - Grafana dashboards for perf and async-terminalization analysis
 - Redis in Upstash
+- Kafka in Aiven
 - secret distribution in AWS SSM Parameter Store
 
 Putting them behind one Terraform entrypoint makes it easier to reason about flashsale as one deployable platform slice instead of several unrelated stacks.
@@ -59,9 +62,46 @@ terraform apply
 - `neon_datasource_uid`
 - `loki_datasource_uid`
 - `tempo_datasource_uid`
+- `prometheus_datasource_uid` (optional, defaults to `prometheus`)
 - `aws_region`
 
 See [terraform.tfvars.example](./terraform.tfvars.example) for a working starting point.
+
+## Aiven Kafka Provider Bootstrap
+
+By default, this stack reads the Aiven provider API token from AWS SSM Parameter Store:
+
+- `/avien/api_token`
+
+Create it manually as a SecureString before running Terraform:
+
+```bash
+aws ssm put-parameter \
+  --name /avien/api_token \
+  --type SecureString \
+  --value "YOUR_AIVEN_API_TOKEN" \
+  --overwrite
+```
+
+The stack creates an Aiven Kafka service with `aiven_kafka_plan = "free-0"` by default, plus:
+
+- `flashsale.order.terminalization.v1`
+- `flashsale.order.terminalization.retry.v1`
+- `flashsale.order.terminalization.dlq.v1`
+- a `flashsale-order-service` Kafka user with read/write ACLs on those topics
+- a Grafana dashboard for Kafka terminalization health, using the Prometheus datasource configured by `prometheus_datasource_uid`
+
+The default topic shape stays within the Aiven free tier limits: five topics maximum and two partitions maximum per topic.
+
+The Kafka service also enables public Prometheus access so an external Prometheus server can scrape Aiven Kafka metrics. Aiven exposes Kafka metrics such as `kafka_consumer_group_rep_lag`, `kafka_consumer_group_offset`, and broker topic counters like `kafka_server_BrokerTopicMetrics_MessagesInPerSec_Count`.
+
+You can override the SSM lookup or service placement with:
+
+- `aiven_api_token_parameter_name`
+- `aiven_api_token`
+- `aiven_project_name`
+- `aiven_kafka_cloud_name`
+- `aiven_kafka_service_name`
 
 ## Upstash Provider Bootstrap
 
@@ -87,5 +127,5 @@ but the preferred pattern is:
 
 - The Neon and Grafana subdirectories still exist for compatibility, but the preferred automation entrypoint is the namespace-level flashsale stack and its `terraform-flashsale-resources.yml` workflow.
 - The Upstash provider stores connection outputs in Terraform state. Treat remote state access as sensitive.
-- The stack now mirrors both Neon and Upstash credentials into AWS SSM Parameter Store under `/flashsales/prod` by default.
-- The SSM path includes `DATABASE_URL`, `POSTGRES_*`, `REDIS_URL`, `UPSTASH_REDIS_ENDPOINT`, `UPSTASH_REDIS_PASSWORD`, `UPSTASH_REDIS_REST_TOKEN`, and `UPSTASH_REDIS_READ_ONLY_REST_TOKEN`.
+- The stack now mirrors Neon, Upstash, and Kafka credentials into AWS SSM Parameter Store under `/flashsales/prod` by default.
+- The SSM path includes `DATABASE_URL`, `POSTGRES_*`, `REDIS_URL`, `UPSTASH_REDIS_*`, `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SERVICE_URI`, `KAFKA_USERNAME`, `KAFKA_PASSWORD`, `KAFKA_ACCESS_CERT`, `KAFKA_ACCESS_KEY`, and the terminalization topic names.

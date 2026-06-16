@@ -60,6 +60,12 @@ variable "tempo_datasource_uid" {
   type        = string
 }
 
+variable "prometheus_datasource_uid" {
+  description = "Grafana datasource UID for the Prometheus datasource that scrapes Aiven Kafka metrics."
+  type        = string
+  default     = "prometheus"
+}
+
 variable "processing_sla_minutes" {
   description = "Minutes after which a processing task is treated as stuck."
   type        = number
@@ -164,4 +170,119 @@ variable "upstash_redis_budget" {
   description = "Monthly budget in USD for the flashsale Upstash Redis database."
   type        = number
   default     = 20
+}
+
+variable "aiven_api_token" {
+  description = "Optional direct override for the Aiven API token used by the Terraform provider. Leave empty to read from SSM."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "aiven_api_token_parameter_name" {
+  description = "SSM SecureString parameter name containing the Aiven API token for provider bootstrap."
+  type        = string
+  default     = "/avien/api_token"
+}
+
+variable "aiven_project_name" {
+  description = "Existing Aiven project name where the flashsale Kafka service is created."
+  type        = string
+  default     = "flashsale"
+}
+
+variable "aiven_kafka_service_name" {
+  description = "Aiven Kafka service name for flashsale terminalization."
+  type        = string
+  default     = "flashsale-kafka"
+}
+
+variable "aiven_kafka_plan" {
+  description = "Aiven Kafka plan. free-0 is Aiven's free tier."
+  type        = string
+  default     = "free-0"
+}
+
+variable "aiven_kafka_cloud_name" {
+  description = "Optional Aiven cloud name. Leave empty for free-tier managed placement."
+  type        = string
+  default     = ""
+}
+
+variable "aiven_kafka_version" {
+  description = "Kafka major version for the Aiven service."
+  type        = string
+  default     = "4.0"
+}
+
+variable "aiven_kafka_termination_protection" {
+  description = "Whether to prevent accidental deletion of the Aiven Kafka service."
+  type        = bool
+  default     = true
+}
+
+variable "aiven_kafka_topic_termination_protection" {
+  description = "Whether to prevent accidental deletion of Aiven Kafka topics."
+  type        = bool
+  default     = true
+}
+
+variable "aiven_kafka_order_service_username" {
+  description = "Kafka user name used by flashsale order-service and order-worker."
+  type        = string
+  default     = "flashsale-order-service"
+}
+
+variable "aiven_kafka_topic_partitions" {
+  description = "Partition count for each flashsale Kafka terminalization topic. Aiven free tier allows up to two partitions per topic."
+  type        = number
+  default     = 2
+}
+
+variable "aiven_kafka_topic_replication" {
+  description = "Replication factor for flashsale Kafka terminalization topics."
+  type        = number
+  default     = 1
+}
+
+variable "aiven_kafka_terminalization_retention_ms" {
+  description = "Retention in milliseconds for the primary terminalization topic."
+  type        = number
+  default     = 604800000
+}
+
+variable "aiven_kafka_terminalization_retry_retention_ms" {
+  description = "Retention in milliseconds for the terminalization retry topic."
+  type        = number
+  default     = 604800000
+}
+
+variable "aiven_kafka_terminalization_dlq_retention_ms" {
+  description = "Retention in milliseconds for the terminalization dead-letter topic."
+  type        = number
+  default     = 1209600000
+}
+
+variable "kafka_terminalization_topic" {
+  description = "Primary Kafka topic for order terminalization commands."
+  type        = string
+  default     = "flashsale.order.terminalization.v1"
+}
+
+variable "kafka_terminalization_retry_topic" {
+  description = "Kafka topic for terminalization retry commands."
+  type        = string
+  default     = "flashsale.order.terminalization.retry.v1"
+}
+
+variable "kafka_terminalization_dlq_topic" {
+  description = "Kafka topic for terminalization dead-letter commands."
+  type        = string
+  default     = "flashsale.order.terminalization.dlq.v1"
+}
+
+variable "kafka_terminalization_consumer_group" {
+  description = "Kafka consumer group used by the flashsale order terminalization worker."
+  type        = string
+  default     = "flashsale-order-terminalization-worker"
 }
