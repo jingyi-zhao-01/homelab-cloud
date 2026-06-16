@@ -2,12 +2,6 @@ name: Flashsales Deploy
 
 on:
   workflow_dispatch:
-    inputs:
-      run_perf:
-        description: Run the app-owned perf cadence in post deploy checks.
-        required: false
-        type: boolean
-        default: false
   repository_dispatch:
     types:
       - flashsale-release-ready
@@ -26,7 +20,6 @@ on:
       - '.github/actions/setup-private-k3s-access/**'
       - 'charts/flashsales/**'
       - '.github/workflows/flashsales-deploy.yml'
-      - '.github/workflows/flashsales-deploy-post.yml'
 
 concurrency:
   group: flashsales-deploy-${{ github.sha }}
@@ -207,24 +200,10 @@ jobs:
           kubectl get pods -n "$NAMESPACE" -o wide
           kubectl get svc -n "$NAMESPACE"
 
-  postdeploy:
-    name: Postdeploy Runtime Gates
-    needs:
-      - deploy
-    if: ${{ needs.deploy.result == 'success' }}
-    uses: ./.github/workflows/flashsales-deploy-post.yml
-    with:
-      flashsale_source_ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_ref || github.ref_name }}
-      flashsale_source_sha: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_sha || github.sha }}
-      flashsale_image_tag: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_image_tag || 'latest' }}
-      run_perf: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_perf || false }}
-    secrets: inherit
-
   notify-discord:
     name: Notify Discord
     needs:
       - deploy
-      - postdeploy
     if: ${{ always() }}
     runs-on: ubuntu-latest
     continue-on-error: true

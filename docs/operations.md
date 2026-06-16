@@ -8,10 +8,9 @@ This page collects the operational commands and workflow details that used to be
 | --- | --- | --- |
 | `application/flashsale/.github/workflows/flashsales-deploy-pre.yml` | Pushes or PRs in the standalone `flashsale` repo | Flashsales pre-deploy gates |
 | `flashsales-deploy.yml` | Pushes to `flashsale`, `.gitmodules`, or `charts/flashsales/**`, or manual dispatch | Flashsales deploy |
-| `flashsales-deploy-post.yml` | After a successful `flashsales-deploy.yml` or manual dispatch | Unified flashsales post-deploy quality gate |
+| `flashsales-loadtest-manual.yml` | Manual `workflow_dispatch` | App-owned flashsales perf cadence |
 | `deploy-strategy-tester.yml` | Pushes to `strategy-tester/**` or `charts/strategy-tester/**` | Strategy tester |
 | `deploy-leetcode-intelligence.yml` | Pushes to `charts/leetcode-intelligence/**` | LeetCode intelligence |
-| `flashsales-loadtest-manual.yml` | Manual `workflow_dispatch` | Performance testing |
 | `terraform-flashsale-resources.yml` | Manual or push to `terraform/flashsale/**` | Flashsales namespace resources: Neon, Upstash, Grafana, and SSM |
 | `terraform-leetcode-intelligence-resources.yml` | Manual or push to `terraform/leetcode-intelligence/**` | LeetCode intelligence namespace resources |
 | `terraform-strategy-tester-resources.yml` | Manual or push to `terraform/strategy-tester/**` | Strategy tester namespace resources |
@@ -34,7 +33,7 @@ AWS_SECRET_ACCESS_KEY
 
 ## Performance Testing
 
-Perf runs currently execute the ordered cadence declared by `application/flashsale/release/flashsale-quality-contract.yaml`; the platform workflow provides runner, kubeconfig, and cluster access, but does not hardcode the lane order.
+Perf runs execute the ordered cadence declared by `application/flashsale/release/flashsale-quality-contract.yaml` through the manual `flashsales-loadtest-manual.yml` workflow. Deploy workflows do not run perf automatically; the platform workflow provides runner, kubeconfig, and cluster access, but does not hardcode the lane order.
 
 For the current interpretation limits and correctness caveats of the flashsales perf harness, use [Flashsales harness engineering](../application/flashsale/docs/flashsales-harness-engineering.md) as the source of truth.
 
@@ -42,7 +41,7 @@ For the current interpretation limits and correctness caveats of the flashsales 
 make concurrency-baseline KUBECONFIG_PATH=secrets/.kube-config
 make concurrency-smoke KUBECONFIG_PATH=secrets/.kube-config
 make concurrency-hotspot-100tps KUBECONFIG_PATH=secrets/.kube-config
-bash ./application/flashsale/perf/scripts/loadtest-k6.sh -e RAMP_UP=30s -e STEADY=180s -e TARGET_VUS=50
+gh workflow run flashsales-loadtest-manual.yml
 ```
 
 ## Developer Setup

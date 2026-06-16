@@ -50,7 +50,7 @@ For flashsale specifically, the current aggregate stack is:
 |---|---|
 | Deploy orchestration | GitHub Actions drives Helm-based rollout into the shared k3s cluster |
 | Resource allocation | Terraform and cluster config provision Neon, AWS SSM secrets, and spot-backed worker capacity |
-| Runtime quality provisioning | Post-deploy workflows prepare the live runtime needed by flashsale perf cadence and other app-owned quality lanes |
+| Runtime quality provisioning | Manual perf workflows prepare the live runtime needed by flashsale app-owned quality lanes |
 | Feedback loop | Workflow logs, Discord notifications, Grafana, and docs feed runtime behavior back into the repo |
 
 ## Start Here
@@ -64,7 +64,7 @@ For flashsale specifically, the current aggregate stack is:
 | [Flashsale workload agent context](application/flashsale/AGENT.md) | Workload-specific architecture, validation order, and wiki/ADR mirroring rules |
 | [Flashsales deploy pre](application/flashsale/.github/workflows/flashsales-deploy-pre.yml) | App-owned pre-deploy unit and Docker Compose integration gates |
 | [Flashsales deploy](.github/workflows/flashsales-deploy.yml) | Platform-side deploy executor for the shared k3s runtime |
-| [Flashsales deploy post](.github/workflows/flashsales-deploy-post.yml) | Platform-side post-deploy quality workflow executor |
+| [Flashsales perf test](.github/workflows/flashsales-loadtest-manual.yml) | Manual platform-side executor for the app-owned flashsale perf cadence |
 | [Strategy tester workload](docs/strategy-tester.md) | Scheduled ingestion app, cron jobs, and secret wiring |
 | [LeetCode intelligence workload](docs/leetcode-intelligence.md) | Continuous intelligence API service with Discord and LLM secret wiring |
 | [Infrastructure](docs/infrastructure.md) | Terraform-backed resource provisioning for Neon, SSM, networking, and worker capacity |

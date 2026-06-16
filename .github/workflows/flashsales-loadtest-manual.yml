@@ -1,43 +1,46 @@
-name: Manual Perf Test (k6)
+name: Flashsales Perf Test
 
 on:
   workflow_dispatch:
     inputs:
-      target_vus:
-        description: Target concurrent VUs
+      flashsale_source_ref:
+        description: Optional flashsale ref to record with perf results.
         required: false
-        default: "20"
-      ramp_up:
-        description: Ramp-up duration (e.g. 20s)
+        type: string
+        default: ''
+      flashsale_source_sha:
+        description: Optional flashsale sha to record with perf results.
         required: false
-        default: "20s"
-      steady:
-        description: Steady duration (e.g. 60s)
+        type: string
+        default: ''
+      flashsale_image_tag:
+        description: Optional deployed flashsale image tag to record with perf results.
         required: false
-        default: "60s"
-      ramp_down:
-        description: Ramp-down duration (e.g. 20s)
-        required: false
-        default: "20s"
-      report_interval_ms:
-        description: Runtime metric print interval in milliseconds
-        required: false
-        default: "5000"
+        type: string
+        default: ''
+
+concurrency:
+  group: flashsales-perf-test-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
+  packages: write
 
 env:
+  NAMESPACE: ${{ vars.K8S_NAMESPACE || 'flashsales' }}
   PERF_RESULTS_ROOT: ${{ github.workspace }}/flashsale-perf-results
+  TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
+  TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+  TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
   FLASHSALE_RESULTS_PR_TOKEN: ${{ secrets.HOMELAB_CLOUD_REPO_DISPATCH_TOKEN }}
 
 jobs:
-  perf-test:
-    name: Run k6 Perf Test
+  contract:
+    name: Resolve Flashsale Quality Contract
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      NAMESPACE: ${{ vars.K8S_NAMESPACE || 'flashsales' }}
+    outputs:
+      perf_cadence_json: ${{ steps.export.outputs.perf_cadence_json }}
 
     steps:
       - name: Checkout
@@ -45,87 +48,130 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install contract parser dependencies
+        run: python -m pip install --upgrade pip pyyaml jsonschema
+
+      - name: Export flashsale quality contract
+        id: export
+        run: |
+          python3 .github/scripts/export_flashsale_quality_contract.py \
+            application/flashsale/release/flashsale-quality-contract.yaml \
+            "$GITHUB_OUTPUT"
+
+  prepare:
+    name: Prepare Perf Environment
+    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
+    needs:
+      - contract
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
 
       - name: Install k6
         uses: grafana/setup-k6-action@v1
 
-      - name: Configure kubeconfig
-        env:
-          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
-        run: |
-          set -euo pipefail
-
-          if [ -z "$KUBE_CONFIG_DATA" ]; then
-            echo "KUBE_CONFIG_DATA secret is missing"
-            exit 1
-          fi
-
-          mkdir -p "$HOME/.kube"
-          if ! echo "$KUBE_CONFIG_DATA" | base64 -d > "$HOME/.kube/config"; then
-            echo "Failed to decode KUBE_CONFIG_DATA. Ensure it is valid base64 kubeconfig content."
-            exit 1
-          fi
-          chmod 600 "$HOME/.kube/config"
-          export KUBECONFIG="$HOME/.kube/config"
-
-          if ! timeout 15s kubectl config current-context; then
-            echo "Failed to read current-context from kubeconfig (or command timed out)."
-            exit 1
-          fi
-
-          # Bound cluster checks to avoid opaque runner-level unhandled failures.
-          for i in 1 2 3; do
-            if timeout 30s kubectl --request-timeout=20s get nodes; then
-              exit 0
-            fi
-            echo "kubectl get nodes failed (attempt $i/3), retrying..."
-            sleep 5
-          done
-
-          echo "Unable to connect to Kubernetes cluster after retries."
-          exit 1
+      - name: Configure private k3s access
+        uses: ./.github/actions/setup-private-k3s-access
+        with:
+          kube_config_data: ${{ secrets.KUBE_CONFIG_DATA }}
+          k3s_server_url_tailscale: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+          ts_oauth_client_id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          ts_oauth_secret: ${{ env.TS_OAUTH_SECRET }}
+          ts_ci_tags: ${{ env.TS_CI_TAGS }}
+          verify_sleep_seconds: "5"
 
       - name: Verify target services
         run: |
+          set -euo pipefail
           kubectl -n "$NAMESPACE" get svc flashsales-user-service
           kubectl -n "$NAMESPACE" get svc flashsales-product-service
           kubectl -n "$NAMESPACE" get svc flashsales-order-service
 
-      - name: Run perf test
-        run: |
-          set -euo pipefail
-          export PERF_RESULTS_DIR="$PERF_RESULTS_ROOT/manual"
-          KUBECONFIG_PATH="$HOME/.kube/config" bash ./application/flashsale/perf/scripts/loadtest-k6.sh \
-            -e TARGET_VUS=${{ github.event.inputs.target_vus }} \
-            -e RAMP_UP=${{ github.event.inputs.ramp_up }} \
-            -e STEADY=${{ github.event.inputs.steady }} \
-            -e RAMP_DOWN=${{ github.event.inputs.ramp_down }} \
-            -e REPORT_INTERVAL_MS=${{ github.event.inputs.report_interval_ms }}
+  perf-cadence:
+    name: Run Flashsale Perf Cadence
+    runs-on: ${{ fromJson(vars.K8S_RUNNER_LABELS_JSON || '["ubuntu-latest"]') }}
+    needs:
+      - contract
+      - prepare
+    if: ${{ needs.prepare.result == 'success' }}
 
-      - name: Write perf result manifest
-        if: ${{ always() }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Resolve perf source metadata
+        id: source_metadata
         run: |
           set -euo pipefail
-          mkdir -p "$PERF_RESULTS_ROOT/manual"
-          cat > "$PERF_RESULTS_ROOT/manifest.json" <<EOF
+
+          source_ref="${{ github.event.inputs.flashsale_source_ref }}"
+          source_sha="${{ github.event.inputs.flashsale_source_sha }}"
+          image_tag="${{ github.event.inputs.flashsale_image_tag }}"
+
+          if [ -z "$source_ref" ]; then
+            source_ref="$(git -C application/flashsale rev-parse --abbrev-ref HEAD)"
+            if [ "$source_ref" = "HEAD" ]; then
+              source_ref="${{ github.ref_name }}"
+            fi
+          fi
+
+          if [ -z "$source_sha" ]; then
+            source_sha="$(git -C application/flashsale rev-parse HEAD)"
+          fi
+
           {
-            "generated_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
-            "workflow": "Manual Perf Test (k6)",
-            "lanes": [
-              {
-                "id": "manual",
-                "name": "manual",
-                "scenario": "manual-dispatch",
-                "status": "${{ job.status }}",
-                "results_dir": "manual",
-                "started_at": null,
-                "finished_at": null
-              }
-            ]
-          }
-          EOF
+            echo "source_ref=$source_ref"
+            echo "source_sha=$source_sha"
+            echo "image_tag=$image_tag"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Configure private k3s access
+        uses: ./.github/actions/setup-private-k3s-access
+        with:
+          kube_config_data: ${{ secrets.KUBE_CONFIG_DATA }}
+          k3s_server_url_tailscale: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+          ts_oauth_client_id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          ts_oauth_secret: ${{ env.TS_OAUTH_SECRET }}
+          ts_ci_tags: ${{ env.TS_CI_TAGS }}
+          verify_sleep_seconds: "5"
+
+      - name: Run flashsale-owned perf cadence
+        run: |
+          set -euo pipefail
+          export KUBECONFIG_PATH="$HOME/.kube/config"
+          export USE_K8S_PORT_FORWARD="true"
+          python3 .github/scripts/run_flashsale_perf_cadence.py \
+            --lanes-json '${{ needs.contract.outputs.perf_cadence_json }}' \
+            --results-root "$PERF_RESULTS_ROOT"
 
       - name: Upload perf results artifact
         if: ${{ always() }}
@@ -149,12 +195,12 @@ jobs:
           results_relative_dir="$(python3 .github/scripts/materialize_flashsale_perf_results.py \
             --results-dir "$PERF_RESULTS_ROOT" \
             --flashsale-dir application/flashsale \
-            --workflow-name "Manual Perf Test (k6)" \
+            --workflow-name "Flashsales Perf Test" \
             --run-id "${{ github.run_id }}" \
             --run-attempt "${{ github.run_attempt }}" \
-            --source-ref "${{ github.ref_name }}" \
-            --source-sha "${{ github.sha }}" \
-            --image-tag "")"
+            --source-ref "${{ steps.source_metadata.outputs.source_ref }}" \
+            --source-sha "${{ steps.source_metadata.outputs.source_sha }}" \
+            --image-tag "${{ steps.source_metadata.outputs.image_tag }}")"
           echo "results_relative_dir=$results_relative_dir" >> "$GITHUB_OUTPUT"
 
       - name: Create flashsale perf results PR
@@ -170,11 +216,12 @@ jobs:
           cat > "$pr_body" <<EOF
           Record flashsale perf results from GitHub Actions.
 
-          - Workflow: Manual Perf Test (k6)
+          - Workflow: Flashsales Perf Test
           - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           - Attempt: ${{ github.run_attempt }}
-          - Flashsale ref: ${{ github.ref_name }}
-          - Flashsale sha: ${{ github.sha }}
+          - Flashsale ref: ${{ steps.source_metadata.outputs.source_ref }}
+          - Flashsale sha: ${{ steps.source_metadata.outputs.source_sha }}
+          - Image tag: ${{ steps.source_metadata.outputs.image_tag }}
           - Results path: \`${{ steps.materialize_results.outputs.results_relative_dir }}\`
           EOF
 
@@ -198,7 +245,9 @@ jobs:
   notify-discord:
     name: Notify Discord
     needs:
-      - perf-test
+      - contract
+      - prepare
+      - perf-cadence
     if: ${{ always() }}
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -215,6 +264,6 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ vars.AWS_REGION }}
           DISCORD_WEBHOOK_SSM_NAME: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
-          WORKFLOW_NAME: Manual Perf Test (k6)
+          WORKFLOW_NAME: Flashsales Perf Test
           NEEDS_JSON: ${{ toJson(needs) }}
         run: bash .github/scripts/notify-discord.sh
