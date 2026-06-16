@@ -252,9 +252,9 @@ variable "aiven_kafka_topic_partitions" {
 }
 
 variable "aiven_kafka_topic_replication" {
-  description = "Replication factor for flashsale Kafka terminalization topics."
+  description = "Replication factor for flashsale Kafka terminalization topics. For free-0, this must be at least 2."
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "aiven_kafka_terminalization_retention_ms" {

@@ -175,6 +175,7 @@ resource "upstash_redis_database" "flashsale" {
 locals {
   upstash_redis_scheme = var.upstash_redis_tls ? "rediss" : "redis"
   upstash_redis_url    = "${local.upstash_redis_scheme}://:${upstash_redis_database.flashsale.password}@${upstash_redis_database.flashsale.endpoint}:${upstash_redis_database.flashsale.port}/0"
+  aiven_kafka_topic_replication = var.aiven_kafka_plan == "free-0" ? 2 : var.aiven_kafka_topic_replication
 }
 
 resource "aiven_project" "flashsale" {
@@ -213,7 +214,7 @@ resource "aiven_kafka" "flashsale" {
       auto_create_topics_enable        = false
       group_initial_rebalance_delay_ms = 0
       num_partitions                   = var.aiven_kafka_topic_partitions
-      default_replication_factor       = var.aiven_kafka_topic_replication
+      default_replication_factor       = local.aiven_kafka_topic_replication
     }
 
     public_access {
@@ -244,7 +245,7 @@ resource "aiven_kafka_topic" "terminalization" {
   service_name           = aiven_kafka.flashsale.service_name
   topic_name             = var.kafka_terminalization_topic
   partitions             = var.aiven_kafka_topic_partitions
-  replication            = var.aiven_kafka_topic_replication
+  replication            = local.aiven_kafka_topic_replication
   termination_protection = var.aiven_kafka_topic_termination_protection
   topic_description      = "Primary flashsale order terminalization command topic."
 
@@ -259,7 +260,7 @@ resource "aiven_kafka_topic" "terminalization_retry" {
   service_name           = aiven_kafka.flashsale.service_name
   topic_name             = var.kafka_terminalization_retry_topic
   partitions             = var.aiven_kafka_topic_partitions
-  replication            = var.aiven_kafka_topic_replication
+  replication            = local.aiven_kafka_topic_replication
   termination_protection = var.aiven_kafka_topic_termination_protection
   topic_description      = "Retry flashsale order terminalization command topic."
 
@@ -274,7 +275,7 @@ resource "aiven_kafka_topic" "terminalization_dlq" {
   service_name           = aiven_kafka.flashsale.service_name
   topic_name             = var.kafka_terminalization_dlq_topic
   partitions             = var.aiven_kafka_topic_partitions
-  replication            = var.aiven_kafka_topic_replication
+  replication            = local.aiven_kafka_topic_replication
   termination_protection = var.aiven_kafka_topic_termination_protection
   topic_description      = "Dead-letter flashsale order terminalization command topic."
 
