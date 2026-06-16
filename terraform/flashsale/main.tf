@@ -178,9 +178,9 @@ locals {
   aiven_kafka_topic_replication = var.aiven_kafka_plan == "free-0" ? 2 : var.aiven_kafka_topic_replication
   aiven_kafka_free_tier = lower(var.aiven_kafka_plan) == "free-0"
   aiven_kafka_topic_retention_ms = {
-    primary = aiven_kafka_free_tier ? 3600000 : var.aiven_kafka_terminalization_retention_ms
-    retry   = aiven_kafka_free_tier ? 3600000 : var.aiven_kafka_terminalization_retry_retention_ms
-    dlq     = aiven_kafka_free_tier ? 3600000 : var.aiven_kafka_terminalization_dlq_retention_ms
+    primary = local.aiven_kafka_free_tier ? 3600000 : var.aiven_kafka_terminalization_retention_ms
+    retry   = local.aiven_kafka_free_tier ? 3600000 : var.aiven_kafka_terminalization_retry_retention_ms
+    dlq     = local.aiven_kafka_free_tier ? 3600000 : var.aiven_kafka_terminalization_dlq_retention_ms
   }
 }
 
