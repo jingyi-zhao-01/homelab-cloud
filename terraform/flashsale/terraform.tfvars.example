@@ -24,11 +24,12 @@ upstash_redis_budget = 20
 
 # Aiven Kafka provider bootstrap is read from SSM by default:
 #   /avien/api_token
+#   /avien/org_id
 # aiven_api_token_parameter_name = "/avien/api_token"
+# aiven_org_id_parameter_name    = "/avien/org_id"
 # aiven_api_token                = "YOUR_AIVEN_API_TOKEN"
 aiven_project_name        = "flashsale"
-# Optional. Set this if your Aiven account requires projects to be created
-# under a specific organization or organizational unit.
+# Optional direct override. Leave empty to read from /avien/org_id.
 # aiven_project_parent_id = "org_or_unit_id"
 aiven_kafka_service_name  = "flashsale-kafka"
 aiven_kafka_plan          = "free-0"

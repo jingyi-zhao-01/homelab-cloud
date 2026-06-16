@@ -54,10 +54,17 @@ data "aws_ssm_parameter" "aiven_api_token" {
   with_decryption = true
 }
 
+data "aws_ssm_parameter" "aiven_org_id" {
+  count           = var.aiven_project_parent_id == "" ? 1 : 0
+  name            = var.aiven_org_id_parameter_name
+  with_decryption = true
+}
+
 locals {
   upstash_provider_email   = var.upstash_email != "" ? var.upstash_email : nonsensitive(data.aws_ssm_parameter.upstash_email[0].value)
   upstash_provider_api_key = var.upstash_api_key != "" ? var.upstash_api_key : data.aws_ssm_parameter.upstash_api_key[0].value
   aiven_provider_api_token = var.aiven_api_token != "" ? var.aiven_api_token : data.aws_ssm_parameter.aiven_api_token[0].value
+  aiven_project_parent_id  = var.aiven_project_parent_id != "" ? var.aiven_project_parent_id : data.aws_ssm_parameter.aiven_org_id[0].value
 }
 
 provider "upstash" {
@@ -172,7 +179,7 @@ locals {
 
 resource "aiven_project" "flashsale" {
   project       = var.aiven_project_name
-  parent_id     = var.aiven_project_parent_id == "" ? null : var.aiven_project_parent_id
+  parent_id     = local.aiven_project_parent_id
   default_cloud = var.aiven_kafka_cloud_name == "" ? null : var.aiven_kafka_cloud_name
 
   tag {

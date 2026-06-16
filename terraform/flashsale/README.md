@@ -72,6 +72,7 @@ See [terraform.tfvars.example](./terraform.tfvars.example) for a working startin
 By default, this stack reads the Aiven provider API token from AWS SSM Parameter Store:
 
 - `/avien/api_token`
+- `/avien/org_id`
 
 Create it manually as a SecureString before running Terraform:
 
@@ -80,6 +81,12 @@ aws ssm put-parameter \
   --name /avien/api_token \
   --type SecureString \
   --value "YOUR_AIVEN_API_TOKEN" \
+  --overwrite
+
+aws ssm put-parameter \
+  --name /avien/org_id \
+  --type SecureString \
+  --value "YOUR_AIVEN_ORG_OR_UNIT_ID" \
   --overwrite
 ```
 
@@ -99,6 +106,7 @@ The Kafka service also enables public Prometheus access so an external Prometheu
 You can override the SSM lookup or service placement with:
 
 - `aiven_api_token_parameter_name`
+- `aiven_org_id_parameter_name`
 - `aiven_api_token`
 - `aiven_project_name`
 - `aiven_project_parent_id`

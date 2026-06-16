@@ -192,9 +192,15 @@ variable "aiven_project_name" {
 }
 
 variable "aiven_project_parent_id" {
-  description = "Optional Aiven organization or organizational unit ID under which the flashsale project is created."
+  description = "Optional direct override for the Aiven organization or organizational unit ID under which the flashsale project is created. Leave empty to read from SSM."
   type        = string
   default     = ""
+}
+
+variable "aiven_org_id_parameter_name" {
+  description = "SSM SecureString parameter name containing the Aiven organization or organizational unit ID for project creation."
+  type        = string
+  default     = "/avien/org_id"
 }
 
 variable "aiven_kafka_service_name" {

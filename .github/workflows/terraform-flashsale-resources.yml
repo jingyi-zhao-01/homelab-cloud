@@ -65,6 +65,7 @@ jobs:
       TF_VAR_upstash_redis_budget: ${{ vars.FLASHSALE_UPSTASH_REDIS_BUDGET || '20' }}
       TF_VAR_aiven_api_token_parameter_name: ${{ vars.FLASHSALE_AIVEN_API_TOKEN_PARAMETER_NAME || '/avien/api_token' }}
       TF_VAR_aiven_project_name: ${{ vars.FLASHSALE_AIVEN_PROJECT_NAME || 'flashsale' }}
+      TF_VAR_aiven_org_id_parameter_name: ${{ vars.FLASHSALE_AIVEN_ORG_ID_PARAMETER_NAME || '/avien/org_id' }}
       TF_VAR_aiven_kafka_service_name: ${{ vars.FLASHSALE_AIVEN_KAFKA_SERVICE_NAME || 'flashsale-kafka' }}
       TF_VAR_aiven_kafka_plan: ${{ vars.FLASHSALE_AIVEN_KAFKA_PLAN || 'free-0' }}
       TF_VAR_aiven_kafka_cloud_name: ${{ vars.FLASHSALE_AIVEN_KAFKA_CLOUD_NAME || '' }}
@@ -149,6 +150,11 @@ jobs:
           if [ -z "${TF_VAR_aiven_api_token:-}" ]; then
             aws ssm get-parameter \
               --name "${TF_VAR_aiven_api_token_parameter_name:-/avien/api_token}" \
+              --with-decryption >/dev/null
+          fi
+          if [ -z "${TF_VAR_aiven_project_parent_id:-}" ]; then
+            aws ssm get-parameter \
+              --name "${TF_VAR_aiven_org_id_parameter_name:-/avien/org_id}" \
               --with-decryption >/dev/null
           fi
 
