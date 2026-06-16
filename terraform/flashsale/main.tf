@@ -180,7 +180,6 @@ locals {
 resource "aiven_project" "flashsale" {
   project       = var.aiven_project_name
   parent_id     = local.aiven_project_parent_id
-  default_cloud = var.aiven_kafka_cloud_name == "" ? null : var.aiven_kafka_cloud_name
 
   tag {
     key   = "project"

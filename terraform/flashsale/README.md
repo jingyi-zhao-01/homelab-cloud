@@ -90,7 +90,7 @@ aws ssm put-parameter \
   --overwrite
 ```
 
-The stack creates an Aiven Kafka service with `aiven_kafka_plan = "free-0"`, `aiven_kafka_version = "4.1"`, and `aiven_kafka_cloud_name = "aws-us-east-1"` by default, plus:
+The stack creates an Aiven Kafka service with `aiven_kafka_plan = "free-0"` and `aiven_kafka_version = "4.1"` by default, plus:
 
 - an Aiven project named by `aiven_project_name` if it does not already exist in Terraform state
 - `flashsale.order.terminalization.v1`
@@ -101,7 +101,7 @@ The stack creates an Aiven Kafka service with `aiven_kafka_plan = "free-0"`, `ai
 
 The default topic shape stays within the Aiven free tier limits: five topics maximum and two partitions maximum per topic.
 The current Aiven free tier also requires Kafka `4.1` or newer, which is why the stack defaults to `4.1`.
-We also pin the default cloud to `aws-us-east-1` because leaving free-tier placement empty can cause Aiven to auto-select a cloud that your org is not allowed to use, which surfaced in CI as `Access to cloud:do-atl denied`.
+The GitHub workflow now resolves `aiven_kafka_cloud_name` dynamically by probing your project's accessible clouds against the selected Kafka plan, which avoids both "access denied" clouds and clouds where `free-0` is not offered.
 
 The Kafka service also enables public Prometheus access so an external Prometheus server can scrape Aiven Kafka metrics. Aiven exposes Kafka metrics such as `kafka_consumer_group_rep_lag`, `kafka_consumer_group_offset`, and broker topic counters like `kafka_server_BrokerTopicMetrics_MessagesInPerSec_Count`.
 

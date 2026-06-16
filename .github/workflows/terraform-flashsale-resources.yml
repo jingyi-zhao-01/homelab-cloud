@@ -68,7 +68,7 @@ jobs:
       TF_VAR_aiven_org_id_parameter_name: ${{ vars.FLASHSALE_AIVEN_ORG_ID_PARAMETER_NAME || '/avien/org_id' }}
       TF_VAR_aiven_kafka_service_name: ${{ vars.FLASHSALE_AIVEN_KAFKA_SERVICE_NAME || 'flashsale-kafka' }}
       TF_VAR_aiven_kafka_plan: ${{ vars.FLASHSALE_AIVEN_KAFKA_PLAN || 'free-0' }}
-      TF_VAR_aiven_kafka_cloud_name: ${{ vars.FLASHSALE_AIVEN_KAFKA_CLOUD_NAME || 'aws-us-east-1' }}
+      TF_VAR_aiven_kafka_cloud_name: ${{ vars.FLASHSALE_AIVEN_KAFKA_CLOUD_NAME || '' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}
@@ -157,6 +157,92 @@ jobs:
               --name "${TF_VAR_aiven_org_id_parameter_name:-/avien/org_id}" \
               --with-decryption >/dev/null
           fi
+
+      - name: Resolve Aiven Kafka cloud
+        run: |
+          set -euo pipefail
+
+          auth_header() {
+            printf 'Authorization: aivenv1 %s' "$1"
+          }
+
+          api_token="${TF_VAR_aiven_api_token:-}"
+          if [ -z "$api_token" ]; then
+            api_token="$(
+              aws ssm get-parameter \
+                --name "${TF_VAR_aiven_api_token_parameter_name:-/avien/api_token}" \
+                --with-decryption \
+                --query 'Parameter.Value' \
+                --output text
+            )"
+          fi
+
+          explicit_cloud="${TF_VAR_aiven_kafka_cloud_name:-}"
+          if [ -n "$explicit_cloud" ]; then
+            candidate_clouds="$explicit_cloud"
+            echo "Validating explicitly configured Aiven Kafka cloud: ${explicit_cloud}"
+          else
+            clouds_json="$(
+              curl -fsS \
+                -H "$(auth_header "$api_token")" \
+                "https://api.aiven.io/v1/project/${TF_VAR_aiven_project_name}/clouds"
+            )"
+
+            candidate_clouds="$(
+              printf '%s' "$clouds_json" \
+                | jq -r '.. | .cloud_name? // empty' \
+                | awk 'NF && !seen[$0]++' \
+                | awk '
+                    function rank(cloud) {
+                      if (cloud ~ /^aws-/) return 0
+                      if (cloud ~ /^google-/) return 1
+                      if (cloud ~ /^azure-/) return 2
+                      return 99
+                    }
+                    { print rank($0) ":" $0 }
+                  ' \
+                | sort -t: -k1,1n -k2,2 \
+                | cut -d: -f2-
+            )"
+
+            if [ -z "$candidate_clouds" ]; then
+              echo "No project-accessible Aiven clouds were returned for ${TF_VAR_aiven_project_name}"
+              exit 1
+            fi
+          fi
+
+          resolved_cloud=""
+          while IFS= read -r cloud; do
+            [ -n "$cloud" ] || continue
+            status_code="$(
+              curl -sS \
+                -o /tmp/aiven-plan-cloud.json \
+                -w '%{http_code}' \
+                -H "$(auth_header "$api_token")" \
+                "https://api.aiven.io/v1/project/${TF_VAR_aiven_project_name}/pricing/service-types/kafka/plans/${TF_VAR_aiven_kafka_plan}/clouds/${cloud}"
+            )"
+
+            if [ "$status_code" = "200" ]; then
+              resolved_cloud="$cloud"
+              break
+            fi
+
+            message="$(jq -r '.message // (.errors[0].message // empty)' /tmp/aiven-plan-cloud.json 2>/dev/null || true)"
+            if [ -n "$message" ]; then
+              echo "Skipping Aiven cloud ${cloud}: ${message}"
+            else
+              echo "Skipping Aiven cloud ${cloud}: pricing lookup returned HTTP ${status_code}"
+            fi
+          done < <(printf '%s\n' "$candidate_clouds")
+
+          if [ -z "$resolved_cloud" ]; then
+            echo "Unable to find an Aiven cloud that supports plan ${TF_VAR_aiven_kafka_plan} for project ${TF_VAR_aiven_project_name}"
+            printf 'Candidates checked:\n%s\n' "$candidate_clouds"
+            exit 1
+          fi
+
+          echo "Resolved Aiven Kafka cloud: ${resolved_cloud}"
+          echo "TF_VAR_aiven_kafka_cloud_name=${resolved_cloud}" >> "$GITHUB_ENV"
 
       - name: Import existing project into Terraform state
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}

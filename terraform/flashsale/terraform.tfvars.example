@@ -37,8 +37,9 @@ aiven_kafka_version       = "4.1"
 aiven_kafka_topic_partitions = 2
 aiven_kafka_topic_replication = 1
 
-# Override if your Aiven org only permits a different cloud.
-aiven_kafka_cloud_name = "aws-us-east-1"
+# Optional explicit override. The GitHub workflow auto-resolves a project-accessible
+# cloud that supports the selected Kafka plan when this is left empty.
+# aiven_kafka_cloud_name = "google-europe-west1"
 
 kafka_terminalization_topic          = "flashsale.order.terminalization.v1"
 kafka_terminalization_retry_topic    = "flashsale.order.terminalization.retry.v1"
