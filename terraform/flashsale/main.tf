@@ -170,8 +170,24 @@ locals {
   upstash_redis_url    = "${local.upstash_redis_scheme}://:${upstash_redis_database.flashsale.password}@${upstash_redis_database.flashsale.endpoint}:${upstash_redis_database.flashsale.port}/0"
 }
 
+resource "aiven_project" "flashsale" {
+  project       = var.aiven_project_name
+  parent_id     = var.aiven_project_parent_id == "" ? null : var.aiven_project_parent_id
+  default_cloud = var.aiven_kafka_cloud_name == "" ? null : var.aiven_kafka_cloud_name
+
+  tag {
+    key   = "project"
+    value = "flashsales"
+  }
+
+  tag {
+    key   = "managed_by"
+    value = "terraform"
+  }
+}
+
 resource "aiven_kafka" "flashsale" {
-  project                = var.aiven_project_name
+  project                = aiven_project.flashsale.project
   service_name           = var.aiven_kafka_service_name
   plan                   = var.aiven_kafka_plan
   cloud_name             = var.aiven_kafka_cloud_name == "" ? null : var.aiven_kafka_cloud_name
@@ -212,13 +228,13 @@ resource "aiven_kafka" "flashsale" {
 }
 
 resource "aiven_kafka_user" "order_service" {
-  project      = var.aiven_project_name
+  project      = aiven_project.flashsale.project
   service_name = aiven_kafka.flashsale.service_name
   username     = var.aiven_kafka_order_service_username
 }
 
 resource "aiven_kafka_topic" "terminalization" {
-  project                = var.aiven_project_name
+  project                = aiven_project.flashsale.project
   service_name           = aiven_kafka.flashsale.service_name
   topic_name             = var.kafka_terminalization_topic
   partitions             = var.aiven_kafka_topic_partitions
@@ -233,7 +249,7 @@ resource "aiven_kafka_topic" "terminalization" {
 }
 
 resource "aiven_kafka_topic" "terminalization_retry" {
-  project                = var.aiven_project_name
+  project                = aiven_project.flashsale.project
   service_name           = aiven_kafka.flashsale.service_name
   topic_name             = var.kafka_terminalization_retry_topic
   partitions             = var.aiven_kafka_topic_partitions
@@ -248,7 +264,7 @@ resource "aiven_kafka_topic" "terminalization_retry" {
 }
 
 resource "aiven_kafka_topic" "terminalization_dlq" {
-  project                = var.aiven_project_name
+  project                = aiven_project.flashsale.project
   service_name           = aiven_kafka.flashsale.service_name
   topic_name             = var.kafka_terminalization_dlq_topic
   partitions             = var.aiven_kafka_topic_partitions
@@ -269,7 +285,7 @@ resource "aiven_kafka_acl" "order_service_terminalization" {
     aiven_kafka_topic.terminalization_dlq.topic_name,
   ])
 
-  project      = var.aiven_project_name
+  project      = aiven_project.flashsale.project
   service_name = aiven_kafka.flashsale.service_name
   topic        = each.value
   permission   = "readwrite"

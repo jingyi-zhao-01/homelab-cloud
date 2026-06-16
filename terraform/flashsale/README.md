@@ -85,6 +85,7 @@ aws ssm put-parameter \
 
 The stack creates an Aiven Kafka service with `aiven_kafka_plan = "free-0"` by default, plus:
 
+- an Aiven project named by `aiven_project_name` if it does not already exist in Terraform state
 - `flashsale.order.terminalization.v1`
 - `flashsale.order.terminalization.retry.v1`
 - `flashsale.order.terminalization.dlq.v1`
@@ -100,6 +101,7 @@ You can override the SSM lookup or service placement with:
 - `aiven_api_token_parameter_name`
 - `aiven_api_token`
 - `aiven_project_name`
+- `aiven_project_parent_id`
 - `aiven_kafka_cloud_name`
 - `aiven_kafka_service_name`
 

@@ -186,9 +186,15 @@ variable "aiven_api_token_parameter_name" {
 }
 
 variable "aiven_project_name" {
-  description = "Existing Aiven project name where the flashsale Kafka service is created."
+  description = "Aiven project name that Terraform manages for flashsale Kafka resources."
   type        = string
   default     = "flashsale"
+}
+
+variable "aiven_project_parent_id" {
+  description = "Optional Aiven organization or organizational unit ID under which the flashsale project is created."
+  type        = string
+  default     = ""
 }
 
 variable "aiven_kafka_service_name" {
