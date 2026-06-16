@@ -179,6 +179,48 @@ jobs:
           echo "Importing existing Neon project ${PROJECT_NAME} with id ${existing_project_id}"
           terraform import -input=false module.neon.neon_project.flashsales "$existing_project_id"
 
+      - name: Migrate legacy Grafana dashboard state addresses
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
+        run: |
+          set -euo pipefail
+
+          move_state() {
+            local from="$1"
+            local to="$2"
+
+            if terraform state list | grep -Fxq "$to"; then
+              echo "${to} already exists in Terraform state"
+              return 0
+            fi
+
+            if terraform state list | grep -Fxq "$from"; then
+              echo "Moving Terraform state ${from} -> ${to}"
+              terraform state mv "$from" "$to"
+              return 0
+            fi
+
+            echo "No legacy state found for ${from}"
+          }
+
+          move_state \
+            "module.grafana_dashboards.grafana_folder.flashsale" \
+            "grafana_folder.flashsale"
+          move_state \
+            "module.grafana_dashboards.grafana_dashboard.flashsale_order_service" \
+            "grafana_dashboard.flashsale_order_service"
+          move_state \
+            "module.grafana_dashboards.grafana_dashboard.flashsale_product_service" \
+            "grafana_dashboard.flashsale_product_service"
+          move_state \
+            "module.grafana_dashboards.grafana_dashboard.flashsale_terminalization_queue_health" \
+            "grafana_dashboard.flashsale_terminalization_queue_health"
+          move_state \
+            "module.grafana_dashboards.grafana_dashboard.flashsale_terminalization_outcomes" \
+            "grafana_dashboard.flashsale_terminalization_outcomes"
+          move_state \
+            "module.grafana_dashboards.grafana_dashboard.flashsale_distributed_traces" \
+            "grafana_dashboard.flashsale_distributed_traces"
+
       - name: Import existing Grafana folder into Terraform state
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         run: |
