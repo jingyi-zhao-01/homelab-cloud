@@ -63,6 +63,7 @@ jobs:
         if: ${{ github.event_name == 'repository_dispatch' }}
         env:
           FLASHSALE_SHA: ${{ github.event.client_payload.flashsale_sha }}
+          FLASHSALE_FETCH_REF: ${{ github.event.client_payload.flashsale_fetch_ref }}
         run: |
           set -euo pipefail
           if [ -z "${FLASHSALE_SHA:-}" ]; then
@@ -70,7 +71,11 @@ jobs:
             exit 1
           fi
 
-          git -C application/flashsale fetch --depth=1 origin "$FLASHSALE_SHA"
+          if [ -n "${FLASHSALE_FETCH_REF:-}" ]; then
+            git -C application/flashsale fetch --depth=1 origin "$FLASHSALE_FETCH_REF"
+          else
+            git -C application/flashsale fetch --depth=1 origin "$FLASHSALE_SHA"
+          fi
           git -C application/flashsale checkout --detach "$FLASHSALE_SHA"
 
       - name: Show flashsale source metadata
