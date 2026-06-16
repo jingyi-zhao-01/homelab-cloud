@@ -11,6 +11,11 @@ on:
   repository_dispatch:
     types:
       - flashsale-release-ready
+  pull_request:
+    types:
+      - opened
+    branches:
+      - main
   push:
     branches:
       - main
