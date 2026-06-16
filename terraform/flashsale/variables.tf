@@ -260,19 +260,19 @@ variable "aiven_kafka_topic_replication" {
 variable "aiven_kafka_terminalization_retention_ms" {
   description = "Retention in milliseconds for the primary terminalization topic."
   type        = number
-  default     = 604800000
+  default     = 86400000
 }
 
 variable "aiven_kafka_terminalization_retry_retention_ms" {
   description = "Retention in milliseconds for the terminalization retry topic."
   type        = number
-  default     = 604800000
+  default     = 86400000
 }
 
 variable "aiven_kafka_terminalization_dlq_retention_ms" {
   description = "Retention in milliseconds for the terminalization dead-letter topic."
   type        = number
-  default     = 1209600000
+  default     = 86400000
 }
 
 variable "kafka_terminalization_topic" {
