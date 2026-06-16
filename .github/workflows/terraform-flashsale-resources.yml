@@ -68,7 +68,7 @@ jobs:
       TF_VAR_aiven_org_id_parameter_name: ${{ vars.FLASHSALE_AIVEN_ORG_ID_PARAMETER_NAME || '/avien/org_id' }}
       TF_VAR_aiven_kafka_service_name: ${{ vars.FLASHSALE_AIVEN_KAFKA_SERVICE_NAME || 'flashsale-kafka' }}
       TF_VAR_aiven_kafka_plan: ${{ vars.FLASHSALE_AIVEN_KAFKA_PLAN || 'free-0' }}
-      TF_VAR_aiven_kafka_cloud_name: ${{ vars.FLASHSALE_AIVEN_KAFKA_CLOUD_NAME || '' }}
+      TF_VAR_aiven_kafka_cloud_name: ${{ vars.FLASHSALE_AIVEN_KAFKA_CLOUD_NAME || 'aws-us-east-1' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}

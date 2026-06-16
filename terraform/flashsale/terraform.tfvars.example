@@ -37,8 +37,8 @@ aiven_kafka_version       = "4.1"
 aiven_kafka_topic_partitions = 2
 aiven_kafka_topic_replication = 1
 
-# Optional. Leave empty to let Aiven choose the free-tier cloud placement.
-# aiven_kafka_cloud_name = ""
+# Override if your Aiven org only permits a different cloud.
+aiven_kafka_cloud_name = "aws-us-east-1"
 
 kafka_terminalization_topic          = "flashsale.order.terminalization.v1"
 kafka_terminalization_retry_topic    = "flashsale.order.terminalization.retry.v1"

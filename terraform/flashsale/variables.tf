@@ -216,9 +216,14 @@ variable "aiven_kafka_plan" {
 }
 
 variable "aiven_kafka_cloud_name" {
-  description = "Optional Aiven cloud name. Leave empty for free-tier managed placement."
+  description = "Aiven cloud name for the Kafka service. Defaults to an AWS region so free-tier provisioning does not fall back to an inaccessible provider-selected cloud."
   type        = string
-  default     = ""
+  default     = "aws-us-east-1"
+
+  validation {
+    condition     = var.aiven_kafka_plan != "free-0" || var.aiven_kafka_cloud_name != ""
+    error_message = "aiven_kafka_cloud_name must be set when using the Aiven free-0 Kafka plan."
+  }
 }
 
 variable "aiven_kafka_version" {
