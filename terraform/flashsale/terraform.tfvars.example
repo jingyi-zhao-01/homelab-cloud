@@ -33,7 +33,7 @@ aiven_project_name        = "flashsale"
 # aiven_project_parent_id = "org_or_unit_id"
 aiven_kafka_service_name  = "flashsale-kafka"
 aiven_kafka_plan          = "free-0"
-aiven_kafka_version       = "4.0"
+aiven_kafka_version       = "4.1"
 aiven_kafka_topic_partitions = 2
 aiven_kafka_topic_replication = 1
 

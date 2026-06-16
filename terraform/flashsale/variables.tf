@@ -222,9 +222,9 @@ variable "aiven_kafka_cloud_name" {
 }
 
 variable "aiven_kafka_version" {
-  description = "Kafka major version for the Aiven service."
+  description = "Kafka major version for the Aiven service. Aiven free-0 currently requires 4.1 or newer."
   type        = string
-  default     = "4.0"
+  default     = "4.1"
 }
 
 variable "aiven_kafka_termination_protection" {

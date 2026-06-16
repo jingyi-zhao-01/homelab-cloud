@@ -90,7 +90,7 @@ aws ssm put-parameter \
   --overwrite
 ```
 
-The stack creates an Aiven Kafka service with `aiven_kafka_plan = "free-0"` by default, plus:
+The stack creates an Aiven Kafka service with `aiven_kafka_plan = "free-0"` and `aiven_kafka_version = "4.1"` by default, plus:
 
 - an Aiven project named by `aiven_project_name` if it does not already exist in Terraform state
 - `flashsale.order.terminalization.v1`
@@ -100,6 +100,7 @@ The stack creates an Aiven Kafka service with `aiven_kafka_plan = "free-0"` by d
 - a Grafana dashboard for Kafka terminalization health, using the Prometheus datasource configured by `prometheus_datasource_uid`
 
 The default topic shape stays within the Aiven free tier limits: five topics maximum and two partitions maximum per topic.
+The current Aiven free tier also requires Kafka `4.1` or newer, which is why the stack defaults to `4.1`.
 
 The Kafka service also enables public Prometheus access so an external Prometheus server can scrape Aiven Kafka metrics. Aiven exposes Kafka metrics such as `kafka_consumer_group_rep_lag`, `kafka_consumer_group_offset`, and broker topic counters like `kafka_server_BrokerTopicMetrics_MessagesInPerSec_Count`.
 
