@@ -166,6 +166,16 @@ jobs:
             printf 'Authorization: aivenv1 %s' "$1"
           }
 
+          api_get() {
+            local output_file="$1"
+            shift
+            curl -sS \
+              -o "$output_file" \
+              -w '%{http_code}' \
+              -H "$(auth_header "$api_token")" \
+              "$@"
+          }
+
           api_token="${TF_VAR_aiven_api_token:-}"
           if [ -z "$api_token" ]; then
             api_token="$(
@@ -177,20 +187,71 @@ jobs:
             )"
           fi
 
+          target_project="${TF_VAR_aiven_project_name}"
           explicit_cloud="${TF_VAR_aiven_kafka_cloud_name:-}"
+          probe_project=""
+
+          project_status="$(api_get /tmp/aiven-target-project.json "https://api.aiven.io/v1/project/${target_project}")"
+          if [ "$project_status" = "200" ]; then
+            probe_project="$target_project"
+          elif [ "$project_status" = "404" ]; then
+            echo "Aiven project ${target_project} does not exist yet; resolving Kafka cloud before project creation."
+          else
+            message="$(jq -r '.message // (.errors[0].message // empty)' /tmp/aiven-target-project.json 2>/dev/null || true)"
+            if [ -n "$message" ]; then
+              echo "Unable to inspect Aiven project ${target_project}: ${message}"
+            else
+              echo "Unable to inspect Aiven project ${target_project}: HTTP ${project_status}"
+            fi
+            exit 1
+          fi
+
+          if [ -z "$probe_project" ]; then
+            projects_status="$(api_get /tmp/aiven-projects.json "https://api.aiven.io/v1/project")"
+            if [ "$projects_status" != "200" ]; then
+              message="$(jq -r '.message // (.errors[0].message // empty)' /tmp/aiven-projects.json 2>/dev/null || true)"
+              if [ -n "$message" ]; then
+                echo "Unable to list accessible Aiven projects: ${message}"
+              else
+                echo "Unable to list accessible Aiven projects: HTTP ${projects_status}"
+              fi
+              exit 1
+            fi
+
+            probe_project="$(
+              jq -r '.projects[].project_name // empty' /tmp/aiven-projects.json \
+                | awk 'NF { print; exit }'
+            )"
+
+            if [ -n "$probe_project" ]; then
+              echo "Using existing Aiven project ${probe_project} to probe Kafka plan availability."
+            else
+              echo "No existing Aiven projects are accessible; falling back to the global cloud catalog."
+            fi
+          fi
+
           if [ -n "$explicit_cloud" ]; then
             candidate_clouds="$explicit_cloud"
             echo "Validating explicitly configured Aiven Kafka cloud: ${explicit_cloud}"
           else
-            clouds_json="$(
-              curl -fsS \
-                -H "$(auth_header "$api_token")" \
-                "https://api.aiven.io/v1/project/${TF_VAR_aiven_project_name}/clouds"
-            )"
+            if [ -n "$probe_project" ]; then
+              clouds_status="$(api_get /tmp/aiven-clouds.json "https://api.aiven.io/v1/project/${probe_project}/clouds")"
+            else
+              clouds_status="$(api_get /tmp/aiven-clouds.json "https://api.aiven.io/v1/clouds")"
+            fi
+
+            if [ "$clouds_status" != "200" ]; then
+              message="$(jq -r '.message // (.errors[0].message // empty)' /tmp/aiven-clouds.json 2>/dev/null || true)"
+              if [ -n "$message" ]; then
+                echo "Unable to list candidate Aiven clouds: ${message}"
+              else
+                echo "Unable to list candidate Aiven clouds: HTTP ${clouds_status}"
+              fi
+              exit 1
+            fi
 
             candidate_clouds="$(
-              printf '%s' "$clouds_json" \
-                | jq -r '.. | .cloud_name? // empty' \
+              jq -r '.. | .cloud_name? // empty' /tmp/aiven-clouds.json \
                 | awk 'NF && !seen[$0]++' \
                 | awk '
                     function rank(cloud) {
@@ -206,7 +267,7 @@ jobs:
             )"
 
             if [ -z "$candidate_clouds" ]; then
-              echo "No project-accessible Aiven clouds were returned for ${TF_VAR_aiven_project_name}"
+              echo "No candidate Aiven clouds were returned"
               exit 1
             fi
           fi
@@ -214,13 +275,13 @@ jobs:
           resolved_cloud=""
           while IFS= read -r cloud; do
             [ -n "$cloud" ] || continue
-            status_code="$(
-              curl -sS \
-                -o /tmp/aiven-plan-cloud.json \
-                -w '%{http_code}' \
-                -H "$(auth_header "$api_token")" \
-                "https://api.aiven.io/v1/project/${TF_VAR_aiven_project_name}/pricing/service-types/kafka/plans/${TF_VAR_aiven_kafka_plan}/clouds/${cloud}"
-            )"
+            if [ -z "$probe_project" ]; then
+              resolved_cloud="$cloud"
+              echo "Selected Aiven cloud ${cloud} from the global catalog without project-scoped plan validation."
+              break
+            fi
+
+            status_code="$(api_get /tmp/aiven-plan-cloud.json "https://api.aiven.io/v1/project/${probe_project}/pricing/service-types/kafka/plans/${TF_VAR_aiven_kafka_plan}/clouds/${cloud}")"
 
             if [ "$status_code" = "200" ]; then
               resolved_cloud="$cloud"
@@ -236,7 +297,7 @@ jobs:
           done < <(printf '%s\n' "$candidate_clouds")
 
           if [ -z "$resolved_cloud" ]; then
-            echo "Unable to find an Aiven cloud that supports plan ${TF_VAR_aiven_kafka_plan} for project ${TF_VAR_aiven_project_name}"
+            echo "Unable to find an Aiven cloud that supports plan ${TF_VAR_aiven_kafka_plan} for project ${target_project}"
             printf 'Candidates checked:\n%s\n' "$candidate_clouds"
             exit 1
           fi
