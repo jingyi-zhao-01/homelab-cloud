@@ -158,7 +158,68 @@ jobs:
               --with-decryption >/dev/null
           fi
 
+      - name: Import existing Aiven project into Terraform state
+        if: ${{ inputs.action != 'destroy' }}
+        run: |
+          set -euo pipefail
+
+          if terraform state show aiven_project.flashsale >/dev/null 2>&1; then
+            echo "aiven_project.flashsale already managed by Terraform"
+            exit 0
+          fi
+
+          api_token="${TF_VAR_aiven_api_token:-}"
+          if [ -z "$api_token" ]; then
+            api_token="$(
+              aws ssm get-parameter \
+                --name "${TF_VAR_aiven_api_token_parameter_name:-/avien/api_token}" \
+                --with-decryption \
+                --query 'Parameter.Value' \
+                --output text
+            )"
+          fi
+
+          project_status="$(
+            curl -sS \
+              -o /tmp/aiven-target-project-import.json \
+              -w '%{http_code}' \
+              -H "Authorization: aivenv1 ${api_token}" \
+              "https://api.aiven.io/v1/project/${TF_VAR_aiven_project_name}"
+          )"
+
+          if [ "$project_status" = "404" ]; then
+            echo "Aiven project ${TF_VAR_aiven_project_name} does not exist yet; Terraform will create it"
+            exit 0
+          fi
+
+          if [ "$project_status" != "200" ]; then
+            message="$(jq -r '.message // (.errors[0].message // empty)' /tmp/aiven-target-project-import.json 2>/dev/null || true)"
+            if [ -n "$message" ]; then
+              echo "Unable to inspect Aiven project ${TF_VAR_aiven_project_name}: ${message}"
+            else
+              echo "Unable to inspect Aiven project ${TF_VAR_aiven_project_name}: HTTP ${project_status}"
+            fi
+            exit 1
+          fi
+
+          echo "Importing existing Aiven project ${TF_VAR_aiven_project_name}"
+          terraform import -input=false aiven_project.flashsale "${TF_VAR_aiven_project_name}"
+
+      - name: Bootstrap Aiven project for cloud resolution
+        if: ${{ (inputs.action == 'apply' || inputs.action == '') && vars.FLASHSALE_AIVEN_KAFKA_CLOUD_NAME == '' }}
+        run: |
+          set -euo pipefail
+
+          if terraform state show aiven_project.flashsale >/dev/null 2>&1; then
+            echo "aiven_project.flashsale already managed by Terraform"
+            exit 0
+          fi
+
+          echo "Bootstrapping aiven_project.flashsale so cloud resolution can use the real target project"
+          terraform apply -target=aiven_project.flashsale -auto-approve -input=false
+
       - name: Resolve Aiven Kafka cloud
+        if: ${{ inputs.action != 'destroy' }}
         run: |
           set -euo pipefail
 
@@ -189,55 +250,27 @@ jobs:
 
           target_project="${TF_VAR_aiven_project_name}"
           explicit_cloud="${TF_VAR_aiven_kafka_cloud_name:-}"
-          probe_project=""
+          preferred_cloud="aws-${AWS_REGION}"
 
           project_status="$(api_get /tmp/aiven-target-project.json "https://api.aiven.io/v1/project/${target_project}")"
-          if [ "$project_status" = "200" ]; then
-            probe_project="$target_project"
-          elif [ "$project_status" = "404" ]; then
-            echo "Aiven project ${target_project} does not exist yet; resolving Kafka cloud before project creation."
-          else
-            message="$(jq -r '.message // (.errors[0].message // empty)' /tmp/aiven-target-project.json 2>/dev/null || true)"
-            if [ -n "$message" ]; then
-              echo "Unable to inspect Aiven project ${target_project}: ${message}"
-            else
-              echo "Unable to inspect Aiven project ${target_project}: HTTP ${project_status}"
-            fi
-            exit 1
-          fi
-
-          if [ -z "$probe_project" ]; then
-            projects_status="$(api_get /tmp/aiven-projects.json "https://api.aiven.io/v1/project")"
-            if [ "$projects_status" != "200" ]; then
-              message="$(jq -r '.message // (.errors[0].message // empty)' /tmp/aiven-projects.json 2>/dev/null || true)"
-              if [ -n "$message" ]; then
-                echo "Unable to list accessible Aiven projects: ${message}"
-              else
-                echo "Unable to list accessible Aiven projects: HTTP ${projects_status}"
-              fi
-              exit 1
-            fi
-
-            probe_project="$(
-              jq -r '.projects[].project_name // empty' /tmp/aiven-projects.json \
-                | awk 'NF { print; exit }'
-            )"
-
-            if [ -n "$probe_project" ]; then
-              echo "Using existing Aiven project ${probe_project} to probe Kafka plan availability."
-            else
-              echo "No existing Aiven projects are accessible; falling back to the global cloud catalog."
-            fi
-          fi
 
           if [ -n "$explicit_cloud" ]; then
             candidate_clouds="$explicit_cloud"
             echo "Validating explicitly configured Aiven Kafka cloud: ${explicit_cloud}"
           else
-            if [ -n "$probe_project" ]; then
-              clouds_status="$(api_get /tmp/aiven-clouds.json "https://api.aiven.io/v1/project/${probe_project}/clouds")"
-            else
+            if [ "$project_status" = "200" ]; then
+              clouds_status="$(api_get /tmp/aiven-clouds.json "https://api.aiven.io/v1/project/${target_project}/clouds")"
+            elif [ "$project_status" = "404" ]; then
+              echo "Aiven project ${target_project} still does not exist; using the global cloud catalog as a fallback."
               clouds_status="$(api_get /tmp/aiven-clouds.json "https://api.aiven.io/v1/clouds")"
+            else
+              message="$(jq -r '.message // (.errors[0].message // empty)' /tmp/aiven-target-project.json 2>/dev/null || true)"
+              if [ -n "$message" ]; then
+                echo "Unable to inspect Aiven project ${target_project}: ${message}"
+              else
+                echo "Unable to inspect Aiven project ${target_project}: HTTP ${project_status}"
+              fi
+              exit 1
             fi
 
             if [ "$clouds_status" != "200" ]; then
@@ -253,14 +286,20 @@ jobs:
             candidate_clouds="$(
               jq -r '.. | .cloud_name? // empty' /tmp/aiven-clouds.json \
                 | awk 'NF && !seen[$0]++' \
-                | awk '
+                | awk -v preferred_cloud="$preferred_cloud" '
                     function rank(cloud) {
+                      if (cloud == preferred_cloud) return -20
+                      if (cloud ~ /^aws-us-/) return -10
                       if (cloud ~ /^aws-/) return 0
-                      if (cloud ~ /^google-/) return 1
-                      if (cloud ~ /^azure-/) return 2
+                      if (cloud ~ /^google-us-/) return 10
+                      if (cloud ~ /^google-/) return 20
+                      if (cloud ~ /^azure-us-/) return 30
+                      if (cloud ~ /^azure-/) return 40
                       return 99
                     }
-                    { print rank($0) ":" $0 }
+                    {
+                      printf "%03d:%s\n", rank($0) + 100, $0
+                    }
                   ' \
                 | sort -t: -k1,1n -k2,2 \
                 | cut -d: -f2-
@@ -275,13 +314,13 @@ jobs:
           resolved_cloud=""
           while IFS= read -r cloud; do
             [ -n "$cloud" ] || continue
-            if [ -z "$probe_project" ]; then
+            if [ "$project_status" = "404" ]; then
               resolved_cloud="$cloud"
               echo "Selected Aiven cloud ${cloud} from the global catalog without project-scoped plan validation."
               break
             fi
 
-            status_code="$(api_get /tmp/aiven-plan-cloud.json "https://api.aiven.io/v1/project/${probe_project}/pricing/service-types/kafka/plans/${TF_VAR_aiven_kafka_plan}/clouds/${cloud}")"
+            status_code="$(api_get /tmp/aiven-plan-cloud.json "https://api.aiven.io/v1/project/${target_project}/pricing/service-types/kafka/plans/${TF_VAR_aiven_kafka_plan}/clouds/${cloud}")"
 
             if [ "$status_code" = "200" ]; then
               resolved_cloud="$cloud"
