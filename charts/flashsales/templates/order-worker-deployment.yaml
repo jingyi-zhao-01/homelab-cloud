@@ -76,7 +76,6 @@ spec:
                   name: {{ .Values.externalSecrets.targetSecretName }}
                   key: REDIS_URL
                   optional: true
-            {{- if .Values.externalSecrets.includeAivenKafka }}
             - name: KAFKA_BOOTSTRAP_SERVERS
               valueFrom:
                 secretKeyRef:
@@ -132,7 +131,6 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.externalSecrets.targetSecretName }}
                   key: KAFKA_TERMINALIZATION_CONSUMER_GROUP
-            {{- end }}
             {{- if .Values.observability.tracing.existingSecretName }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               valueFrom:
