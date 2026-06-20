@@ -95,6 +95,11 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.externalSecrets.targetSecretName }}
                   key: KAFKA_PASSWORD
+            - name: KAFKA_CA_CERT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.externalSecrets.targetSecretName }}
+                  key: KAFKA_CA_CERT
             - name: KAFKA_TERMINALIZATION_TOPIC
               valueFrom:
                 secretKeyRef:

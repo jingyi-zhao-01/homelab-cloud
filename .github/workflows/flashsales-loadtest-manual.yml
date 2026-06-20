@@ -115,13 +115,18 @@ jobs:
                 -o jsonpath='{.data.KAFKA_SECURITY_PROTOCOL}' 2>/dev/null \
                 | base64 --decode 2>/dev/null || true
             )"
+            kafka_ca_cert="$(
+              kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth \
+                -o jsonpath='{.data.KAFKA_CA_CERT}' 2>/dev/null \
+                | base64 --decode 2>/dev/null || true
+            )"
 
-            if [ "$protocol" = "SASL_SSL" ]; then
-              echo "Kafka runtime secret has KAFKA_SECURITY_PROTOCOL=SASL_SSL"
+            if [ "$protocol" = "SASL_SSL" ] && printf '%s' "$kafka_ca_cert" | grep -q 'BEGIN CERTIFICATE'; then
+              echo "Kafka runtime secret has SASL_SSL and KAFKA_CA_CERT"
               break
             fi
 
-            echo "Waiting for Kafka runtime secret to sync SASL_SSL (attempt ${attempt}/30, current=${protocol:-missing})..."
+            echo "Waiting for Kafka runtime secret to sync SASL_SSL + CA cert (attempt ${attempt}/30, protocol=${protocol:-missing})..."
             sleep 5
           done
 
@@ -130,8 +135,13 @@ jobs:
               -o jsonpath='{.data.KAFKA_SECURITY_PROTOCOL}' 2>/dev/null \
               | base64 --decode 2>/dev/null || true
           )"
-          if [ "$protocol" != "SASL_SSL" ]; then
-            echo "KAFKA_SECURITY_PROTOCOL must be SASL_SSL before perf; got ${protocol:-missing}"
+          kafka_ca_cert="$(
+            kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth \
+              -o jsonpath='{.data.KAFKA_CA_CERT}' 2>/dev/null \
+              | base64 --decode 2>/dev/null || true
+          )"
+          if [ "$protocol" != "SASL_SSL" ] || ! printf '%s' "$kafka_ca_cert" | grep -q 'BEGIN CERTIFICATE'; then
+            echo "Kafka runtime secret must contain SASL_SSL and a PEM KAFKA_CA_CERT before perf; protocol=${protocol:-missing}"
             echo "ExternalSecret status:"
             kubectl -n "$NAMESPACE" get externalsecret flashsales-postgres-auth -o yaml || true
             exit 1
@@ -174,6 +184,7 @@ jobs:
               "KAFKA_SERVICE_URI",
               "KAFKA_USERNAME",
               "KAFKA_PASSWORD",
+              "KAFKA_CA_CERT",
               "KAFKA_TERMINALIZATION_TOPIC",
               "KAFKA_TERMINALIZATION_RETRY_TOPIC",
               "KAFKA_TERMINALIZATION_DLQ_TOPIC",
@@ -186,6 +197,8 @@ jobs:
                   raise SystemExit(
                       f"Kafka secret key {name} still contains an Aiven redacted placeholder"
                   )
+              if name == "KAFKA_CA_CERT" and "BEGIN CERTIFICATE" not in current:
+                  raise SystemExit("KAFKA_CA_CERT must contain a PEM certificate")
 
           print("Kafka runtime secret preflight passed")
           PY

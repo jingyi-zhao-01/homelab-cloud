@@ -61,6 +61,10 @@ KAFKA_PASSWORD:
   path: /flashsales/prod/KAFKA_PASSWORD
   optional: false
 
+KAFKA_CA_CERT:
+  path: /flashsales/prod/KAFKA_CA_CERT
+  optional: false
+
 KAFKA_TERMINALIZATION_TOPIC:
   path: /flashsales/prod/KAFKA_TERMINALIZATION_TOPIC
   optional: false
