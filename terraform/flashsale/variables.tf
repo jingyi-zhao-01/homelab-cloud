@@ -240,9 +240,9 @@ variable "aiven_kafka_topic_termination_protection" {
 }
 
 variable "aiven_kafka_order_service_username" {
-  description = "Kafka user name used by flashsale order-service and order-worker."
+  description = "Kafka SASL user name used by flashsale order-service and order-worker. This must match the externally managed Aiven credential currently used for KAFKA_PASSWORD."
   type        = string
-  default     = "flashsale-order-service-v3"
+  default     = "avnadmin"
 }
 
 variable "aiven_kafka_topic_partitions" {
