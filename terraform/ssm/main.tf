@@ -197,7 +197,7 @@ resource "aws_ssm_parameter" "kafka_username" {
 resource "terraform_data" "kafka_credentials_generation" {
   count = var.include_aiven_kafka_runtime ? 1 : 0
 
-  input = var.kafka_credentials_generation
+  triggers_replace = var.kafka_credentials_generation
 }
 
 resource "aws_ssm_parameter" "kafka_password" {

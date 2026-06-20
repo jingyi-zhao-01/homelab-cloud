@@ -102,6 +102,51 @@ jobs:
           kubectl -n "$NAMESPACE" get svc flashsales-user-service
           kubectl -n "$NAMESPACE" get svc flashsales-product-service
           kubectl -n "$NAMESPACE" get svc flashsales-order-service
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-user-service --timeout=120s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-product-service --timeout=120s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=120s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-worker --timeout=120s
+
+          kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth -o json | python3 - <<'PY'
+          import base64
+          import json
+          import sys
+
+          secret = json.load(sys.stdin)
+          data = secret.get("data", {})
+
+          def value(name: str) -> str:
+              encoded = data.get(name)
+              if not encoded:
+                  raise SystemExit(f"Missing required Kafka secret key: {name}")
+              return base64.b64decode(encoded).decode("utf-8", errors="replace")
+
+          protocol = value("KAFKA_SECURITY_PROTOCOL")
+          if protocol != "SASL_SSL":
+              raise SystemExit(
+                  f"KAFKA_SECURITY_PROTOCOL must be SASL_SSL before perf; got {protocol!r}"
+              )
+
+          for name in (
+              "KAFKA_BOOTSTRAP_SERVERS",
+              "KAFKA_SERVICE_URI",
+              "KAFKA_USERNAME",
+              "KAFKA_PASSWORD",
+              "KAFKA_TERMINALIZATION_TOPIC",
+              "KAFKA_TERMINALIZATION_RETRY_TOPIC",
+              "KAFKA_TERMINALIZATION_DLQ_TOPIC",
+              "KAFKA_TERMINALIZATION_CONSUMER_GROUP",
+          ):
+              current = value(name)
+              if not current.strip():
+                  raise SystemExit(f"Kafka secret key {name} is empty")
+              if "<redacted>" in current:
+                  raise SystemExit(
+                      f"Kafka secret key {name} still contains an Aiven redacted placeholder"
+                  )
+
+          print("Kafka runtime secret preflight passed")
+          PY
 
   perf-cadence:
     name: Run Flashsale Perf Cadence

@@ -453,6 +453,48 @@ jobs:
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         run: terraform apply -auto-approve -input=false
 
+      - name: Verify Kafka runtime SSM parameters
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
+        run: |
+          set -euo pipefail
+
+          ssm_value() {
+            aws ssm get-parameter \
+              --name "$1" \
+              --with-decryption \
+              --query 'Parameter.Value' \
+              --output text
+          }
+
+          kafka_password="$(ssm_value /flashsales/prod/KAFKA_PASSWORD)"
+          if [ -z "$kafka_password" ]; then
+            echo "KAFKA_PASSWORD is empty after Terraform apply"
+            exit 1
+          fi
+          case "$kafka_password" in
+            *"<redacted>"*)
+              echo "KAFKA_PASSWORD still contains an Aiven redacted placeholder after Terraform apply"
+              exit 1
+              ;;
+          esac
+
+          kafka_protocol="$(ssm_value /flashsales/prod/KAFKA_SECURITY_PROTOCOL)"
+          if [ "$kafka_protocol" != "SASL_SSL" ]; then
+            echo "KAFKA_SECURITY_PROTOCOL must be SASL_SSL after Terraform apply; got ${kafka_protocol}"
+            exit 1
+          fi
+
+          for removed_key in KAFKA_ACCESS_CERT KAFKA_ACCESS_KEY; do
+            if aws ssm get-parameter \
+              --name "/flashsales/prod/${removed_key}" \
+              --with-decryption >/dev/null 2>&1; then
+              echo "/flashsales/prod/${removed_key} should have been destroyed by Terraform"
+              exit 1
+            fi
+          done
+
+          echo "Kafka runtime SSM parameters verified"
+
       - name: Roll back newly-created Neon project if apply flow failed
         if: ${{ failure() && (inputs.action == 'apply' || inputs.action == '') && steps.precheck_project.outputs.project_preexisting == 'false' }}
         run: |
