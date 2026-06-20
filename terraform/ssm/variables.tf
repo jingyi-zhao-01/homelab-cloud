@@ -110,7 +110,7 @@ variable "kafka_service_uri" {
 variable "kafka_security_protocol" {
   description = "Kafka security protocol"
   type        = string
-  default     = "SSL"
+  default     = "SASL_SSL"
 }
 
 variable "kafka_username" {
@@ -127,17 +127,9 @@ variable "kafka_password" {
   default     = ""
 }
 
-variable "kafka_access_cert" {
-  description = "Kafka runtime client certificate"
+variable "kafka_credentials_generation" {
+  description = "Generation marker for one-time-readable Kafka credentials. Change this to intentionally replace credential SSM parameters."
   type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "kafka_access_key" {
-  description = "Kafka runtime client private key"
-  type        = string
-  sensitive   = true
   default     = ""
 }
 

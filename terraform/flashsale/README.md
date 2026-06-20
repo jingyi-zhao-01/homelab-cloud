@@ -140,4 +140,4 @@ but the preferred pattern is:
 - The Neon and Grafana subdirectories still exist for compatibility, but the preferred automation entrypoint is the namespace-level flashsale stack and its `terraform-flashsale-resources.yml` workflow.
 - The Upstash provider stores connection outputs in Terraform state. Treat remote state access as sensitive.
 - The stack now mirrors Neon, Upstash, and Kafka credentials into AWS SSM Parameter Store under `/flashsales/prod` by default.
-- The SSM path includes `DATABASE_URL`, `POSTGRES_*`, `REDIS_URL`, `UPSTASH_REDIS_*`, `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SERVICE_URI`, `KAFKA_USERNAME`, `KAFKA_PASSWORD`, `KAFKA_ACCESS_CERT`, `KAFKA_ACCESS_KEY`, and the terminalization topic names.
+- The SSM path includes `DATABASE_URL`, `POSTGRES_*`, `REDIS_URL`, `UPSTASH_REDIS_*`, `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SERVICE_URI`, `KAFKA_SECURITY_PROTOCOL`, `KAFKA_USERNAME`, `KAFKA_PASSWORD`, and the terminalization topic names.

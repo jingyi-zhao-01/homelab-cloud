@@ -242,7 +242,7 @@ variable "aiven_kafka_topic_termination_protection" {
 variable "aiven_kafka_order_service_username" {
   description = "Kafka user name used by flashsale order-service and order-worker."
   type        = string
-  default     = "flashsale-order-service"
+  default     = "flashsale-order-service-v2"
 }
 
 variable "aiven_kafka_topic_partitions" {

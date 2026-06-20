@@ -173,10 +173,10 @@ resource "upstash_redis_database" "flashsale" {
 }
 
 locals {
-  upstash_redis_scheme = var.upstash_redis_tls ? "rediss" : "redis"
-  upstash_redis_url    = "${local.upstash_redis_scheme}://:${upstash_redis_database.flashsale.password}@${upstash_redis_database.flashsale.endpoint}:${upstash_redis_database.flashsale.port}/0"
+  upstash_redis_scheme          = var.upstash_redis_tls ? "rediss" : "redis"
+  upstash_redis_url             = "${local.upstash_redis_scheme}://:${upstash_redis_database.flashsale.password}@${upstash_redis_database.flashsale.endpoint}:${upstash_redis_database.flashsale.port}/0"
   aiven_kafka_topic_replication = var.aiven_kafka_plan == "free-0" ? 2 : var.aiven_kafka_topic_replication
-  aiven_kafka_free_tier = lower(var.aiven_kafka_plan) == "free-0"
+  aiven_kafka_free_tier         = lower(var.aiven_kafka_plan) == "free-0"
   aiven_kafka_topic_retention_ms = {
     primary = local.aiven_kafka_free_tier ? 3600000 : var.aiven_kafka_terminalization_retention_ms
     retry   = local.aiven_kafka_free_tier ? 3600000 : var.aiven_kafka_terminalization_retry_retention_ms
@@ -185,8 +185,8 @@ locals {
 }
 
 resource "aiven_project" "flashsale" {
-  project       = var.aiven_project_name
-  parent_id     = local.aiven_project_parent_id
+  project   = var.aiven_project_name
+  parent_id = local.aiven_project_parent_id
 
   tag {
     key   = "project"
@@ -329,11 +329,10 @@ module "ssm" {
   upstash_redis_read_only_rest_token   = upstash_redis_database.flashsale.read_only_rest_token
   kafka_bootstrap_servers              = local.aiven_kafka_bootstrap_servers
   kafka_service_uri                    = aiven_kafka.flashsale.service_uri
-  kafka_security_protocol              = "SSL"
+  kafka_security_protocol              = "SASL_SSL"
   kafka_username                       = aiven_kafka_user.order_service.username
   kafka_password                       = aiven_kafka_user.order_service.password
-  kafka_access_cert                    = aiven_kafka_user.order_service.access_cert
-  kafka_access_key                     = aiven_kafka_user.order_service.access_key
+  kafka_credentials_generation         = aiven_kafka_user.order_service.username
   kafka_terminalization_topic          = aiven_kafka_topic.terminalization.topic_name
   kafka_terminalization_retry_topic    = aiven_kafka_topic.terminalization_retry.topic_name
   kafka_terminalization_dlq_topic      = aiven_kafka_topic.terminalization_dlq.topic_name
