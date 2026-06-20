@@ -10,6 +10,11 @@ spec:
   {{- if not .Values.orderService.worker.autoscaling.enabled }}
   replicas: {{ .Values.orderService.workerReplicaCount }}
   {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/component: order-worker
