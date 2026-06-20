@@ -107,12 +107,16 @@ jobs:
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=120s
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-worker --timeout=120s
 
-          kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth -o json | python3 - <<'PY'
+          secret_json="$(mktemp)"
+          kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth -o json > "$secret_json"
+
+          SECRET_JSON="$secret_json" python3 - <<'PY'
           import base64
           import json
-          import sys
+          import os
 
-          secret = json.load(sys.stdin)
+          with open(os.environ["SECRET_JSON"], encoding="utf-8") as handle:
+              secret = json.load(handle)
           data = secret.get("data", {})
 
           def value(name: str) -> str:
