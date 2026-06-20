@@ -7,7 +7,9 @@ metadata:
     {{- include "flashsales.labels" . | nindent 4 }}
     app.kubernetes.io/component: order-worker
 spec:
+  {{- if not .Values.orderService.worker.autoscaling.enabled }}
   replicas: {{ .Values.orderService.workerReplicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/component: order-worker
