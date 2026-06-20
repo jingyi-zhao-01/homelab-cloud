@@ -32,3 +32,9 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
+
+{{- define "flashsales.datadogPodLabels" -}}
+admission.datadoghq.com/enabled: "true"
+tags.datadoghq.com/env: "prod"
+tags.datadoghq.com/version: {{ .Chart.AppVersion | quote }}
+{{- end -}}

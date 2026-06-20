@@ -7,11 +7,16 @@ spec:
   global:
     clusterName: openhands-k3s
     site: us5.datadoghq.com
+    tags:
+      - env:prod
     credentials:
       apiSecret:
         secretName: datadog-secret
         keyName: api-key
   features:
+    admissionController:
+      enabled: true
+      mutateUnlabelled: false
     clusterChecks:
       enabled: true
     orchestratorExplorer:
@@ -21,6 +26,9 @@ spec:
         enabled: true
         targets:
           - name: default-target
+            namespaceSelector:
+              matchNames:
+                - flashsales
             ddTraceVersions:
               java: "1"
               python: "4"
