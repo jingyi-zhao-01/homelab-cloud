@@ -123,6 +123,8 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.externalSecrets.targetSecretName }}
                   key: KAFKA_TERMINALIZATION_CONSUMER_GROUP
+            - name: DD_DATA_STREAMS_ENABLED
+              value: "true"
             {{- if .Values.observability.tracing.existingSecretName }}
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               valueFrom:
