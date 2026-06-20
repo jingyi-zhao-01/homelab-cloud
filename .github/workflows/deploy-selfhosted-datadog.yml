@@ -1,0 +1,171 @@
+name: Deploy Self-Hosted Datadog
+
+on:
+  workflow_dispatch:
+    inputs:
+      desired_state:
+        description: "Whether to keep self-hosted Datadog enabled or disabled"
+        required: true
+        default: enable
+        type: choice
+        options:
+          - enable
+          - disable
+      namespace:
+        description: "Namespace that owns the Datadog operator and agent"
+        required: true
+        default: datadog
+        type: string
+      release_name:
+        description: "Helm release name"
+        required: true
+        default: datadog-operator
+        type: string
+      values_file:
+        description: "Helm values file path in this repo"
+        required: true
+        default: deploy/monitoring/self-hosted/datadog/operator-values.yaml
+        type: string
+      manifests_dir:
+        description: "Kustomize directory for Datadog runtime resources"
+        required: true
+        default: deploy/monitoring/self-hosted/datadog/manifests
+        type: string
+
+concurrency:
+  group: deploy-selfhosted-datadog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
+  TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+  TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+
+jobs:
+  deploy:
+    name: ${{ github.event.inputs.desired_state == 'disable' && 'Disable' || 'Enable' }} self-hosted Datadog
+    runs-on: ubuntu-latest
+    env:
+      NAMESPACE: ${{ github.event.inputs.namespace }}
+      RELEASE_NAME: ${{ github.event.inputs.release_name }}
+      VALUES_FILE: ${{ github.event.inputs.values_file }}
+      MANIFESTS_DIR: ${{ github.event.inputs.manifests_dir }}
+
+    steps:
+      - name: Checkout homelab-cloud
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Configure private k3s access
+        uses: ./.github/actions/setup-private-k3s-access
+        with:
+          kube_config_data: ${{ secrets.KUBE_CONFIG_DATA }}
+          k3s_server_url_tailscale: ${{ vars.K3S_SERVER_URL_TAILSCALE }}
+          ts_oauth_client_id: ${{ env.TS_OAUTH_CLIENT_ID }}
+          ts_oauth_secret: ${{ env.TS_OAUTH_SECRET }}
+          ts_ci_tags: ${{ env.TS_CI_TAGS }}
+
+      - name: Validate requested inputs
+        run: |
+          set -euo pipefail
+          if [ ! -f "$VALUES_FILE" ]; then
+            echo "Values file not found: $VALUES_FILE"
+            exit 1
+          fi
+          if [ ! -d "$MANIFESTS_DIR" ]; then
+            echo "Manifests directory not found: $MANIFESTS_DIR"
+            exit 1
+          fi
+
+      - name: Install or upgrade Datadog operator
+        if: ${{ github.event.inputs.desired_state == 'enable' }}
+        run: |
+          set -euo pipefail
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          helm repo add datadog https://helm.datadoghq.com
+          helm repo update
+          helm upgrade --install "$RELEASE_NAME" datadog/datadog-operator \
+            -n "$NAMESPACE" \
+            --create-namespace \
+            -f "$VALUES_FILE"
+
+      - name: Wait for Datadog CRD
+        if: ${{ github.event.inputs.desired_state == 'enable' }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if kubectl get crd datadogagents.datadoghq.com >/dev/null 2>&1; then
+              exit 0
+            fi
+            echo "Waiting for datadogagents.datadoghq.com CRD to be registered (${attempt}/30)..."
+            sleep 10
+          done
+          echo "Timed out waiting for datadogagents.datadoghq.com"
+          exit 1
+
+      - name: Apply Datadog manifests
+        if: ${{ github.event.inputs.desired_state == 'enable' }}
+        run: |
+          set -euo pipefail
+          kubectl apply -k "$MANIFESTS_DIR"
+
+      - name: Remove Datadog manifests
+        if: ${{ github.event.inputs.desired_state == 'disable' }}
+        run: |
+          set -euo pipefail
+          kubectl delete -k "$MANIFESTS_DIR" --ignore-not-found || true
+
+      - name: Uninstall Datadog operator
+        if: ${{ github.event.inputs.desired_state == 'disable' }}
+        run: |
+          set -euo pipefail
+          helm uninstall "$RELEASE_NAME" -n "$NAMESPACE" || true
+
+      - name: Show Datadog status
+        if: ${{ github.event.inputs.desired_state == 'enable' }}
+        run: |
+          kubectl get pods -n "$NAMESPACE" -o wide
+          kubectl get externalsecret -n "$NAMESPACE" || true
+          kubectl get secret datadog-secret -n "$NAMESPACE" || true
+          kubectl get datadogagent -n "$NAMESPACE" || true
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get pods -n "$NAMESPACE" -o wide || true
+          kubectl get events -n "$NAMESPACE" --sort-by=.lastTimestamp | tail -n 50 || true
+          kubectl get externalsecret -n "$NAMESPACE" -o yaml || true
+          kubectl get datadogagent -n "$NAMESPACE" -o yaml || true
+          helm status "$RELEASE_NAME" -n "$NAMESPACE" || true
+
+  notify-discord:
+    name: Notify Discord
+    needs:
+      - deploy
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        continue-on-error: true
+
+      - name: Send Discord notification
+        continue-on-error: true
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          DISCORD_WEBHOOK_SSM_NAME: ${{ vars.DISCORD_WEBHOOK_SSM_NAME || '/codex/discord-webhook' }}
+          WORKFLOW_NAME: Deploy Self-Hosted Datadog
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: bash .github/scripts/notify-discord.sh

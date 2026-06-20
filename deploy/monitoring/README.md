@@ -31,5 +31,11 @@ Examples:
 - self-hosted Prometheus values:
   `deploy/monitoring/self-hosted/prometheus-values.yaml.tmpl`
 
+- self-hosted Datadog operator values and runtime manifests:
+  `deploy/monitoring/self-hosted/datadog/`
+
 - GitHub Actions manual deploy workflow:
   `.github/workflows/deploy-selfhosted-prometheus.yml`
+
+- GitHub Actions manual Datadog deploy workflow:
+  `.github/workflows/deploy-selfhosted-datadog.yml`
