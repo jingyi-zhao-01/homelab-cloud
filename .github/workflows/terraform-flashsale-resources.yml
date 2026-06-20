@@ -31,6 +31,8 @@ on:
         required: true
       TF_STATE_BUCKET:
         required: true
+      FLASHSALE_KAFKA_PASSWORD:
+        required: false
 
   push:
     branches:
@@ -73,6 +75,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: ${{ fromJson(toJson(vars)).AWS_REGION }}
       TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+      FLASHSALE_KAFKA_PASSWORD: ${{ secrets.FLASHSALE_KAFKA_PASSWORD }}
     defaults:
       run:
         working-directory: terraform/flashsale
@@ -422,6 +425,27 @@ jobs:
             "module.grafana_dashboards.grafana_dashboard.flashsale_distributed_traces" \
             "grafana_dashboard.flashsale_distributed_traces"
 
+      - name: Detach externally managed Kafka credentials from Terraform state
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
+        run: |
+          set -euo pipefail
+
+          remove_state_only() {
+            local address="$1"
+
+            if terraform state show "$address" >/dev/null 2>&1; then
+              echo "Removing ${address} from Terraform state without deleting the remote resource"
+              terraform state rm "$address"
+              return 0
+            fi
+
+            echo "No Terraform state found for ${address}"
+          }
+
+          remove_state_only "aiven_kafka_user.order_service"
+          remove_state_only "module.ssm.aws_ssm_parameter.kafka_password[0]"
+          remove_state_only "module.ssm.terraform_data.kafka_credentials_generation[0]"
+
       - name: Import existing Grafana folder into Terraform state
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         run: |
@@ -453,6 +477,32 @@ jobs:
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         run: terraform apply -auto-approve -input=false
 
+      - name: Sync externally managed Kafka password to SSM
+        if: ${{ inputs.action == 'apply' || inputs.action == '' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${FLASHSALE_KAFKA_PASSWORD:-}" ]; then
+            echo "FLASHSALE_KAFKA_PASSWORD secret is not configured; leaving /flashsales/prod/KAFKA_PASSWORD unchanged"
+            exit 0
+          fi
+
+          case "$FLASHSALE_KAFKA_PASSWORD" in
+            *"<redacted>"*)
+              echo "FLASHSALE_KAFKA_PASSWORD must be the real Kafka password, not an Aiven redacted placeholder"
+              exit 1
+              ;;
+          esac
+
+          aws ssm put-parameter \
+            --name /flashsales/prod/KAFKA_PASSWORD \
+            --description "Externally managed Kafka runtime password for flashsales/prod" \
+            --type SecureString \
+            --value "$FLASHSALE_KAFKA_PASSWORD" \
+            --overwrite >/dev/null
+
+          echo "Synced externally managed Kafka password to /flashsales/prod/KAFKA_PASSWORD"
+
       - name: Verify Kafka runtime SSM parameters
         if: ${{ inputs.action == 'apply' || inputs.action == '' }}
         run: |
@@ -474,6 +524,7 @@ jobs:
           case "$kafka_password" in
             *"<redacted>"*)
               echo "KAFKA_PASSWORD still contains an Aiven redacted placeholder after Terraform apply"
+              echo "Set GitHub secret FLASHSALE_KAFKA_PASSWORD or update /flashsales/prod/KAFKA_PASSWORD manually with the real Aiven Kafka user password."
               exit 1
               ;;
           esac

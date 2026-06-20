@@ -120,19 +120,6 @@ variable "kafka_username" {
   default     = ""
 }
 
-variable "kafka_password" {
-  description = "Kafka runtime password"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "kafka_credentials_generation" {
-  description = "Generation marker for one-time-readable Kafka credentials. Change this to intentionally replace credential SSM parameters."
-  type        = string
-  default     = ""
-}
-
 variable "kafka_terminalization_topic" {
   description = "Primary Kafka topic for order terminalization commands"
   type        = string

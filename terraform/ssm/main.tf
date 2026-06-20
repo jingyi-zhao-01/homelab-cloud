@@ -194,30 +194,6 @@ resource "aws_ssm_parameter" "kafka_username" {
   tags = var.tags
 }
 
-resource "terraform_data" "kafka_credentials_generation" {
-  count = var.include_aiven_kafka_runtime ? 1 : 0
-
-  triggers_replace = var.kafka_credentials_generation
-}
-
-resource "aws_ssm_parameter" "kafka_password" {
-  count = var.include_aiven_kafka_runtime ? 1 : 0
-
-  name        = "${local.prefix}/KAFKA_PASSWORD"
-  description = "Kafka runtime password for ${var.ssm_path_prefix}"
-  type        = "SecureString"
-  value       = var.kafka_password
-  key_id      = var.kms_key_id
-  overwrite   = true
-
-  tags = var.tags
-
-  lifecycle {
-    ignore_changes       = [value]
-    replace_triggered_by = [terraform_data.kafka_credentials_generation[0]]
-  }
-}
-
 resource "aws_ssm_parameter" "kafka_terminalization_topic" {
   count = var.include_aiven_kafka_runtime ? 1 : 0
 

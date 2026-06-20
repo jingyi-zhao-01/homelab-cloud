@@ -68,11 +68,6 @@ output "kafka_username_arn" {
   value       = try(aws_ssm_parameter.kafka_username[0].arn, null)
 }
 
-output "kafka_password_arn" {
-  description = "ARN of the KAFKA_PASSWORD SSM parameter"
-  value       = try(aws_ssm_parameter.kafka_password[0].arn, null)
-}
-
 output "kafka_terminalization_topic_arn" {
   description = "ARN of the KAFKA_TERMINALIZATION_TOPIC SSM parameter"
   value       = try(aws_ssm_parameter.kafka_terminalization_topic[0].arn, null)

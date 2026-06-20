@@ -139,5 +139,6 @@ but the preferred pattern is:
 
 - The Neon and Grafana subdirectories still exist for compatibility, but the preferred automation entrypoint is the namespace-level flashsale stack and its `terraform-flashsale-resources.yml` workflow.
 - The Upstash provider stores connection outputs in Terraform state. Treat remote state access as sensitive.
-- The stack now mirrors Neon, Upstash, and Kafka credentials into AWS SSM Parameter Store under `/flashsales/prod` by default.
-- The SSM path includes `DATABASE_URL`, `POSTGRES_*`, `REDIS_URL`, `UPSTASH_REDIS_*`, `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SERVICE_URI`, `KAFKA_SECURITY_PROTOCOL`, `KAFKA_USERNAME`, `KAFKA_PASSWORD`, and the terminalization topic names.
+- The stack now mirrors Neon, Upstash, and non-password Kafka runtime settings into AWS SSM Parameter Store under `/flashsales/prod` by default.
+- The SSM path includes `DATABASE_URL`, `POSTGRES_*`, `REDIS_URL`, `UPSTASH_REDIS_*`, `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SERVICE_URI`, `KAFKA_SECURITY_PROTOCOL`, `KAFKA_USERNAME`, and the terminalization topic names.
+- The Aiven Kafka user and `KAFKA_PASSWORD` are intentionally managed outside Terraform because Aiven returns generated Kafka user passwords to Terraform as the literal placeholder `<redacted>`. Keep `/flashsales/prod/KAFKA_PASSWORD` as a manually managed SecureString containing the real Aiven user password for the configured `KAFKA_USERNAME`.

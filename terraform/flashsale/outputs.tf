@@ -129,7 +129,7 @@ output "aiven_kafka_service_uri" {
 
 output "aiven_kafka_order_service_username" {
   description = "Kafka username for flashsale order-service and order-worker."
-  value       = aiven_kafka_user.order_service.username
+  value       = var.aiven_kafka_order_service_username
 }
 
 output "kafka_terminalization_topic" {

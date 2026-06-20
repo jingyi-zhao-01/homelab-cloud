@@ -240,12 +240,6 @@ resource "aiven_kafka" "flashsale" {
   }
 }
 
-resource "aiven_kafka_user" "order_service" {
-  project      = aiven_project.flashsale.project
-  service_name = aiven_kafka.flashsale.service_name
-  username     = var.aiven_kafka_order_service_username
-}
-
 resource "aiven_kafka_topic" "terminalization" {
   project                = aiven_project.flashsale.project
   service_name           = aiven_kafka.flashsale.service_name
@@ -302,7 +296,7 @@ resource "aiven_kafka_acl" "order_service_terminalization" {
   service_name = aiven_kafka.flashsale.service_name
   topic        = each.value
   permission   = "readwrite"
-  username     = aiven_kafka_user.order_service.username
+  username     = var.aiven_kafka_order_service_username
 }
 
 locals {
@@ -330,9 +324,7 @@ module "ssm" {
   kafka_bootstrap_servers              = local.aiven_kafka_bootstrap_servers
   kafka_service_uri                    = aiven_kafka.flashsale.service_uri
   kafka_security_protocol              = "SASL_SSL"
-  kafka_username                       = aiven_kafka_user.order_service.username
-  kafka_password                       = aiven_kafka_user.order_service.password
-  kafka_credentials_generation         = aiven_kafka_user.order_service.username
+  kafka_username                       = var.aiven_kafka_order_service_username
   kafka_terminalization_topic          = aiven_kafka_topic.terminalization.topic_name
   kafka_terminalization_retry_topic    = aiven_kafka_topic.terminalization_retry.topic_name
   kafka_terminalization_dlq_topic      = aiven_kafka_topic.terminalization_dlq.topic_name
