@@ -2,6 +2,17 @@ name: Flashsales Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      flashsale_source_sha:
+        description: Optional flashsale source SHA to deploy.
+        required: false
+        type: string
+        default: ''
+      flashsale_image_tag:
+        description: Optional flashsale image tag to deploy.
+        required: false
+        type: string
+        default: ''
   repository_dispatch:
     types:
       - flashsale-release-ready
@@ -29,9 +40,7 @@ env:
   NAMESPACE: ${{ vars.K8S_NAMESPACE || 'flashsales' }}
   RELEASE: ${{ vars.HELM_RELEASE || 'flashsales' }}
   CHART_PATH: ${{ vars.HELM_CHART_PATH || 'charts/flashsales' }}
-  FLASHSALE_SOURCE_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_sha || github.sha }}
   FLASHSALE_SOURCE_REF: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_ref || github.ref_name }}
-  FLASHSALE_IMAGE_TAG: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_image_tag || 'latest' }}
   TS_CI_TAGS: ${{ vars.TS_CI_TAGS }}
   TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
   TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
@@ -71,11 +80,46 @@ jobs:
           fi
           git -C application/flashsale checkout --detach "$FLASHSALE_SHA"
 
+      - name: Resolve flashsale submodule to workflow_dispatch revision
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.flashsale_source_sha != '' }}
+        env:
+          FLASHSALE_SHA: ${{ github.event.inputs.flashsale_source_sha }}
+        run: |
+          set -euo pipefail
+          git -C application/flashsale fetch --depth=1 origin "$FLASHSALE_SHA"
+          git -C application/flashsale checkout --detach "$FLASHSALE_SHA"
+
+      - name: Resolve flashsale deploy metadata
+        id: flashsale_metadata
+        env:
+          DISPATCH_IMAGE_TAG: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.flashsale_image_tag || '' }}
+          MANUAL_IMAGE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.flashsale_image_tag || '' }}
+        run: |
+          set -euo pipefail
+
+          flashsale_sha="$(git -C application/flashsale rev-parse HEAD)"
+          flashsale_ref="${FLASHSALE_SOURCE_REF}"
+          flashsale_image_tag="${DISPATCH_IMAGE_TAG:-}"
+
+          if [ -z "$flashsale_image_tag" ]; then
+            flashsale_image_tag="${MANUAL_IMAGE_TAG:-}"
+          fi
+
+          if [ -z "$flashsale_image_tag" ]; then
+            flashsale_image_tag="$flashsale_sha"
+          fi
+
+          {
+            echo "flashsale_sha=$flashsale_sha"
+            echo "flashsale_ref=$flashsale_ref"
+            echo "flashsale_image_tag=$flashsale_image_tag"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Show flashsale source metadata
         run: |
-          echo "Flashsale source ref: $FLASHSALE_SOURCE_REF"
-          echo "Flashsale source sha: $FLASHSALE_SOURCE_SHA"
-          echo "Flashsale image tag: $FLASHSALE_IMAGE_TAG"
+          echo "Flashsale source ref: ${{ steps.flashsale_metadata.outputs.flashsale_ref }}"
+          echo "Flashsale source sha: ${{ steps.flashsale_metadata.outputs.flashsale_sha }}"
+          echo "Flashsale image tag: ${{ steps.flashsale_metadata.outputs.flashsale_image_tag }}"
           git -C application/flashsale rev-parse HEAD
 
       - name: Install kubectl
@@ -148,7 +192,7 @@ jobs:
           GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
         run: |
           set -euo pipefail
-          IMAGE_TAG="${FLASHSALE_IMAGE_TAG}"
+          IMAGE_TAG="${{ steps.flashsale_metadata.outputs.flashsale_image_tag }}"
 
           echo "$GHCR_PULL_TOKEN" | docker login ghcr.io \
             --username "$GHCR_PULL_USERNAME" \
@@ -161,7 +205,7 @@ jobs:
       - name: Deploy Helm release
         run: |
           set -euo pipefail
-          IMAGE_TAG="${FLASHSALE_IMAGE_TAG}"
+          IMAGE_TAG="${{ steps.flashsale_metadata.outputs.flashsale_image_tag }}"
           helm upgrade --install "$RELEASE" "$CHART_PATH" \
             --dependency-update \
             -n "$NAMESPACE" \
