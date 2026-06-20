@@ -102,6 +102,44 @@ jobs:
           kubectl -n "$NAMESPACE" get svc flashsales-user-service
           kubectl -n "$NAMESPACE" get svc flashsales-product-service
           kubectl -n "$NAMESPACE" get svc flashsales-order-service
+
+          if kubectl -n "$NAMESPACE" get externalsecret flashsales-postgres-auth >/dev/null 2>&1; then
+            kubectl -n "$NAMESPACE" annotate externalsecret flashsales-postgres-auth \
+              force-sync="$(date +%s)" \
+              --overwrite
+          fi
+
+          for attempt in $(seq 1 30); do
+            protocol="$(
+              kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth \
+                -o jsonpath='{.data.KAFKA_SECURITY_PROTOCOL}' 2>/dev/null \
+                | base64 --decode 2>/dev/null || true
+            )"
+
+            if [ "$protocol" = "SASL_SSL" ]; then
+              echo "Kafka runtime secret has KAFKA_SECURITY_PROTOCOL=SASL_SSL"
+              break
+            fi
+
+            echo "Waiting for Kafka runtime secret to sync SASL_SSL (attempt ${attempt}/30, current=${protocol:-missing})..."
+            sleep 5
+          done
+
+          protocol="$(
+            kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth \
+              -o jsonpath='{.data.KAFKA_SECURITY_PROTOCOL}' 2>/dev/null \
+              | base64 --decode 2>/dev/null || true
+          )"
+          if [ "$protocol" != "SASL_SSL" ]; then
+            echo "KAFKA_SECURITY_PROTOCOL must be SASL_SSL before perf; got ${protocol:-missing}"
+            echo "ExternalSecret status:"
+            kubectl -n "$NAMESPACE" get externalsecret flashsales-postgres-auth -o yaml || true
+            exit 1
+          fi
+
+          kubectl -n "$NAMESPACE" rollout restart deploy/flashsales-order-service
+          kubectl -n "$NAMESPACE" rollout restart deploy/flashsales-order-worker
+
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-user-service --timeout=120s
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-product-service --timeout=120s
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=120s

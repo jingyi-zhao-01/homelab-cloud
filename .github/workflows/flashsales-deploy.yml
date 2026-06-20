@@ -224,11 +224,53 @@ jobs:
             --set orderService.image.pullPolicy=IfNotPresent \
             ${HELM_EXTERNAL_SECRETS_ARGS:-}
 
+      - name: Refresh runtime secrets
+        run: |
+          set -euo pipefail
+
+          if kubectl -n "$NAMESPACE" get externalsecret flashsales-postgres-auth >/dev/null 2>&1; then
+            kubectl -n "$NAMESPACE" annotate externalsecret flashsales-postgres-auth \
+              force-sync="$(date +%s)" \
+              --overwrite
+          fi
+
+          for attempt in $(seq 1 30); do
+            protocol="$(
+              kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth \
+                -o jsonpath='{.data.KAFKA_SECURITY_PROTOCOL}' 2>/dev/null \
+                | base64 --decode 2>/dev/null || true
+            )"
+
+            if [ "$protocol" = "SASL_SSL" ]; then
+              echo "Kafka runtime secret has KAFKA_SECURITY_PROTOCOL=SASL_SSL"
+              break
+            fi
+
+            echo "Waiting for Kafka runtime secret to sync SASL_SSL (attempt ${attempt}/30, current=${protocol:-missing})..."
+            sleep 5
+          done
+
+          protocol="$(
+            kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth \
+              -o jsonpath='{.data.KAFKA_SECURITY_PROTOCOL}' 2>/dev/null \
+              | base64 --decode 2>/dev/null || true
+          )"
+          if [ "$protocol" != "SASL_SSL" ]; then
+            echo "KAFKA_SECURITY_PROTOCOL must be SASL_SSL after deploy; got ${protocol:-missing}"
+            echo "ExternalSecret status:"
+            kubectl -n "$NAMESPACE" get externalsecret flashsales-postgres-auth -o yaml || true
+            exit 1
+          fi
+
+          kubectl -n "$NAMESPACE" rollout restart deploy/flashsales-order-service
+          kubectl -n "$NAMESPACE" rollout restart deploy/flashsales-order-worker
+
       - name: Wait for rollouts
         run: |
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-user-service --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-product-service --timeout=300s
           kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-worker --timeout=300s
 
       - name: Diagnostics on failure
         if: failure()
@@ -238,6 +280,7 @@ jobs:
           kubectl describe deploy flashsales-user-service -n "$NAMESPACE" || true
           kubectl describe deploy flashsales-product-service -n "$NAMESPACE" || true
           kubectl describe deploy flashsales-order-service -n "$NAMESPACE" || true
+          kubectl describe deploy flashsales-order-worker -n "$NAMESPACE" || true
 
       - name: Show final status
         run: |
