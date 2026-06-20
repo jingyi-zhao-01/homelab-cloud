@@ -204,6 +204,17 @@ resource "aws_launch_template" "spot_node" {
     security_groups             = [aws_security_group.spot_node.id]
   }
 
+  block_device_mappings {
+    device_name = "/dev/sda1"
+
+    ebs {
+      delete_on_termination = true
+      encrypted             = true
+      volume_size           = var.root_volume_size_gb
+      volume_type           = var.root_volume_type
+    }
+  }
+
   user_data = base64encode(local.user_data)
 
   tag_specifications {

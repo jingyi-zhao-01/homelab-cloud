@@ -103,6 +103,23 @@ variable "instance_types" {
   default     = ["t3.small", "t3a.small"]
 }
 
+variable "root_volume_size_gb" {
+  description = "Root EBS volume size in GiB for each spot worker"
+  type        = number
+  default     = 15
+
+  validation {
+    condition     = var.root_volume_size_gb >= 8
+    error_message = "root_volume_size_gb must be at least 8 GiB."
+  }
+}
+
+variable "root_volume_type" {
+  description = "Root EBS volume type for each spot worker"
+  type        = string
+  default     = "gp3"
+}
+
 variable "ami_ssm_parameter" {
   description = "SSM parameter name resolving to the AMI ID used for the spot worker"
   type        = string

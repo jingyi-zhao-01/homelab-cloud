@@ -25,6 +25,10 @@ on:
         required: false
         default: t3.small,t3a.small
         type: string
+      root_volume_size_gb:
+        required: false
+        default: "15"
+        type: string
       desired_capacity:
         required: false
         default: "1"
@@ -95,6 +99,7 @@ jobs:
       VPC_ID: ${{ inputs.vpc_id }}
       SUBNET_IDS: ${{ inputs.subnet_ids }}
       INSTANCE_TYPES: ${{ inputs.instance_types || vars.K3S_SPOT_INSTANCE_TYPES || 't3.small,t3a.small' }}
+      ROOT_VOLUME_SIZE_GB: ${{ inputs.root_volume_size_gb || vars.K3S_SPOT_ROOT_VOLUME_SIZE_GB || '15' }}
       DESIRED_CAPACITY: ${{ inputs.desired_capacity || vars.K3S_SPOT_DESIRED_CAPACITY || '1' }}
       MIN_SIZE: ${{ inputs.min_size || vars.K3S_SPOT_MIN_SIZE || '1' }}
       MAX_SIZE: ${{ inputs.max_size || vars.K3S_SPOT_MAX_SIZE || '1' }}
@@ -179,6 +184,7 @@ jobs:
           network_state_bucket = "${TF_STATE_BUCKET}"
           network_state_key    = "${NETWORK_STATE_KEY}"
           instance_types  = $(list_to_hcl "$INSTANCE_TYPES")
+          root_volume_size_gb = ${ROOT_VOLUME_SIZE_GB}
           desired_capacity = ${DESIRED_CAPACITY}
           min_size         = ${MIN_SIZE}
           max_size         = ${MAX_SIZE}

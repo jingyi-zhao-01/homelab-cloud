@@ -42,6 +42,11 @@ on:
         required: false
         default: t3.small,t3a.small
         type: string
+      root_volume_size_gb:
+        description: Root EBS volume size in GiB for the spot worker
+        required: false
+        default: "15"
+        type: string
       desired_capacity:
         description: Desired number of spot workers to maintain
         required: false
@@ -119,6 +124,7 @@ jobs:
       cluster_name: ${{ inputs.cluster_name }}
       node_group_name: ${{ inputs.node_group_name }}
       instance_types: ${{ inputs.instance_types }}
+      root_volume_size_gb: ${{ inputs.root_volume_size_gb }}
       desired_capacity: ${{ inputs.desired_capacity }}
       min_size: ${{ inputs.min_size }}
       max_size: ${{ inputs.max_size }}
