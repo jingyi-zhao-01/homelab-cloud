@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -47,5 +48,57 @@ func TestIsTerminatedPodAcceptsOldFailedPod(t *testing.T) {
 
 	if !isTerminatedPod(pod, time.Now().Add(-time.Minute)) {
 		t.Fatalf("expected old failed pod to qualify for deletion")
+	}
+}
+
+func TestIsFinishedJobAcceptsOldCompletedJob(t *testing.T) {
+	finished := time.Now().Add(-20 * time.Minute)
+	job := batchv1.Job{
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{
+				{
+					Type:               batchv1.JobComplete,
+					Status:             corev1.ConditionTrue,
+					LastTransitionTime: metav1.Time{Time: finished},
+				},
+			},
+		},
+	}
+
+	if !isFinishedJob(job, time.Now().Add(-10*time.Minute)) {
+		t.Fatalf("expected old completed job to be deletable")
+	}
+}
+
+func TestIsFinishedJobRejectsFreshFailedJob(t *testing.T) {
+	finished := time.Now().Add(-2 * time.Minute)
+	job := batchv1.Job{
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{
+				{
+					Type:               batchv1.JobFailed,
+					Status:             corev1.ConditionTrue,
+					LastTransitionTime: metav1.Time{Time: finished},
+				},
+			},
+		},
+	}
+
+	if isFinishedJob(job, time.Now().Add(-10*time.Minute)) {
+		t.Fatalf("expected fresh failed job to be preserved")
+	}
+}
+
+func TestNamespaceCleanupCandidateProtectsSystemNamespaces(t *testing.T) {
+	namespace := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "kube-system",
+			CreationTimestamp: metav1.Time{Time: time.Now().Add(-time.Hour)},
+		},
+		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
+	}
+
+	if isNamespaceCleanupCandidate(namespace, time.Now().Add(-10*time.Minute), defaultProtectedNamespaces()) {
+		t.Fatalf("expected kube-system to be protected")
 	}
 }
