@@ -1,0 +1,71 @@
+namespaceOverride: ""
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
+
+image:
+  repository: ghcr.io/jingyi-zhao-01/node-disk-janitor
+  tag: latest
+  pullPolicy: Always
+
+updateStrategy:
+  type: RollingUpdate
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+  limits:
+    cpu: "250m"
+    memory: "256Mi"
+
+securityContext:
+  privileged: true
+  runAsUser: 0
+  runAsGroup: 0
+
+env:
+  HOST_ROOT: /host
+  CHECK_INTERVAL_SECONDS: "120"
+  CLEANUP_COOLDOWN_SECONDS: "300"
+  DISK_USAGE_TRIGGER_PERCENT: "85"
+  DISK_USAGE_TARGET_PERCENT: "75"
+  DELETE_TERMINATED_PODS: "true"
+  TERMINATED_POD_GRACE_SECONDS: "120"
+
+hostCleanupCommand: |
+  set -eu
+
+  export PATH="/var/lib/rancher/k3s/data/current/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
+  echo "[janitor] vacuuming journals"
+  if command -v journalctl >/dev/null 2>&1; then
+    journalctl --vacuum-time=2d || true
+  fi
+
+  echo "[janitor] removing exited containers"
+  if command -v crictl >/dev/null 2>&1; then
+    crictl ps -a --state Exited -q | xargs -r crictl rm || true
+    crictl pods --state NotReady -q | xargs -r crictl rmp || true
+    crictl rmi --prune || true
+  fi
+
+  echo "[janitor] pruning containerd images"
+  if command -v ctr >/dev/null 2>&1; then
+    ctr -n k8s.io images prune || true
+  fi
+
+  echo "[janitor] cleaning apt cache when present"
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get clean || true
+  fi
+
+nodeSelector: {}
+
+affinity: {}
+
+tolerations:
+  - operator: Exists
+
+hostPaths:
+  root: /
