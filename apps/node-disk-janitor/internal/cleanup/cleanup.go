@@ -179,17 +179,50 @@ func IsTerminatedPod(pod corev1.Pod, cutoff time.Time) bool {
 		return false
 	}
 
-	if pod.Status.StartTime != nil && pod.Status.StartTime.After(cutoff) {
+	finishedAt := podFinishedTime(pod)
+	if finishedAt == nil || finishedAt.After(cutoff) {
 		return false
 	}
 
-	for _, status := range pod.Status.ContainerStatuses {
-		if status.State.Terminated == nil && status.LastTerminationState.Terminated == nil {
-			return false
+	return true
+}
+
+func podFinishedTime(pod corev1.Pod) *time.Time {
+	var latest *time.Time
+
+	recordLatest := func(candidate *time.Time) {
+		if candidate == nil {
+			return
+		}
+		if latest == nil || candidate.After(*latest) {
+			finished := *candidate
+			latest = &finished
 		}
 	}
 
-	return true
+	for _, status := range pod.Status.InitContainerStatuses {
+		recordLatest(terminatedAt(status))
+	}
+
+	for _, status := range pod.Status.ContainerStatuses {
+		recordLatest(terminatedAt(status))
+	}
+
+	return latest
+}
+
+func terminatedAt(status corev1.ContainerStatus) *time.Time {
+	if status.State.Terminated != nil {
+		finished := status.State.Terminated.FinishedAt.Time
+		return &finished
+	}
+
+	if status.LastTerminationState.Terminated != nil {
+		finished := status.LastTerminationState.Terminated.FinishedAt.Time
+		return &finished
+	}
+
+	return nil
 }
 
 func IsFinishedJob(job batchv1.Job, cutoff time.Time) bool {

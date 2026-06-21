@@ -13,12 +13,13 @@ func TestIsTerminatedPodRejectsFreshSucceededPod(t *testing.T) {
 	now := time.Now()
 	pod := corev1.Pod{
 		Status: corev1.PodStatus{
-			Phase:     corev1.PodSucceeded,
-			StartTime: &metav1.Time{Time: now},
+			Phase: corev1.PodSucceeded,
 			ContainerStatuses: []corev1.ContainerStatus{
 				{
 					State: corev1.ContainerState{
-						Terminated: &corev1.ContainerStateTerminated{},
+						Terminated: &corev1.ContainerStateTerminated{
+							FinishedAt: metav1.Time{Time: now},
+						},
 					},
 				},
 			},
@@ -31,15 +32,16 @@ func TestIsTerminatedPodRejectsFreshSucceededPod(t *testing.T) {
 }
 
 func TestIsTerminatedPodAcceptsOldFailedPod(t *testing.T) {
-	start := time.Now().Add(-10 * time.Minute)
+	finished := time.Now().Add(-10 * time.Minute)
 	pod := corev1.Pod{
 		Status: corev1.PodStatus{
-			Phase:     corev1.PodFailed,
-			StartTime: &metav1.Time{Time: start},
+			Phase: corev1.PodFailed,
 			ContainerStatuses: []corev1.ContainerStatus{
 				{
 					State: corev1.ContainerState{
-						Terminated: &corev1.ContainerStateTerminated{},
+						Terminated: &corev1.ContainerStateTerminated{
+							FinishedAt: metav1.Time{Time: finished},
+						},
 					},
 				},
 			},
@@ -48,6 +50,29 @@ func TestIsTerminatedPodAcceptsOldFailedPod(t *testing.T) {
 
 	if !IsTerminatedPod(pod, time.Now().Add(-time.Minute)) {
 		t.Fatalf("expected old failed pod to qualify for deletion")
+	}
+}
+
+func TestIsTerminatedPodRejectsRecentlyFinishedLongRunningPod(t *testing.T) {
+	finished := time.Now()
+	pod := corev1.Pod{
+		Status: corev1.PodStatus{
+			Phase:     corev1.PodSucceeded,
+			StartTime: &metav1.Time{Time: finished.Add(-time.Hour)},
+			ContainerStatuses: []corev1.ContainerStatus{
+				{
+					State: corev1.ContainerState{
+						Terminated: &corev1.ContainerStateTerminated{
+							FinishedAt: metav1.Time{Time: finished},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if IsTerminatedPod(pod, finished.Add(-time.Minute)) {
+		t.Fatalf("expected recently finished long-running pod to be preserved")
 	}
 }
 

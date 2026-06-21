@@ -11,26 +11,26 @@ import (
 )
 
 type JanitorConfig struct {
-	NodeName                 string
-	HostRoot                 string
-	CheckInterval            time.Duration
-	CleanupCooldown          time.Duration
-	TriggerPercent           float64
-	TargetPercent            float64
-	DeleteTerminatedPods     bool
-	TerminatedPodGrace       time.Duration
-	HostCleanupShellCommand  string
-	ClusterCleanupCooldown   time.Duration
-	DeleteFinishedJobs       bool
-	FinishedJobGrace         time.Duration
-	DeleteEmptyNamespaces    bool
-	EmptyNamespaceGrace      time.Duration
-	ProtectedNamespaces      []string
-	TailscaleSelfHeal        bool
-	SelfHealCooldown         time.Duration
-	TailscalePingTimeout     time.Duration
-	TailscalePeer            string
-	RestartK3SOnHeal         bool
+	NodeName                string
+	HostRoot                string
+	CheckInterval           time.Duration
+	CleanupCooldown         time.Duration
+	TriggerPercent          float64
+	TargetPercent           float64
+	DeleteTerminatedPods    bool
+	TerminatedPodGrace      time.Duration
+	HostCleanupShellCommand string
+	ClusterCleanupCooldown  time.Duration
+	DeleteFinishedJobs      bool
+	FinishedJobGrace        time.Duration
+	DeleteEmptyNamespaces   bool
+	EmptyNamespaceGrace     time.Duration
+	ProtectedNamespaces     []string
+	TailscaleSelfHeal       bool
+	SelfHealCooldown        time.Duration
+	TailscalePingTimeout    time.Duration
+	TailscalePeer           string
+	RestartK3SOnHeal        bool
 }
 
 func Load() (JanitorConfig, error) {

@@ -27,7 +27,7 @@ func Inspect(
 	runScript func(context.Context, string) (string, error),
 	cfg config.JanitorConfig,
 ) (Status, error) {
-	output, err := runScript(ctx, inspectConnectivityScript(cfg.TailscalePeer, cfg.TailscalePingTimeout))
+	output, err := runScript(ctx, BuildInspectConnectivityScript(cfg.TailscalePeer, cfg.TailscalePingTimeout))
 	if err != nil {
 		return Status{}, fmt.Errorf("inspect connectivity: %w", err)
 	}

@@ -13,6 +13,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+var deleteFinishedJobsClusterWide = cleanup.DeleteFinishedJobsClusterWide
+var deleteEmptyNamespacesClusterWide = cleanup.DeleteEmptyNamespacesClusterWide
+
 type Janitor struct {
 	cfg              config.JanitorConfig
 	clientset        kubernetes.Interface
@@ -121,10 +124,14 @@ func (j *Janitor) runClusterCleanupIfDue(ctx context.Context, now time.Time) err
 		return nil
 	}
 
-	j.lastClusterSweep = now
+	if err := j.runFinishedJobCleanup(ctx); err != nil {
+		return err
+	}
+	if err := j.runEmptyNamespaceCleanup(ctx); err != nil {
+		return err
+	}
 
-	j.runFinishedJobCleanup(ctx)
-	j.runEmptyNamespaceCleanup(ctx)
+	j.lastClusterSweep = now
 
 	return nil
 }
@@ -137,43 +144,45 @@ func (j *Janitor) clusterCleanupDue(now time.Time) bool {
 	return now.Sub(j.lastClusterSweep) >= j.cfg.ClusterCleanupCooldown
 }
 
-func (j *Janitor) runFinishedJobCleanup(ctx context.Context) {
+func (j *Janitor) runFinishedJobCleanup(ctx context.Context) error {
 	if !j.cfg.DeleteFinishedJobs {
-		return
+		return nil
 	}
 
 	cutoff := time.Now().Add(-j.cfg.FinishedJobGrace)
-	deletedCount, err := cleanup.DeleteFinishedJobsClusterWide(ctx, j.clientset, cutoff)
+	deletedCount, err := deleteFinishedJobsClusterWide(ctx, j.clientset, cutoff)
 	if err != nil {
-		log.Printf("node=%s delete finished jobs failed: %v", j.cfg.NodeName, err)
-		return
+		return err
 	}
 
 	if deletedCount > 0 {
 		log.Printf("node=%s deleted %d finished job(s)", j.cfg.NodeName, deletedCount)
 	}
+
+	return nil
 }
 
-func (j *Janitor) runEmptyNamespaceCleanup(ctx context.Context) {
+func (j *Janitor) runEmptyNamespaceCleanup(ctx context.Context) error {
 	if !j.cfg.DeleteEmptyNamespaces {
-		return
+		return nil
 	}
 
 	cutoff := time.Now().Add(-j.cfg.EmptyNamespaceGrace)
-	deletedCount, err := cleanup.DeleteEmptyNamespacesClusterWide(
+	deletedCount, err := deleteEmptyNamespacesClusterWide(
 		ctx,
 		j.clientset,
 		cutoff,
 		j.cfg.ProtectedNamespaces,
 	)
 	if err != nil {
-		log.Printf("node=%s delete empty namespaces failed: %v", j.cfg.NodeName, err)
-		return
+		return err
 	}
 
 	if deletedCount > 0 {
 		log.Printf("node=%s deleted %d empty namespace(s)", j.cfg.NodeName, deletedCount)
 	}
+
+	return nil
 }
 
 func (j *Janitor) measureNodeDiskUsage() (float64, error) {
