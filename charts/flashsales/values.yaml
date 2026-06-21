@@ -56,6 +56,13 @@ userService:
     node-purpose: worker
   tolerations: []
   affinity: {}
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: user-service
   env:
     dbHost: ""
     dbPort: ""
@@ -87,6 +94,13 @@ productService:
     node-purpose: worker
   tolerations: []
   affinity: {}
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: product-service
   env:
     dbHost: ""
     dbPort: ""
@@ -100,7 +114,7 @@ productService:
 
 orderService:
   replicaCount: 1
-  workerReplicaCount: 2
+  workerReplicaCount: 1
   autoscaling:
     enabled: true
     minReplicas: 2
@@ -134,6 +148,13 @@ orderService:
     node-purpose: worker
   tolerations: []
   affinity: {}
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: order-service
   runBackgroundWorker: false
   env:
     userServiceUrl: http://flashsales-user-service:8001
@@ -158,8 +179,8 @@ orderService:
   worker:
     autoscaling:
       enabled: true
-      minReplicas: 2
-      maxReplicas: 5
+      minReplicas: 1
+      maxReplicas: 2
       targetCPUUtilizationPercentage: 70
     resources:
       requests:
@@ -172,6 +193,13 @@ orderService:
       node-purpose: worker
     tolerations: []
     affinity: {}
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: order-worker
     env:
       dbPoolMinSize: "1"
       dbPoolMaxSize: "8"

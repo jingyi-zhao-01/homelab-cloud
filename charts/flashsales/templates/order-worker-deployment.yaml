@@ -40,6 +40,10 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.orderService.worker.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.orderService.worker.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
