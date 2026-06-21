@@ -161,6 +161,7 @@ jobs:
       DESIRED_CAPACITY: ${{ inputs.desired_capacity }}
       MIN_SIZE: ${{ inputs.min_size }}
       MAX_SIZE: ${{ inputs.max_size }}
+      RECYCLE_UNREADY_NODE: "true"
 
     steps:
       - name: Install kubectl
@@ -232,6 +233,7 @@ jobs:
           set -euo pipefail
           asg_name="${CLUSTER_NAME}-${NODE_GROUP_NAME}"
           desired_capacity="${DESIRED_CAPACITY}"
+          recycled_unready_node="false"
           echo "Waiting for ${desired_capacity} spot instance(s) from ASG ${asg_name} to register as Ready k3s node(s)..."
 
           instance_ids=""
@@ -276,6 +278,8 @@ jobs:
 
           for attempt in $(seq 1 36); do
             ready_matches=0
+            unready_matches=0
+            first_unready_node=""
             while IFS= read -r node_prefix; do
               [ -z "$node_prefix" ] && continue
               matched_node="$(kubectl get nodes -o name | sed 's|^node/||' | grep "^${node_prefix}" | head -n1 || true)"
@@ -285,6 +289,10 @@ jobs:
                   ready_matches=$((ready_matches + 1))
                   continue
                 fi
+                unready_matches=$((unready_matches + 1))
+                if [ -z "$first_unready_node" ]; then
+                  first_unready_node="$matched_node"
+                fi
                 echo "Matched node ${matched_node}, but Ready=${ready_status:-unknown}"
               fi
             done <<< "$node_prefixes"
@@ -293,6 +301,54 @@ jobs:
               echo "Ready nodes matched: ${ready_matches}/${desired_capacity}"
               kubectl get nodes -o wide
               exit 0
+            fi
+
+            if [ "${RECYCLE_UNREADY_NODE}" = "true" ] && [ "$recycled_unready_node" = "false" ] && [ "$unready_matches" -gt 0 ]; then
+              echo "Detected ${unready_matches} matched worker node(s) that are registered but not Ready. Recycling ASG instance(s) once."
+              if [ -n "$first_unready_node" ]; then
+                kubectl describe node "$first_unready_node" || true
+              fi
+
+              for instance_id in "${instance_id_array[@]}"; do
+                echo "Terminating stale ASG instance ${instance_id} to force replacement"
+                aws autoscaling terminate-instance-in-auto-scaling-group \
+                  --instance-id "$instance_id" \
+                  --should-decrement-desired-capacity false \
+                  --region "$AWS_REGION"
+              done
+
+              recycled_unready_node="true"
+              instance_ids=""
+              for refill_attempt in $(seq 1 30); do
+                instance_ids="$(aws autoscaling describe-auto-scaling-groups \
+                  --auto-scaling-group-names "$asg_name" \
+                  --region "$AWS_REGION" \
+                  --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`].InstanceId' \
+                  --output text)"
+                instance_count="$(printf '%s\n' "$instance_ids" | awk 'NF{count++} END{print count+0}')"
+                if [ "$instance_count" -ge "$desired_capacity" ]; then
+                  break
+                fi
+                echo "Replacement wait ${refill_attempt}/30: ASG has ${instance_count}/${desired_capacity} InService instance(s)."
+                sleep 10
+              done
+
+              read -r -a instance_id_array <<< "$instance_ids"
+              node_prefixes=""
+              for instance_id in "${instance_id_array[@]}"; do
+                [ -z "$instance_id" ] && continue
+                private_dns="$(aws ec2 describe-instances \
+                  --instance-ids "$instance_id" \
+                  --region "$AWS_REGION" \
+                  --query 'Reservations[0].Instances[0].PrivateDnsName' \
+                  --output text)"
+                node_prefixes="${node_prefixes}${private_dns%%.*}"$'\n'
+              done
+
+              echo "Replacement InService instances:"
+              printf '%s\n' "${instance_id_array[@]}"
+              sleep 20
+              continue
             fi
 
             echo "Attempt ${attempt}/36: only ${ready_matches}/${desired_capacity} worker node(s) are Ready yet."
