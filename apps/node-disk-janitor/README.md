@@ -7,6 +7,7 @@ It is intended to run as a privileged `DaemonSet` on both worker and
 control-plane nodes. Each pod:
 
 - measures host root filesystem usage through a host mount
+- can self-heal host Tailscale and `k3s`/`k3s-agent` when a node drops off the tailnet
 - triggers cleanup when usage crosses a configured threshold
 - deletes terminated pod objects scheduled to the same node
 - enters the host namespaces with `nsenter` and runs a bounded cleanup command
@@ -36,6 +37,11 @@ The daemon needs:
 - `NODE_NAME`
 - `CHECK_INTERVAL_SECONDS`
 - `CLEANUP_COOLDOWN_SECONDS`
+- `TAILSCALE_SELF_HEAL_ENABLED`
+- `SELF_HEAL_COOLDOWN_SECONDS`
+- `TAILSCALE_PING_TIMEOUT_SECONDS`
+- `TAILSCALE_PING_PEER`
+- `RESTART_K3S_ON_TAILSCALE_HEAL`
 - `DISK_USAGE_TRIGGER_PERCENT`
 - `DISK_USAGE_TARGET_PERCENT`
 - `DELETE_TERMINATED_PODS`

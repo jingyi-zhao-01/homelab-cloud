@@ -9,7 +9,7 @@ on:
       - "charts/node-disk-janitor/**"
       - ".github/actions/setup-private-k3s-access/**"
       - ".github/scripts/ensure-k8s-prereqs.sh"
-      - ".github/workflows/build-node-disk-janitor.yml"
+      - ".github/workflows/deploy-node-disk-janitor.yml"
   workflow_dispatch:
 
 concurrency:

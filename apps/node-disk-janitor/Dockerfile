@@ -5,7 +5,7 @@ ARG TARGETARCH=amd64
 
 WORKDIR /src
 
-COPY go.mod ./
+COPY go.mod go.sum ./
 COPY main.go ./
 
 RUN go mod download
