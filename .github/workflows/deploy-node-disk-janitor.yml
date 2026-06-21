@@ -43,6 +43,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: apps/node-disk-janitor/go.mod
+          cache-dependency-path: apps/node-disk-janitor/go.sum
 
       - name: Run unit tests
         working-directory: apps/node-disk-janitor

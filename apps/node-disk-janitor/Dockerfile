@@ -6,10 +6,10 @@ ARG TARGETARCH=amd64
 WORKDIR /src
 
 COPY go.mod go.sum ./
-COPY main.go ./
+COPY *.go ./
 
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/node-disk-janitor ./main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/node-disk-janitor .
 
 FROM alpine:3.20
 
