@@ -114,9 +114,28 @@ k3s_active=false
 peer=""
 peer_reachable=skip
 
-if [ "$(systemctl show -p LoadState --value tailscaled 2>/dev/null || true)" = "loaded" ]; then
+has_systemd_unit() {
+  unit="$1"
+  if [ "$(systemctl show -p LoadState --value "$unit" 2>/dev/null || true)" = "loaded" ]; then
+    return 0
+  fi
+  [ -f "/etc/systemd/system/$unit.service" ] || \
+    [ -f "/lib/systemd/system/$unit.service" ] || \
+    [ -f "/usr/lib/systemd/system/$unit.service" ]
+}
+
+is_service_active() {
+  unit="$1"
+  proc_name="$2"
+  if systemctl is-active --quiet "$unit" 2>/dev/null; then
+    return 0
+  fi
+  pgrep -x "$proc_name" >/dev/null 2>&1
+}
+
+if has_systemd_unit tailscaled || command -v tailscale >/dev/null 2>&1 || command -v tailscaled >/dev/null 2>&1 || pgrep -x tailscaled >/dev/null 2>&1; then
   tailscaled_present=true
-  if systemctl is-active --quiet tailscaled; then
+  if is_service_active tailscaled tailscaled; then
     tailscaled_active=true
   fi
   if tailscale ip -4 >/dev/null 2>&1; then
@@ -135,13 +154,13 @@ elif [ -f /etc/systemd/system/k3s-agent.service.env ]; then
   peer="${peer%%%%:*}"
 fi
 
-if [ "$(systemctl show -p LoadState --value k3s-agent 2>/dev/null || true)" = "loaded" ]; then
+if has_systemd_unit k3s-agent || [ -f /etc/systemd/system/k3s-agent.service.env ] || pgrep -x k3s-agent >/dev/null 2>&1; then
   k3s_service="k3s-agent"
-elif [ "$(systemctl show -p LoadState --value k3s 2>/dev/null || true)" = "loaded" ]; then
+elif has_systemd_unit k3s || pgrep -x k3s >/dev/null 2>&1; then
   k3s_service="k3s"
 fi
 
-if [ -n "$k3s_service" ] && systemctl is-active --quiet "$k3s_service"; then
+if [ -n "$k3s_service" ] && is_service_active "$k3s_service" "$k3s_service"; then
   k3s_active=true
 fi
 
@@ -173,15 +192,27 @@ restart_tailscale=%q
 restart_k3s=%q
 k3s_service=%q
 
+restart_service() {
+  unit="$1"
+  if systemctl restart "$unit" 2>/dev/null; then
+    return 0
+  fi
+  if command -v service >/dev/null 2>&1; then
+    service "$unit" restart
+    return 0
+  fi
+  return 1
+}
+
 if [ "$restart_tailscale" = "true" ]; then
   echo "[janitor] restarting tailscaled"
-  systemctl restart tailscaled
+  restart_service tailscaled
   sleep 5
 fi
 
 if [ "$restart_k3s" = "true" ] && [ -n "$k3s_service" ]; then
   echo "[janitor] restarting $k3s_service"
-  systemctl restart "$k3s_service"
+  restart_service "$k3s_service"
 fi
 `, strconv.FormatBool(restartTailscale), strconv.FormatBool(restartK3S), k3sService)
 }
