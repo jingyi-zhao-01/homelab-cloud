@@ -16,6 +16,7 @@ type janitor struct {
 
 type connectivityStatus struct {
 	tailscaledPresent bool
+	tailscaledService string
 	tailscaledActive  bool
 	hasTailscaleIPv4  bool
 	k3sService        string

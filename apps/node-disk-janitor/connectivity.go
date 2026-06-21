@@ -42,8 +42,9 @@ func (j *janitor) ensureNodeConnectivity(ctx context.Context) error {
 	j.lastSelfHealTime = time.Now()
 
 	log.Printf(
-		"node=%s starting self-heal tailscaled_active=%t tailscale_ip=%t peer=%q peer_reachable=%t k3s_service=%q k3s_active=%t",
+		"node=%s starting self-heal tailscaled_service=%q tailscaled_active=%t tailscale_ip=%t peer=%q peer_reachable=%t k3s_service=%q k3s_active=%t",
 		j.cfg.nodeName,
+		status.tailscaledService,
 		status.tailscaledActive,
 		status.hasTailscaleIPv4,
 		status.peer,
@@ -55,7 +56,7 @@ func (j *janitor) ensureNodeConnectivity(ctx context.Context) error {
 	needsTailscaleRestart := !status.tailscaledActive || !status.hasTailscaleIPv4 || (!status.peerCheckSkipped && !status.peerReachable)
 	needsK3SRestart := (status.k3sService != "" && !status.k3sActive) || (needsTailscaleRestart && j.cfg.restartK3SOnHeal && status.k3sService != "")
 
-	output, err := j.runHostScript(ctx, buildSelfHealScript(needsTailscaleRestart, needsK3SRestart, status.k3sService))
+	output, err := j.runHostScript(ctx, buildSelfHealScript(needsTailscaleRestart, status.tailscaledService, needsK3SRestart, status.k3sService))
 	if strings.TrimSpace(output) != "" {
 		log.Printf("node=%s self-heal output:\n%s", j.cfg.nodeName, output)
 	}
@@ -87,6 +88,7 @@ func (j *janitor) inspectConnectivity(ctx context.Context) (connectivityStatus, 
 
 	return connectivityStatus{
 		tailscaledPresent: values["TAILSCALED_PRESENT"] == "true",
+		tailscaledService: values["TAILSCALED_SERVICE"],
 		tailscaledActive:  values["TAILSCALED_ACTIVE"] == "true",
 		hasTailscaleIPv4:  values["TAILSCALE_HAS_IPV4"] == "true",
 		k3sService:        values["K3S_SERVICE"],
@@ -107,6 +109,7 @@ override_peer=%q
 ping_timeout=%d
 
 tailscaled_present=false
+tailscaled_service=""
 tailscaled_active=false
 tailscale_has_ipv4=false
 k3s_service=""
@@ -133,11 +136,19 @@ is_service_active() {
   pgrep -x "$proc_name" >/dev/null 2>&1
 }
 
-if has_systemd_unit tailscaled || command -v tailscale >/dev/null 2>&1 || command -v tailscaled >/dev/null 2>&1 || pgrep -x tailscaled >/dev/null 2>&1; then
+if has_systemd_unit snap.tailscale.tailscaled; then
   tailscaled_present=true
-  if is_service_active tailscaled tailscaled; then
+  tailscaled_service="snap.tailscale.tailscaled"
+elif has_systemd_unit tailscaled || command -v tailscale >/dev/null 2>&1 || command -v tailscaled >/dev/null 2>&1 || pgrep -x tailscaled >/dev/null 2>&1; then
+  tailscaled_present=true
+  tailscaled_service="tailscaled"
+fi
+
+if [ -n "$tailscaled_service" ] && is_service_active "$tailscaled_service" tailscaled; then
     tailscaled_active=true
-  fi
+fi
+
+if [ "$tailscaled_present" = true ]; then
   if tailscale ip -4 >/dev/null 2>&1; then
     tailscale_has_ipv4=true
   fi
@@ -145,7 +156,7 @@ fi
 
 if [ -n "$override_peer" ]; then
   peer="$override_peer"
-elif [ -f /etc/systemd/system/k3s-agent.service.env ]; then
+elif pgrep -x k3s-agent >/dev/null 2>&1 && [ -f /etc/systemd/system/k3s-agent.service.env ]; then
   # shellcheck disable=SC1091
   . /etc/systemd/system/k3s-agent.service.env
   peer="${K3S_URL:-}"
@@ -154,10 +165,10 @@ elif [ -f /etc/systemd/system/k3s-agent.service.env ]; then
   peer="${peer%%%%:*}"
 fi
 
-if has_systemd_unit k3s-agent || [ -f /etc/systemd/system/k3s-agent.service.env ] || pgrep -x k3s-agent >/dev/null 2>&1; then
-  k3s_service="k3s-agent"
-elif has_systemd_unit k3s || pgrep -x k3s >/dev/null 2>&1; then
+if pgrep -x k3s >/dev/null 2>&1 || has_systemd_unit k3s; then
   k3s_service="k3s"
+elif pgrep -x k3s-agent >/dev/null 2>&1 || has_systemd_unit k3s-agent || [ -f /etc/systemd/system/k3s-agent.service.env ]; then
+  k3s_service="k3s-agent"
 fi
 
 if [ -n "$k3s_service" ] && is_service_active "$k3s_service" "$k3s_service"; then
@@ -173,6 +184,7 @@ if [ -n "$peer" ] && [ "$tailscaled_present" = true ] && [ "$tailscaled_active" 
 fi
 
 printf 'TAILSCALED_PRESENT=%%s\n' "$tailscaled_present"
+printf 'TAILSCALED_SERVICE=%%s\n' "$tailscaled_service"
 printf 'TAILSCALED_ACTIVE=%%s\n' "$tailscaled_active"
 printf 'TAILSCALE_HAS_IPV4=%%s\n' "$tailscale_has_ipv4"
 printf 'K3S_SERVICE=%%s\n' "$k3s_service"
@@ -182,13 +194,14 @@ printf 'PEER_REACHABLE=%%s\n' "$peer_reachable"
 `, j.cfg.tailscalePeer, int(j.cfg.tailscalePingTimeout.Seconds()))
 }
 
-func buildSelfHealScript(restartTailscale, restartK3S bool, k3sService string) string {
+func buildSelfHealScript(restartTailscale bool, tailscaledService string, restartK3S bool, k3sService string) string {
 	return fmt.Sprintf(`
 set -eu
 
 export PATH="/var/lib/rancher/k3s/data/current/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
 restart_tailscale=%q
+tailscaled_service=%q
 restart_k3s=%q
 k3s_service=%q
 
@@ -204,9 +217,9 @@ restart_service() {
   return 1
 }
 
-if [ "$restart_tailscale" = "true" ]; then
-  echo "[janitor] restarting tailscaled"
-  restart_service tailscaled
+if [ "$restart_tailscale" = "true" ] && [ -n "$tailscaled_service" ]; then
+  echo "[janitor] restarting $tailscaled_service"
+  restart_service "$tailscaled_service"
   sleep 5
 fi
 
@@ -214,5 +227,5 @@ if [ "$restart_k3s" = "true" ] && [ -n "$k3s_service" ]; then
   echo "[janitor] restarting $k3s_service"
   restart_service "$k3s_service"
 fi
-`, strconv.FormatBool(restartTailscale), strconv.FormatBool(restartK3S), k3sService)
+`, strconv.FormatBool(restartTailscale), tailscaledService, strconv.FormatBool(restartK3S), k3sService)
 }
