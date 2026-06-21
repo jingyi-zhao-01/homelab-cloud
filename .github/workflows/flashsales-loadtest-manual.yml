@@ -150,10 +150,10 @@ jobs:
           kubectl -n "$NAMESPACE" rollout restart deploy/flashsales-order-service
           kubectl -n "$NAMESPACE" rollout restart deploy/flashsales-order-worker
 
-          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-user-service --timeout=120s
-          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-product-service --timeout=120s
-          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=120s
-          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-worker --timeout=120s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-user-service --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-product-service --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-service --timeout=300s
+          kubectl -n "$NAMESPACE" rollout status deploy/flashsales-order-worker --timeout=300s
 
           secret_json="$(mktemp)"
           kubectl -n "$NAMESPACE" get secret flashsales-postgres-auth -o json > "$secret_json"
