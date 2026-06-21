@@ -19,7 +19,7 @@ func isTerminatedPod(pod corev1.Pod, cutoff time.Time) bool {
 		return false
 	}
 
-	if pod.Status.StartTime != nil && pod.Status.StartTime.Time.After(cutoff) {
+	if pod.Status.StartTime != nil && pod.Status.StartTime.After(cutoff) {
 		return false
 	}
 
@@ -65,7 +65,7 @@ func isNamespaceCleanupCandidate(namespace corev1.Namespace, cutoff time.Time, p
 	if namespace.DeletionTimestamp != nil || namespace.Status.Phase != corev1.NamespaceActive {
 		return false
 	}
-	if namespace.CreationTimestamp.Time.After(cutoff) {
+	if namespace.CreationTimestamp.After(cutoff) {
 		return false
 	}
 	return !slices.Contains(protected, namespace.Name)

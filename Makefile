@@ -11,8 +11,9 @@ SSH_HOST ?= 76.13.108.14
 SSH_PORT ?= 22
 REMOTE_K3S_CMD ?= k3s ctr images import -
 SSH ?= ssh -p $(SSH_PORT) $(SSH_USER)@$(SSH_HOST)
+GOLANGCI_LINT ?= $(shell go env GOPATH)/bin/golangci-lint
 
-.PHONY: help lint deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-plan neon-apply neon-destroy k3s-spot-plan k3s-spot-apply k3s-spot-destroy db-format db-validate db-generate db-migrate-status db-migrate-all concurrency-smoke concurrency-idempotency-lite concurrency-hotspot-100tps concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot require-tf-remote-state
+.PHONY: help lint lint-go deploy status e2e undeploy build-images import-images restart-apps fix-images logs-user logs-product logs-order logs-all logs-since import-images-remote deploy-remote fix-images-remote neon-plan neon-apply neon-destroy k3s-spot-plan k3s-spot-apply k3s-spot-destroy db-format db-validate db-generate db-migrate-status db-migrate-all concurrency-smoke concurrency-idempotency-lite concurrency-hotspot-100tps concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot require-tf-remote-state
 
 TAIL ?= 200
 SINCE ?= 10m
@@ -20,6 +21,7 @@ SINCE ?= 10m
 help:
 >echo "Targets:"
 >echo "  make lint      # Run repo lint and shared pylint checks"
+>echo "  make lint-go   # Run golangci-lint for node-disk-janitor"
 >echo "  make deploy    # Deploy chart to local k3s"
 >echo "  make status    # Show pods and services"
 >echo "  make e2e       # Run E2E smoke test"
@@ -57,6 +59,9 @@ help:
 
 lint:
 >cd application/flashsale && uv run pre-commit run --all-files
+
+lint-go:
+>cd apps/node-disk-janitor && $(GOLANGCI_LINT) run --config .golangci.yml ./...
 
 concurrency-smoke concurrency-idempotency-lite concurrency-hotspot-100tps concurrency-baseline concurrency-stress100 concurrency-stress200 concurrency-hotspot:
 >$(MAKE) -C application/flashsale $@
