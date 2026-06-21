@@ -19,7 +19,9 @@ func (j *janitor) runHostScript(ctx context.Context, script string) (string, err
 		"-t", "1",
 		"-m", "-u", "-i", "-n", "-p",
 		"--",
-		"chroot", j.cfg.hostRoot,
+		// After entering the host mount namespace, the container's /host bind mount no
+		// longer exists. /proc/1/root is the host rootfs from that namespace.
+		"chroot", "/proc/1/root",
 		"/bin/sh", "-lc", script,
 	)
 	output, err := cmd.CombinedOutput()
