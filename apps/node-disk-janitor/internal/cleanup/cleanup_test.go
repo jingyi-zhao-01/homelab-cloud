@@ -1,4 +1,4 @@
-package main
+package cleanup
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ func TestIsTerminatedPodRejectsFreshSucceededPod(t *testing.T) {
 		},
 	}
 
-	if isTerminatedPod(pod, now.Add(-time.Minute)) {
+	if IsTerminatedPod(pod, now.Add(-time.Minute)) {
 		t.Fatalf("expected fresh succeeded pod to be skipped")
 	}
 }
@@ -46,7 +46,7 @@ func TestIsTerminatedPodAcceptsOldFailedPod(t *testing.T) {
 		},
 	}
 
-	if !isTerminatedPod(pod, time.Now().Add(-time.Minute)) {
+	if !IsTerminatedPod(pod, time.Now().Add(-time.Minute)) {
 		t.Fatalf("expected old failed pod to qualify for deletion")
 	}
 }
@@ -65,7 +65,7 @@ func TestIsFinishedJobAcceptsOldCompletedJob(t *testing.T) {
 		},
 	}
 
-	if !isFinishedJob(job, time.Now().Add(-10*time.Minute)) {
+	if !IsFinishedJob(job, time.Now().Add(-10*time.Minute)) {
 		t.Fatalf("expected old completed job to be deletable")
 	}
 }
@@ -84,7 +84,7 @@ func TestIsFinishedJobRejectsFreshFailedJob(t *testing.T) {
 		},
 	}
 
-	if isFinishedJob(job, time.Now().Add(-10*time.Minute)) {
+	if IsFinishedJob(job, time.Now().Add(-10*time.Minute)) {
 		t.Fatalf("expected fresh failed job to be preserved")
 	}
 }
@@ -98,7 +98,9 @@ func TestNamespaceCleanupCandidateProtectsSystemNamespaces(t *testing.T) {
 		Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive},
 	}
 
-	if isNamespaceCleanupCandidate(namespace, time.Now().Add(-10*time.Minute), defaultProtectedNamespaces()) {
+	protected := []string{"kube-system", "default"}
+
+	if IsNamespaceCleanupCandidate(namespace, time.Now().Add(-10*time.Minute), protected) {
 		t.Fatalf("expected kube-system to be protected")
 	}
 }

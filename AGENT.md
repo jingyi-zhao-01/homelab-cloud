@@ -40,6 +40,7 @@ Use the closest source of truth for the task:
 * repo wiki and mirrored ADRs: [wiki/Home.md](/home/jingyi/PycharmProjects/homelab-cloud/wiki/Home.md)
 * strategy-tester platform notes: [docs/strategy-tester.md](/home/jingyi/PycharmProjects/homelab-cloud/docs/strategy-tester.md)
 * flashsale workload internals: [application/flashsale/AGENT.md](/home/jingyi/PycharmProjects/homelab-cloud/application/flashsale/AGENT.md)
+* backend and infra-facing app code rules: [.codex/skills/home-cloud-rules/SKILL.md](/home/jingyi/PycharmProjects/homelab-cloud/.codex/skills/home-cloud-rules/SKILL.md)
 
 Keep root guidance short. Push workload-specific business rules down into workload-owned docs.
 

@@ -1,4 +1,4 @@
-package main
+package kubeclient
 
 import (
 	"os"
@@ -9,7 +9,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func newClientset() (kubernetes.Interface, error) {
+func New() (kubernetes.Interface, error) {
 	inCluster, err := rest.InClusterConfig()
 	if err == nil {
 		return kubernetes.NewForConfig(inCluster)
@@ -30,5 +30,6 @@ func newClientset() (kubernetes.Interface, error) {
 	if buildErr != nil {
 		return nil, buildErr
 	}
+
 	return kubernetes.NewForConfig(outOfCluster)
 }
