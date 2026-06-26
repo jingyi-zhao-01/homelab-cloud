@@ -75,14 +75,46 @@ jobs:
             exit 1
           fi
 
-      - name: Terraform shared flow
-        uses: ./.github/actions/terraform-run
-        with:
-          working_directory: terraform/strategy-tester
-          backend_bucket: ${{ env.TF_STATE_BUCKET }}
-          backend_key: strategy-tester/resources/terraform.tfstate
-          aws_region: ${{ env.AWS_REGION }}
-          action: ${{ github.event_name == 'push' && 'apply' || inputs.action }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=strategy-tester/resources/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
+
+      - name: Import existing Grafana folder into Terraform state
+        if: ${{ github.event_name == 'push' || inputs.action == 'apply' }}
+        run: |
+          if terraform state show grafana_folder.strategy_tester >/dev/null 2>&1; then
+            echo "grafana_folder.strategy_tester already managed by Terraform"
+            exit 0
+          fi
+
+          echo "Importing existing Grafana folder ${TF_VAR_grafana_folder_uid}"
+          terraform import -input=false grafana_folder.strategy_tester "${TF_VAR_grafana_folder_uid}"
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: |
+          if [ "${{ github.event_name == 'push' && 'apply' || inputs.action }}" = "destroy" ]; then
+            terraform plan -destroy -input=false
+          else
+            terraform plan -input=false
+          fi
+
+      - name: Terraform Apply
+        if: ${{ github.event_name == 'push' || inputs.action == 'apply' }}
+        run: terraform apply -auto-approve -input=false
+
+      - name: Terraform Destroy
+        if: ${{ inputs.action == 'destroy' }}
+        run: terraform destroy -auto-approve -input=false
 
   notify-discord:
     name: Notify Discord
