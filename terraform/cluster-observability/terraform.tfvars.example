@@ -1,0 +1,13 @@
+namespace = "default"
+cluster_name = "openhands-k3s"
+
+kubeconfig_path = "~/.kube/config"
+# kubeconfig_context = "your-context"
+
+destinations_loki_url = "https://logs-prod-021.grafana.net/loki/api/v1/push"
+destinations_loki_username = "1284914"
+destinations_loki_password = "set-me"
+
+fleetmanagement_url = "https://fleet-management-prod-014.grafana.net"
+fleetmanagement_username = "1327120"
+fleetmanagement_password = "set-me"

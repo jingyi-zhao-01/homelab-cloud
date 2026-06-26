@@ -1,0 +1,55 @@
+destinations:
+  grafana-cloud-logs:
+    type: loki
+    auth:
+      type: basic
+clusterMetrics:
+  enabled: false
+  collector: alloy-metrics
+hostMetrics:
+  enabled: false
+  collector: alloy-metrics
+  linuxHosts:
+    enabled: true
+  windowsHosts:
+    enabled: false
+  energyMetrics:
+    enabled: false
+costMetrics:
+  enabled: false
+  collector: alloy-metrics
+clusterEvents:
+  enabled: true
+  collector: alloy-singleton
+podLogsViaLoki:
+  enabled: true
+  collector: alloy-logs
+collectors:
+  alloy-metrics:
+    presets:
+      - clustered
+      - statefulset
+  alloy-singleton:
+    presets:
+      - singleton
+  alloy-logs:
+    presets:
+      - filesystem-log-reader
+      - daemonset
+collectorCommon:
+  alloy:
+    remoteConfig:
+      enabled: true
+      auth:
+        type: basic
+telemetryServices:
+  kube-state-metrics:
+    deploy: false
+  node-exporter:
+    deploy: false
+  windows-exporter:
+    deploy: false
+  opencost:
+    deploy: false
+  kepler:
+    deploy: false
