@@ -25,6 +25,10 @@ spec:
         metadata:
           labels:
             app: option-ingestor
+            {{- if .Values.observability.datadog.apm.enabled }}
+            {{- include "strategy-tester.datadogPodLabels" . | nindent 12 }}
+            tags.datadoghq.com/service: "option-ingestor"
+            {{- end }}
             {{- include "strategy-tester.selectorLabels" . | nindent 12 }}
         spec:
           restartPolicy: {{ .Values.optionIngestor.cronJob.restartPolicy }}
@@ -54,6 +58,20 @@ spec:
                 - name: {{ $key }}
                   value: {{ $value | quote }}
                 {{- end }}
+                {{- if $.Values.observability.datadog.apm.enabled }}
+                - name: HOST_IP
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: status.hostIP
+                - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+                  value: "http://$(HOST_IP):{{ $.Values.observability.datadog.apm.tracesPort }}{{ $.Values.observability.datadog.apm.tracesPath }}"
+                - name: DD_ENV
+                  value: {{ $.Values.observability.datadog.apm.env | quote }}
+                - name: DD_SERVICE
+                  value: "option-ingestor"
+                - name: DD_VERSION
+                  value: {{ $.Chart.AppVersion | quote }}
+                {{- end }}
                 - name: OTEL_EXPORTER_OTLP_PROTOCOL
                   value: {{ $.Values.observability.tracing.otlpProtocol | default "http/protobuf" | quote }}
                 {{- if $.Values.observability.tracing.existingSecretName }}
@@ -66,13 +84,13 @@ spec:
                 - name: OTEL_EXPORTER_OTLP_ENDPOINT
                   value: {{ $.Values.observability.tracing.otlpHttpEndpoint | default "" | quote }}
                 {{- end }}
-                {{- if $.Values.observability.tracing.existingSecretName }}
+                {{- if and (not $.Values.observability.datadog.apm.enabled) $.Values.observability.tracing.existingSecretName }}
                 - name: OTEL_EXPORTER_OTLP_HEADERS
                   valueFrom:
                     secretKeyRef:
                       name: {{ $.Values.observability.tracing.existingSecretName }}
                       key: {{ $.Values.observability.tracing.existingSecretKey }}
-                {{- else if $.Values.observability.tracing.otlpHeaders }}
+                {{- else if and (not $.Values.observability.datadog.apm.enabled) $.Values.observability.tracing.otlpHeaders }}
                 - name: OTEL_EXPORTER_OTLP_HEADERS
                   value: {{ $.Values.observability.tracing.otlpHeaders | quote }}
                 {{- end }}

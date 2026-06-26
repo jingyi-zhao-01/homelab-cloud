@@ -12,6 +12,12 @@ observability:
     existingSecretEndpointKey: "OTEL_EXPORTER_OTLP_ENDPOINT"
     existingSecretName: "strategy-tester-apis"
     existingSecretKey: "OTEL_EXPORTER_OTLP_HEADERS"
+  datadog:
+    apm:
+      enabled: true
+      env: "prod"
+      tracesPort: 4318
+      tracesPath: "/v1/traces"
 
 externalSecrets:
   enabled: true

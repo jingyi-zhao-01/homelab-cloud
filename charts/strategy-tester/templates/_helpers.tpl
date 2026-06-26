@@ -70,3 +70,9 @@ Get namespace
 {{- $merged := merge $common $local -}}
 {{- toYaml $merged }}
 {{- end }}
+
+{{- define "strategy-tester.datadogPodLabels" -}}
+admission.datadoghq.com/enabled: "true"
+tags.datadoghq.com/env: {{ .Values.observability.datadog.apm.env | default "prod" | quote }}
+tags.datadoghq.com/version: {{ .Chart.AppVersion | quote }}
+{{- end -}}
