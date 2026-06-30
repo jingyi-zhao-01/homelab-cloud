@@ -18,11 +18,22 @@ import type {
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { z } from "zod";
 
+import {
+  buildHostFilter,
+  extractZhihuHotListItems,
+  extractZhihuSearchItems,
+  inferQueryFromUrl,
+  isZhihuHost,
+  parseSharedUrl,
+  zhihuGetJson
+} from "./zhihu.js";
+
 const port = Number.parseInt(process.env.PORT ?? "8080", 10);
 const bindHost = process.env.HOST ?? "0.0.0.0";
 const publicBaseUrl = getRequiredUrl("PUBLIC_BASE_URL");
 const issuerUrl = new URL(publicBaseUrl.origin);
 const mcpServerUrl = new URL("/mcp", publicBaseUrl);
+const zhihuApiKey = process.env.ZHIHU_API_KEY;
 
 function getRequiredUrl(name: string): URL {
   const value = process.env[name];
@@ -31,6 +42,11 @@ function getRequiredUrl(name: string): URL {
   }
 
   return new URL(value);
+}
+
+function getShortText(value: string, limit = 220): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+  return compact.length <= limit ? compact : `${compact.slice(0, limit - 1)}...`;
 }
 
 function createMcpServer(): McpServer {
@@ -72,6 +88,241 @@ function createMcpServer(): McpServer {
       };
     }
   );
+
+  if (zhihuApiKey) {
+    server.registerTool(
+      "zhihu_search",
+      {
+        title: "Zhihu Search",
+        description: "Search content inside Zhihu.",
+        inputSchema: {
+          query: z.string().trim().min(2).max(100),
+          count: z.number().int().min(1).max(10).optional()
+        }
+      },
+      async ({ query, count }) => {
+        const response = await zhihuGetJson(
+          "/api/v1/content/zhihu_search",
+          {
+            Query: query,
+            Count: count
+          },
+          zhihuApiKey
+        );
+
+        const items = extractZhihuSearchItems(response);
+        const text = items.length === 0
+          ? `No Zhihu results for "${query}".`
+          : [
+              `Zhihu results for "${query}":`,
+              ...items.map((item, index) =>
+                `${index + 1}. ${item.title} [${item.contentType}] by ${item.authorName} (${item.voteUpCount} votes)\n${item.url}\n${getShortText(item.contentText)}`
+              )
+            ].join("\n\n");
+
+        return {
+          content: [
+            {
+              type: "text",
+              text
+            }
+          ],
+          structuredContent: {
+            query,
+            count: items.length,
+            items
+          }
+        };
+      }
+    );
+
+    server.registerTool(
+      "zhihu_global_search",
+      {
+        title: "Zhihu Global Search",
+        description: "Search the web through Zhihu's global search API.",
+        inputSchema: {
+          query: z.string().trim().min(2).max(100),
+          count: z.number().int().min(1).max(20).optional(),
+          filter: z.string().trim().min(1).max(300).optional(),
+          search_db: z.enum(["all", "realtime", "static"]).optional()
+        }
+      },
+      async ({ query, count, filter, search_db }) => {
+        const response = await zhihuGetJson(
+          "/api/v1/content/global_search",
+          {
+            Query: query,
+            Count: count,
+            Filter: filter,
+            SearchDB: search_db
+          },
+          zhihuApiKey
+        );
+
+        const items = extractZhihuSearchItems(response);
+        const text = items.length === 0
+          ? `No global results for "${query}".`
+          : [
+              `Global results for "${query}":`,
+              ...items.map((item, index) =>
+                `${index + 1}. ${item.title} [${item.contentType}] by ${item.authorName}\n${item.url}\n${getShortText(item.contentText)}`
+              )
+            ].join("\n\n");
+
+        return {
+          content: [
+            {
+              type: "text",
+              text
+            }
+          ],
+          structuredContent: {
+            query,
+            count: items.length,
+            items
+          }
+        };
+      }
+    );
+
+    server.registerTool(
+      "zhihu_hot_list",
+      {
+        title: "Zhihu Hot List",
+        description: "Get the current Zhihu hot list.",
+        inputSchema: {
+          limit: z.number().int().min(1).max(30).optional()
+        }
+      },
+      async ({ limit }) => {
+        const response = await zhihuGetJson(
+          "/api/v1/content/hot_list",
+          {
+            Limit: limit
+          },
+          zhihuApiKey
+        );
+
+        const items = extractZhihuHotListItems(response);
+        const text = items.length === 0
+          ? "Zhihu hot list is empty."
+          : [
+              "Current Zhihu hot list:",
+              ...items.map((item, index) =>
+                `${index + 1}. ${item.title}\n${item.url}\n${getShortText(item.summary || "No summary.")}`
+              )
+            ].join("\n\n");
+
+        return {
+          content: [
+            {
+              type: "text",
+              text
+            }
+          ],
+          structuredContent: {
+            count: items.length,
+            items
+          }
+        };
+      }
+    );
+
+    server.registerTool(
+      "zhihu_url_search",
+      {
+        title: "Zhihu URL Search",
+        description: "Search around a shared URL by inferring keywords and host constraints.",
+        inputSchema: {
+          url: z.string().url(),
+          count: z.number().int().min(1).max(10).optional()
+        }
+      },
+      async ({ url, count }) => {
+        const parsedUrl = parseSharedUrl(url);
+        const inferredQuery = inferQueryFromUrl(parsedUrl);
+
+        if (isZhihuHost(parsedUrl.hostname)) {
+          const response = await zhihuGetJson(
+            "/api/v1/content/zhihu_search",
+            {
+              Query: inferredQuery,
+              Count: count
+            },
+            zhihuApiKey
+          );
+
+          const items = extractZhihuSearchItems(response);
+          const text = items.length === 0
+            ? `No Zhihu results inferred from ${parsedUrl.href}.`
+            : [
+                `Zhihu URL search for ${parsedUrl.href}`,
+                `Inferred query: ${inferredQuery}`,
+                ...items.map((item, index) =>
+                  `${index + 1}. ${item.title} [${item.contentType}] by ${item.authorName}\n${item.url}\n${getShortText(item.contentText)}`
+                )
+              ].join("\n\n");
+
+          return {
+            content: [
+              {
+                type: "text",
+                text
+              }
+            ],
+            structuredContent: {
+              url: parsedUrl.href,
+              mode: "zhihu_search",
+              inferredQuery,
+              count: items.length,
+              items
+            }
+          };
+        }
+
+        const response = await zhihuGetJson(
+          "/api/v1/content/global_search",
+          {
+            Query: inferredQuery,
+            Count: count,
+            Filter: buildHostFilter(parsedUrl.hostname),
+            SearchDB: "all"
+          },
+          zhihuApiKey
+        );
+
+        const items = extractZhihuSearchItems(response);
+        const text = items.length === 0
+          ? `No global results inferred from ${parsedUrl.href}.`
+          : [
+              `URL search for ${parsedUrl.href}`,
+              `Inferred query: ${inferredQuery}`,
+              `Host filter: ${parsedUrl.hostname}`,
+              ...items.map((item, index) =>
+                `${index + 1}. ${item.title} [${item.contentType}] by ${item.authorName}\n${item.url}\n${getShortText(item.contentText)}`
+              )
+            ].join("\n\n");
+
+        return {
+          content: [
+            {
+              type: "text",
+              text
+            }
+          ],
+          structuredContent: {
+            url: parsedUrl.href,
+            mode: "global_search",
+            inferredQuery,
+            hostFilter: buildHostFilter(parsedUrl.hostname),
+            count: items.length,
+            items
+          }
+        };
+      }
+    );
+  }
 
   return server;
 }
@@ -265,4 +516,7 @@ app.listen(port, bindHost, () => {
   console.log(`chatgpt-mcp-hello listening on http://${bindHost}:${port}`);
   console.log(`OAuth issuer: ${issuerUrl.href}`);
   console.log(`MCP resource: ${mcpServerUrl.href}`);
+  if (!zhihuApiKey) {
+    console.warn("ZHIHU_API_KEY is not set; Zhihu tools are disabled.");
+  }
 });

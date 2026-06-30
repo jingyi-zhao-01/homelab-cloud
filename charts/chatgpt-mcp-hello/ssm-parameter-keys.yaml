@@ -1,3 +1,7 @@
 TUNNEL_TOKEN:
   path: /cloudflare/tunnel/alpha/TUNNEL_TOKEN
   optional: false
+
+ZHIHU_API_KEY:
+  path: /chatgpt-mcp-hello/zhihu/API_KEY
+  optional: false
