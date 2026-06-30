@@ -1,0 +1,39 @@
+{{- if .Values.tunnel.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-tunnel" (include "chatgpt-mcp-hello.fullname" .) }}
+  namespace: {{ include "chatgpt-mcp-hello.namespace" . }}
+  labels:
+    {{- include "chatgpt-mcp-hello.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tunnel
+spec:
+  replicas: {{ .Values.tunnel.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "chatgpt-mcp-hello.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: tunnel
+  template:
+    metadata:
+      labels:
+        {{- include "chatgpt-mcp-hello.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: tunnel
+    spec:
+      containers:
+        - name: cloudflared
+          image: "{{ .Values.tunnel.image.repository }}:{{ .Values.tunnel.image.tag }}"
+          imagePullPolicy: {{ .Values.tunnel.image.pullPolicy }}
+          args:
+            - tunnel
+            - run
+            - --token
+            - $(TUNNEL_TOKEN)
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "chatgpt-mcp-hello.secretName" . }}
+                  key: TUNNEL_TOKEN
+          resources:
+            {{- toYaml .Values.tunnel.resources | nindent 12 }}
+{{- end }}

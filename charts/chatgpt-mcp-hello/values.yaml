@@ -1,0 +1,58 @@
+namespaceOverride: ""
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
+
+image:
+  repository: ghcr.io/jingyi-zhao-01/chatgpt-mcp-hello
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8080
+
+app:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  env:
+    HOST: "0.0.0.0"
+    PORT: "8080"
+
+tunnel:
+  enabled: true
+  image:
+    repository: cloudflare/cloudflared
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  hostname: mcp-hello.jzhao62.com
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
+externalSecrets:
+  enabled: true
+  refreshInterval: 1h
+  targetSecretName: chatgpt-mcp-hello-secrets
+  parameterMapFile: ssm-parameter-keys.yaml
+  store:
+    kind: ClusterSecretStore
+    name: chatgpt-mcp-hello-aws-ssm
+    create: true
+    region: us-west-1
+    authSecret:
+      name: aws-ssm-credentials
+      namespace: external-secrets
+      accessKeyIdKey: access-key-id
+      secretAccessKeyKey: secret-access-key

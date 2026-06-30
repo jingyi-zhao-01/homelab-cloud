@@ -1,0 +1,7 @@
+MCP_SHARED_SECRET:
+  path: /chatgpt-mcp-hello/auth/alpha/MCP_SHARED_SECRET
+  optional: false
+
+TUNNEL_TOKEN:
+  path: /cloudflare/tunnel/alpha/TUNNEL_TOKEN
+  optional: false

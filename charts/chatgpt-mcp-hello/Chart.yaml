@@ -1,0 +1,11 @@
+apiVersion: v2
+name: chatgpt-mcp-hello
+description: Minimal remote MCP hello-world service for ChatGPT discovery tests
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+dependencies:
+  - name: ssm-common
+    version: 0.1.0
+    repository: file://../common/ssm-common
