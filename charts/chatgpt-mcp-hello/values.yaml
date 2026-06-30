@@ -26,6 +26,7 @@ app:
   env:
     HOST: "0.0.0.0"
     PORT: "8080"
+    PUBLIC_BASE_URL: "https://mcp-hello.jzhao62.com"
 
 tunnel:
   enabled: true

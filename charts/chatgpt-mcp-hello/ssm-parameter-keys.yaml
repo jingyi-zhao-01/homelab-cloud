@@ -1,7 +1,3 @@
-MCP_SHARED_SECRET:
-  path: /mcp/BEARER_TOKEN
-  optional: false
-
 TUNNEL_TOKEN:
   path: /cloudflare/tunnel/alpha/TUNNEL_TOKEN
   optional: false

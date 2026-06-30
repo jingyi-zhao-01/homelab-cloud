@@ -1,82 +1,43 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomUUID } from "node:crypto";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { mcpAuthRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
+import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js";
+import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type {
+  OAuthClientInformationFull,
+  OAuthClientMetadata,
+  OAuthTokenRevocationRequest,
+  OAuthTokens
+} from "@modelcontextprotocol/sdk/shared/auth.js";
+import type {
+  AuthorizationParams,
+  OAuthServerProvider
+} from "@modelcontextprotocol/sdk/server/auth/provider.js";
+import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { z } from "zod";
 
 const port = Number.parseInt(process.env.PORT ?? "8080", 10);
 const bindHost = process.env.HOST ?? "0.0.0.0";
+const publicBaseUrl = getRequiredUrl("PUBLIC_BASE_URL");
+const issuerUrl = new URL(publicBaseUrl.origin);
+const mcpServerUrl = new URL("/mcp", publicBaseUrl);
 
-function getRequiredEnv(name: string): string {
+function getRequiredUrl(name: string): URL {
   const value = process.env[name];
   if (!value) {
     throw new Error(`${name} is required`);
   }
 
-  return value;
-}
-
-const sharedSecret = getRequiredEnv("MCP_SHARED_SECRET");
-
-function sendJson(res: ServerResponse, statusCode: number, body: unknown): void {
-  const payload = JSON.stringify(body);
-  res.writeHead(statusCode, {
-    "content-type": "application/json",
-    "content-length": Buffer.byteLength(payload),
-    "cache-control": "no-store"
-  });
-  res.end(payload);
-}
-
-function unauthorized(res: ServerResponse): void {
-  res.writeHead(401, {
-    "www-authenticate": 'Bearer realm="chatgpt-mcp-hello"',
-    "content-type": "application/json"
-  });
-  res.end(JSON.stringify({ error: "unauthorized" }));
-}
-
-function constantTimeMatch(actual: string, expected: string): boolean {
-  const actualBuffer = Buffer.from(actual);
-  const expectedBuffer = Buffer.from(expected);
-
-  if (actualBuffer.length !== expectedBuffer.length) {
-    return false;
-  }
-
-  return timingSafeEqual(actualBuffer, expectedBuffer);
-}
-
-function isAuthorized(req: IncomingMessage): boolean {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    return false;
-  }
-
-  return constantTimeMatch(authHeader.slice("Bearer ".length), sharedSecret);
-}
-
-async function readBody(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-
-  if (chunks.length === 0) {
-    return undefined;
-  }
-
-  const raw = Buffer.concat(chunks).toString("utf8");
-  return JSON.parse(raw);
+  return new URL(value);
 }
 
 function createMcpServer(): McpServer {
   const server = new McpServer(
     {
       name: "chatgpt-mcp-hello",
-      version: "0.1.0"
+      version: "0.2.0"
     },
     {
       capabilities: {
@@ -115,37 +76,167 @@ function createMcpServer(): McpServer {
   return server;
 }
 
-async function handleMcpRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (!isAuthorized(req)) {
-    unauthorized(res);
-    return;
+class InMemoryClientsStore {
+  private readonly clients = new Map<string, OAuthClientInformationFull>();
+
+  async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {
+    return this.clients.get(clientId);
   }
 
-  if (req.method !== "POST") {
-    sendJson(res, 405, {
-      jsonrpc: "2.0",
-      error: {
-        code: -32000,
-        message: "Method not allowed."
-      },
-      id: null
+  async registerClient(clientMetadata: OAuthClientMetadata): Promise<OAuthClientInformationFull> {
+    const clientId = randomUUID();
+    const clientInformation: OAuthClientInformationFull = {
+      ...clientMetadata,
+      client_id: clientId,
+      client_id_issued_at: Math.floor(Date.now() / 1000)
+    };
+
+    this.clients.set(clientId, clientInformation);
+    return clientInformation;
+  }
+}
+
+type AuthorizationCodeRecord = {
+  client: OAuthClientInformationFull;
+  params: AuthorizationParams;
+};
+
+type AccessTokenRecord = {
+  clientId: string;
+  scopes: string[];
+  expiresAt: number;
+  resource?: string;
+};
+
+class HelloWorldOAuthProvider implements OAuthServerProvider {
+  readonly clientsStore = new InMemoryClientsStore();
+  private readonly codes = new Map<string, AuthorizationCodeRecord>();
+  private readonly tokens = new Map<string, AccessTokenRecord>();
+
+  async authorize(
+    client: OAuthClientInformationFull,
+    params: AuthorizationParams,
+    res: { redirect: (url: string) => void }
+  ): Promise<void> {
+    const code = randomUUID();
+    this.codes.set(code, { client, params });
+
+    const searchParams = new URLSearchParams({ code });
+    if (params.state) {
+      searchParams.set("state", params.state);
+    }
+
+    const redirectUrl = new URL(params.redirectUri);
+    redirectUrl.search = searchParams.toString();
+    res.redirect(redirectUrl.toString());
+  }
+
+  async challengeForAuthorizationCode(
+    client: OAuthClientInformationFull,
+    authorizationCode: string
+  ): Promise<string> {
+    const code = this.codes.get(authorizationCode);
+    if (!code || code.client.client_id !== client.client_id) {
+      throw new Error("Invalid authorization code");
+    }
+
+    return code.params.codeChallenge;
+  }
+
+  async exchangeAuthorizationCode(
+    client: OAuthClientInformationFull,
+    authorizationCode: string
+  ): Promise<OAuthTokens> {
+    const code = this.codes.get(authorizationCode);
+    if (!code || code.client.client_id !== client.client_id) {
+      throw new Error("Invalid authorization code");
+    }
+
+    this.codes.delete(authorizationCode);
+
+    const accessToken = randomUUID();
+    const scopes = code.params.scopes ?? ["mcp:tools"];
+    const expiresAt = Date.now() + 60 * 60 * 1000;
+
+    this.tokens.set(accessToken, {
+      clientId: client.client_id,
+      scopes,
+      expiresAt,
+      resource: code.params.resource?.toString()
     });
-    return;
+
+    return {
+      access_token: accessToken,
+      token_type: "bearer",
+      expires_in: 3600,
+      scope: scopes.join(" ")
+    };
   }
 
+  async exchangeRefreshToken(): Promise<OAuthTokens> {
+    throw new Error("refresh_token is not implemented");
+  }
+
+  async verifyAccessToken(token: string): Promise<AuthInfo> {
+    const tokenRecord = this.tokens.get(token);
+    if (!tokenRecord || tokenRecord.expiresAt <= Date.now()) {
+      throw new Error("Invalid or expired token");
+    }
+
+    return {
+      token,
+      clientId: tokenRecord.clientId,
+      scopes: tokenRecord.scopes,
+      expiresAt: Math.floor(tokenRecord.expiresAt / 1000),
+      resource: tokenRecord.resource ? new URL(tokenRecord.resource) : undefined
+    };
+  }
+
+  async revokeToken(_client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest): Promise<void> {
+    this.tokens.delete(request.token);
+  }
+}
+
+const provider = new HelloWorldOAuthProvider();
+const app = createMcpExpressApp({ host: bindHost });
+const authMiddleware = requireBearerAuth({
+  verifier: provider,
+  requiredScopes: []
+});
+
+app.use(
+  mcpAuthRouter({
+    provider,
+    issuerUrl,
+    resourceServerUrl: mcpServerUrl,
+    scopesSupported: ["mcp:tools"],
+    resourceName: "ChatGPT MCP Hello"
+  })
+);
+
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ ok: true });
+});
+
+app.post("/mcp", authMiddleware, async (req, res) => {
   const server = createMcpServer();
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined
-  });
 
   try {
-    const parsedBody = await readBody(req);
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined
+    });
+
     await server.connect(transport);
-    await transport.handleRequest(req, res, parsedBody);
+    await transport.handleRequest(req, res, req.body);
+
+    res.on("close", () => {
+      void transport.close();
+      void server.close();
+    });
   } catch (error) {
     console.error("Failed to handle MCP request", error);
     if (!res.headersSent) {
-      sendJson(res, 500, {
+      res.status(500).json({
         jsonrpc: "2.0",
         error: {
           code: -32603,
@@ -154,38 +245,24 @@ async function handleMcpRequest(req: IncomingMessage, res: ServerResponse): Prom
         id: null
       });
     }
-  } finally {
-    await transport.close();
-    await server.close();
-  }
-}
-
-const httpServer = createServer(async (req, res) => {
-  try {
-    if (!req.url) {
-      sendJson(res, 404, { error: "not_found" });
-      return;
-    }
-
-    if (req.url === "/healthz" && req.method === "GET") {
-      sendJson(res, 200, { ok: true });
-      return;
-    }
-
-    if (req.url === "/mcp") {
-      await handleMcpRequest(req, res);
-      return;
-    }
-
-    sendJson(res, 404, { error: "not_found" });
-  } catch (error) {
-    console.error("Unhandled request failure", error);
-    if (!res.headersSent) {
-      sendJson(res, 500, { error: "internal_error" });
-    }
   }
 });
 
-httpServer.listen(port, bindHost, () => {
+for (const method of ["get", "delete"] as const) {
+  app[method]("/mcp", authMiddleware, (_req, res) => {
+    res.status(405).json({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Method not allowed."
+      },
+      id: null
+    });
+  });
+}
+
+app.listen(port, bindHost, () => {
   console.log(`chatgpt-mcp-hello listening on http://${bindHost}:${port}`);
+  console.log(`OAuth issuer: ${issuerUrl.href}`);
+  console.log(`MCP resource: ${mcpServerUrl.href}`);
 });
