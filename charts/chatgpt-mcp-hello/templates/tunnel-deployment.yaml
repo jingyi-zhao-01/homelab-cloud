@@ -19,6 +19,10 @@ spec:
         {{- include "chatgpt-mcp-hello.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: tunnel
     spec:
+      {{- with .Values.tunnel.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: cloudflared
           image: "{{ .Values.tunnel.image.repository }}:{{ .Values.tunnel.image.tag }}"

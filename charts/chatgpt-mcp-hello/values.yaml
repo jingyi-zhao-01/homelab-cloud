@@ -14,6 +14,8 @@ service:
 
 app:
   replicaCount: 1
+  nodeSelector:
+    node-purpose: worker
   resources:
     requests:
       cpu: "100m"
@@ -32,6 +34,8 @@ tunnel:
     tag: latest
     pullPolicy: IfNotPresent
   replicaCount: 1
+  nodeSelector:
+    node-purpose: worker
   hostname: mcp-hello.jzhao62.com
   resources:
     requests:

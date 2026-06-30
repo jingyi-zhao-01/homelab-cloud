@@ -1,5 +1,5 @@
 MCP_SHARED_SECRET:
-  path: /chatgpt-mcp-hello/auth/alpha/MCP_SHARED_SECRET
+  path: /mcp/BEARER_TOKEN
   optional: false
 
 TUNNEL_TOKEN:
