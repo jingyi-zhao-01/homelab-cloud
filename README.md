@@ -33,6 +33,13 @@ This diagram is intentionally control-plane-first: it shows `homelab-cloud` as t
 - Dedicated *1 node* for public traffic ingress, behind cloudflare tunnel for better public traffic pattern and futhure hardening.
 - tailscale for node to node communication and connecting personal devices (laptop + phone) in case something goes wrong every node is immediately accessible
 
+
+## Budget Control 
+- 1 always on control node in boston (cannot save $$)
+- ephemeral ASG worker for day to day tasks (to save $$)
+- use public CICD github worker (to save $$) but only after join tailscale to leverage publically available infra resources without making the project private, but still safe
+- choosing developer friendly PayGo external integrations: NeonPostgres, upstash, free tier avien kafka (should be swapped to redis stream or aws SQS for cheaper) (to save $$)
+
 ## Resilience: 
 - a sample perf test project (flashsale) is provisioned here for periodic performance test for resource and integrated middlewares 
 
