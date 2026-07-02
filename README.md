@@ -35,6 +35,9 @@ This diagram is intentionally control-plane-first: it shows `homelab-cloud` as t
 
 
 ## Budget Control 
+
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/468fdd5f-f358-4679-bf39-9f2c672d53c8" />
+
 - 1 always on control node in boston (cannot save $$)
 - ephemeral ASG worker for day to day tasks (to save $$)
 - use public CICD github worker (to save $$) but only after join tailscale to leverage publically available infra resources without making the project private, but still safe
