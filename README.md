@@ -20,12 +20,12 @@ This repository is that shared platform layer. App repos can stay focused on vib
 
 ## Platform Overview
 
-
 This diagram is intentionally control-plane-first: it shows `homelab-cloud` as the orchestration layer that owns deploy execution, runtime resource allocation, and perf-test environment provisioning. The source lives in [docs/infra-overview.d2](docs/infra-overview.d2).
 
 
 ## Security: 
-- Due to an increasing of trend of exploiting vulnerabilities because every information is on your finger tip with AI, my platform is intentional hardened
+- Due to an increasing of trend of seeing vulnerabilities from public project being exploited, because every information is on your finger tip with AI, my platform is intentional hardened.
+- Centralized secrets management auto provisioned in AWS parameter store, in case something goes sour can be immediately rotated.
 - Dedicated *1 node* for public traffic ingress, behind cloudflare tunnel for better public traffic pattern and futhure hardening.
 - tailscale for node to node communication and connecting personal devices (laptop + phone) in case something goes wrong every node is immediately accessible
 
