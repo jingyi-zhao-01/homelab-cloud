@@ -1,18 +1,17 @@
 # homelab-cloud
 
-Platform control plane for workload deploys, resource allocation, and runtime performance-test provisioning on a shared k3s environment.
+Platform control plane for personal workload deploys, resource allocation, and runtime performance-test provisioning on a shared k3s environment.
 
 ## Why This Exists
 
 I use AI to generate and iterate on a lot of service code, but the hard part is rarely just writing the code.
 
-- local success does not prove k3s deploy success
-- production behavior needs to be observable back to the agent
-- infra and secrets provisioning should not be manually provisioned per app
+- local prototypes needs to be deployed efficiently and stable when interacting with external Apps (discord, chatgpt)
+- infra and secrets provisioning should not be manually provisioned per prototype as it is really time consuming and put people down :(
 - post-deploy quality lanes need real runtime capacity, not only local mocks
+- security becomes more of a problem in OSS communities (Thank you Antropic!!!)
 
 This repository is that shared platform layer. App repos can stay focused on vibe coding and service implementation, while `homelab-cloud` acts as the scheduler that:
-
 - deploys workloads onto k3s
 - allocates shared runtime resources such as cluster capacity, secrets, and databases
 - provisions the runtime environment used by post-deploy quality lanes
