@@ -8,7 +8,7 @@ I use AI to generate and iterate on a lot of service code, but the hard part is 
 
 - local success does not prove k3s deploy success
 - production behavior needs to be observable back to the agent
-- infra and secrets provisioning should not be rebuilt per app
+- infra and secrets provisioning should not be manually provisioned per app
 - post-deploy quality lanes need real runtime capacity, not only local mocks
 
 This repository is that shared platform layer. App repos can stay focused on vibe coding and service implementation, while `homelab-cloud` acts as the scheduler that:
@@ -30,7 +30,7 @@ This diagram is intentionally control-plane-first: it shows `homelab-cloud` as t
 - tailscale for node to node communication and connecting personal devices (laptop + phone) in case something goes wrong every node is immediately accessible
 
 ## Resilience: 
-- a sample perf test project is provisioned here for periodic performance test and integrated middlewares 
+- a sample perf test project is provisioned here for periodic performance test for resource and integrated middlewares 
 
 
 ## Per-Project Provisioning Flow
