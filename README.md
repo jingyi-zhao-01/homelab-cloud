@@ -19,6 +19,9 @@ This repository is that shared platform layer. App repos can stay focused on vib
 
 ## Platform Overview
 
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/4bd58d48-a03a-4bc0-aae9-c855d2af726a" />
+
+
 This diagram is intentionally control-plane-first: it shows `homelab-cloud` as the orchestration layer that owns deploy execution, runtime resource allocation, and perf-test environment provisioning. The source lives in [docs/infra-overview.d2](docs/infra-overview.d2).
 
 
