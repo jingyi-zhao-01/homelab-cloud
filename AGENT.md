@@ -39,10 +39,28 @@ Use the closest source of truth for the task:
 * workflow and runtime operations: [docs/operations.md](/home/jingyi/PycharmProjects/homelab-cloud/docs/operations.md)
 * repo wiki and mirrored ADRs: [wiki/Home.md](/home/jingyi/PycharmProjects/homelab-cloud/wiki/Home.md)
 * strategy-tester platform notes: [docs/strategy-tester.md](/home/jingyi/PycharmProjects/homelab-cloud/docs/strategy-tester.md)
+* recruiter/resume evidence and story-bank content for MCP or resume tasks: [story-banks](/home/jingyi/jingyi-vault/story-banks)
 * flashsale workload internals: [application/flashsale/AGENT.md](/home/jingyi/PycharmProjects/homelab-cloud/application/flashsale/AGENT.md)
 * backend and infra-facing app code rules: [.codex/skills/home-cloud-rules/SKILL.md](/home/jingyi/PycharmProjects/homelab-cloud/.codex/skills/home-cloud-rules/SKILL.md)
 
 Keep root guidance short. Push workload-specific business rules down into workload-owned docs.
+
+## Story Bank Routing
+
+For recruiter, resume, or interview-story tasks:
+
+* Use the Obsidian story bank under [story-banks](/home/jingyi/jingyi-vault/story-banks) as the story-bank source of truth.
+* Do not store story-bank content inside `apps/chatgpt-mcp-hello` unless the user explicitly asks for a checked-in snapshot.
+* Do not go back to Google Drive for `walmart-story` unless the user explicitly asks to compare against the old source.
+* Treat Google Drive `Resumes/` as the home for master resume docs and sendable artifacts, not as the story-bank source of truth.
+
+## P3A Referral Routing
+
+For 一亩三分地 / 1point3acres referral workflows:
+
+* Use the local 1point3acres MCP as the default source for thread discovery and thread reading.
+* Do not use generic web search to find or parse 1point3acres referral posts unless the user explicitly overrides this.
+* Use external web search only after the thread is known, and only for the post's requested outside research such as job links, careers pages, or extra role details.
 
 ## Editing Rules
 
