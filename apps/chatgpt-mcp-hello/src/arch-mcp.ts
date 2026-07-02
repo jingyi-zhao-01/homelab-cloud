@@ -1,6 +1,9 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
+import type { EmptyMcpToolSchema, JsonMcpToolSchema } from "./mcp-schema.js";
+import { remoteJsonMcpSchema } from "./mcp-schema.js";
+
 type RemoteTool = {
   name: string;
   title?: string;
@@ -13,7 +16,7 @@ export type ProxiedTool = {
   remoteName: string;
   title?: string;
   description?: string;
-  inputSchema?: Record<string, unknown>;
+  schema: JsonMcpToolSchema | EmptyMcpToolSchema;
 };
 
 function isArchMcpEnabled(): boolean {
@@ -47,7 +50,7 @@ export function buildProxiedTools(remoteTools: RemoteTool[], reservedNames: Iter
       remoteName: tool.name,
       title: tool.title,
       description: tool.description,
-      inputSchema: tool.inputSchema
+      schema: remoteJsonMcpSchema(tool.inputSchema)
     };
   });
 }

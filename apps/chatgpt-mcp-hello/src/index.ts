@@ -8,6 +8,7 @@ import { z } from "zod";
 import { archMcpBridge } from "./arch-mcp.js";
 import { InMemoryOAuthProvider } from "./auth/in-memory-oauth-provider.js";
 import { createMcpOAuthMiddleware, createMcpOAuthRouter } from "./auth/mcp-oauth.js";
+import { localMcpSchema, resolveMcpInputSchema } from "./mcp-schema.js";
 import {
   buildHostFilter,
   extractZhihuHotListItems,
@@ -58,9 +59,9 @@ async function createMcpServer(): Promise<McpServer> {
     {
       title: "Hello World",
       description: "Return a simple greeting so ChatGPT can verify tool discovery and execution.",
-      inputSchema: {
+      inputSchema: resolveMcpInputSchema(localMcpSchema({
         name: z.string().trim().min(1).max(80).optional()
-      }
+      }))
     },
     async ({ name }) => {
       const target = name ?? "world";
@@ -87,10 +88,10 @@ async function createMcpServer(): Promise<McpServer> {
       {
         title: "Zhihu Search",
         description: "Search content inside Zhihu.",
-        inputSchema: {
+        inputSchema: resolveMcpInputSchema(localMcpSchema({
           query: z.string().trim().min(2).max(100),
           count: z.number().int().min(1).max(10).optional()
-        }
+        }))
       },
       async ({ query, count }) => {
         const response = await zhihuGetJson(
@@ -134,12 +135,12 @@ async function createMcpServer(): Promise<McpServer> {
       {
         title: "Zhihu Global Search",
         description: "Search the web through Zhihu's global search API.",
-        inputSchema: {
+        inputSchema: resolveMcpInputSchema(localMcpSchema({
           query: z.string().trim().min(2).max(100),
           count: z.number().int().min(1).max(20).optional(),
           filter: z.string().trim().min(1).max(300).optional(),
           search_db: z.enum(["all", "realtime", "static"]).optional()
-        }
+        }))
       },
       async ({ query, count, filter, search_db }) => {
         const response = await zhihuGetJson(
@@ -185,9 +186,9 @@ async function createMcpServer(): Promise<McpServer> {
       {
         title: "Zhihu Hot List",
         description: "Get the current Zhihu hot list.",
-        inputSchema: {
+        inputSchema: resolveMcpInputSchema(localMcpSchema({
           limit: z.number().int().min(1).max(30).optional()
-        }
+        }))
       },
       async ({ limit }) => {
         const response = await zhihuGetJson(
@@ -229,10 +230,10 @@ async function createMcpServer(): Promise<McpServer> {
       {
         title: "Zhihu URL Search",
         description: "Search around a shared URL by inferring keywords and host constraints.",
-        inputSchema: {
+        inputSchema: resolveMcpInputSchema(localMcpSchema({
           url: z.string().url(),
           count: z.number().int().min(1).max(10).optional()
-        }
+        }))
       },
       async ({ url, count }) => {
         const parsedUrl = parseSharedUrl(url);
@@ -326,9 +327,7 @@ async function createMcpServer(): Promise<McpServer> {
       {
         title: tool.title,
         description: tool.description ? `${tool.description} (proxied from arch-mcp)` : "Proxied from arch-mcp.",
-        // ponytail: upstream tool schemas arrive as JSON Schema, not Zod/raw shape.
-        // Accept arbitrary arguments here so tool discovery keeps working.
-        inputSchema: z.object({}).passthrough()
+        inputSchema: resolveMcpInputSchema(tool.schema)
       },
       (async (args: Record<string, unknown>) =>
         archMcpBridge.callTool(tool.remoteName, args)) as never
