@@ -326,7 +326,9 @@ async function createMcpServer(): Promise<McpServer> {
       {
         title: tool.title,
         description: tool.description ? `${tool.description} (proxied from arch-mcp)` : "Proxied from arch-mcp.",
-        inputSchema: tool.inputSchema as never
+        // ponytail: upstream tool schemas arrive as JSON Schema, not Zod/raw shape.
+        // Accept arbitrary arguments here so tool discovery keeps working.
+        inputSchema: z.object({}).passthrough()
       },
       (async (args: Record<string, unknown>) =>
         archMcpBridge.callTool(tool.remoteName, args)) as never
@@ -337,6 +339,7 @@ async function createMcpServer(): Promise<McpServer> {
 }
 const provider = new InMemoryOAuthProvider();
 const app = createMcpExpressApp({ host: bindHost });
+app.set("trust proxy", true);
 const authMiddleware = createMcpOAuthMiddleware(provider);
 
 app.use(
