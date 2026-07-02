@@ -30,7 +30,7 @@ This diagram is intentionally control-plane-first: it shows `homelab-cloud` as t
 - tailscale for node to node communication and connecting personal devices (laptop + phone) in case something goes wrong every node is immediately accessible
 
 ## Resilience: 
-- a sample perf test project is provisioned here for periodic performance test for resource and integrated middlewares 
+- a sample perf test project (flashsale) is provisioned here for periodic performance test for resource and integrated middlewares 
 
 
 ## Per-Project Provisioning Flow
@@ -74,44 +74,9 @@ For flashsale specifically, the current aggregate stack is:
 | [Flashsales deploy pre](application/flashsale/.github/workflows/flashsales-deploy-pre.yml) | App-owned pre-deploy unit and Docker Compose integration gates |
 | [Flashsales deploy](.github/workflows/flashsales-deploy.yml) | Platform-side deploy executor for the shared k3s runtime |
 | [Flashsales perf test](.github/workflows/flashsales-loadtest-manual.yml) | Manual platform-side executor for the app-owned flashsale perf cadence |
-| [Strategy tester workload](docs/strategy-tester.md) | Scheduled ingestion app, cron jobs, and secret wiring |
+| [Strategy tester workload](docs/strategy-tester.md) | Scheduled ingestion app for US option strategy tester, cron jobs, and secret wiring |
 | [LeetCode intelligence workload](docs/leetcode-intelligence.md) | Continuous intelligence API service with Discord and LLM secret wiring |
 | [Infrastructure](docs/infrastructure.md) | Terraform-backed resource provisioning for Neon, SSM, networking, and worker capacity |
 | [Operations and tooling](docs/operations.md) | CI/CD, runtime gates, perf workflows, and operator commands |
-
-If you only need one place to orient yourself, start with [Repository overview](docs/overview.md).
-
-## Quick Commands
-
-```bash
-make deploy KUBECONFIG_PATH=$HOME/.kube/config
-make status KUBECONFIG_PATH=$HOME/.kube/config
-make e2e KUBECONFIG_PATH=$HOME/.kube/config
-make concurrency-baseline KUBECONFIG_PATH=secrets/.kube-config
-make k3s-spot-plan
-```
-
-These commands are operator entrypoints into the same control plane:
-
-- `make deploy`: reconcile a workload release into k3s
-- `make status`: inspect live runtime state
-- `make e2e`: exercise the deployed path
-- `make concurrency-baseline`: provision and run a baseline perf lane
-- `make k3s-spot-plan`: inspect worker-capacity allocation changes
-
-## Repository Layout
-
-```text
-.
-├── .github/workflows/      # Deploy, post-deploy runtime gates, and infra automation entrypoints
-├── .github/scripts/        # Workflow-side orchestration helpers
-├── charts/                 # Helm release definitions for platform-managed workloads
-├── application/flashsale/              # App submodule plus quality contract and perf harness inputs
-├── wiki/                   # Root entrypoint to mirrored wiki content
-├── secrets/                # Local and shared secret material
-├── terraform/              # Resource allocation for Neon, SSM, networking, and spot-backed capacity
-├── docs/                   # Platform docs and control-plane diagrams
-└── Makefile                # Operator-facing deploy and diagnostics commands
-```
 
 For workflow-specific guidance, see [Operations and tooling](docs/operations.md).
